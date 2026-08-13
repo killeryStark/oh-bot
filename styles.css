@@ -1,0 +1,117 @@
+/* obsidian-harness-bot styles */
+
+.harness-chat-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 8px;
+  box-sizing: border-box;
+}
+
+.harness-chat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  gap: 8px;
+}
+
+.harness-chat-header-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.harness-chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.harness-message {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 12px;
+  border-radius: 8px;
+  max-width: 90%;
+  word-break: break-word;
+}
+
+.harness-message-user {
+  align-self: flex-end;
+  background-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+.harness-message-assistant {
+  align-self: flex-start;
+  background-color: var(--background-secondary);
+  color: var(--text-normal);
+  border: 1px solid var(--background-modifier-border);
+}
+
+.harness-message-header {
+  font-size: 0.75em;
+  opacity: 0.7;
+  margin-bottom: 4px;
+}
+
+.harness-tool-card {
+  align-self: flex-start;
+  width: 95%;
+  background-color: var(--background-secondary-alt);
+  border: 1px dashed var(--interactive-accent);
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 0.85em;
+}
+
+.harness-tool-title {
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.harness-tool-status {
+  font-size: 0.8em;
+  opacity: 0.8;
+}
+
+.harness-chat-input-area {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.harness-chat-input-container {
+  display: flex;
+  gap: 8px;
+}
+
+.harness-chat-textarea {
+  flex: 1;
+  resize: vertical;
+  min-height: 48px;
+  max-height: 160px;
+  border-radius: 6px;
+  padding: 8px;
+}
+
+.harness-modal-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.harness-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}

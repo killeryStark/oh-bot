@@ -1,0 +1,10 @@
+{
+  "id": "obsidian-harness-bot",
+  "name": "Obsidian Agent Harness",
+  "version": "0.1.0",
+  "minAppVersion": "1.6.0",
+  "description": "Multi-step AI Agent Harness plugin for Obsidian with Vault tools, prompt caching, and mobile support.",
+  "author": "Obsidian Harness Contributors",
+  "authorUrl": "https://github.com/killery/obsidian-harness-bot",
+  "isDesktopOnly": false
+}

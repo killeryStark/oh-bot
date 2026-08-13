@@ -1,0 +1,32 @@
+{
+  "name": "obsidian-harness-bot",
+  "version": "0.1.0",
+  "description": "Multi-step AI Agent Harness plugin for Obsidian running on Desktop and Mobile.",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "node esbuild.config.mjs production",
+    "lint": "tsc --noEmit"
+  },
+  "keywords": [
+    "obsidian",
+    "obsidian-plugin",
+    "ai",
+    "agent",
+    "agent-harness",
+    "openrouter",
+    "openai",
+    "anthropic",
+    "ollama"
+  ],
+  "author": "Obsidian Harness Contributors",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "builtin-modules": "^3.3.0",
+    "esbuild": "^0.20.2",
+    "obsidian": "^1.6.7",
+    "tslib": "^2.6.2",
+    "typescript": "^5.4.2"
+  }
+}
