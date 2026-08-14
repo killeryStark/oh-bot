@@ -79,14 +79,32 @@ export class HarnessChatView extends ItemView {
     return 'bot';
   }
 
-  private handleVisualViewportResize = () => {
-    if (this.isInputExpanded && window.visualViewport) {
-      const vh = window.visualViewport.height;
-      const containerRect = this.containerEl.getBoundingClientRect();
-      const availableHeight = vh - containerRect.top;
-      if (availableHeight > 120) {
-        this.inputAreaEl.style.height = `${availableHeight}px`;
+  private adjustForKeyboard = () => {
+    if (!this.inputAreaEl) return;
+
+    if (window.visualViewport) {
+      const vv = window.visualViewport;
+      // Calculate how many pixels the keyboard covers at the bottom
+      const keyboardHeight = Math.max(0, window.innerHeight - (vv.offsetTop + vv.height));
+
+      if (this.isInputExpanded) {
+        const containerRect = this.containerEl.getBoundingClientRect();
+        const availableHeight = vv.height - containerRect.top;
+        if (availableHeight > 100) {
+          this.inputAreaEl.style.height = `${availableHeight}px`;
+        }
+        this.inputAreaEl.style.paddingBottom = 'max(16px, env(safe-area-inset-bottom))';
+      } else {
+        if (keyboardHeight > 0) {
+          this.inputAreaEl.style.paddingBottom = `${keyboardHeight + 6}px`;
+        } else {
+          this.inputAreaEl.style.paddingBottom = 'calc(8px + env(safe-area-inset-bottom))';
+        }
       }
+    }
+
+    if (this.messagesContainerEl) {
+      this.messagesContainerEl.scrollTop = this.messagesContainerEl.scrollHeight;
     }
   };
 
@@ -167,7 +185,7 @@ export class HarnessChatView extends ItemView {
 
     this.inputTextAreaEl = textareaWrapperEl.createEl('textarea', {
       cls: 'harness-chat-textarea',
-      placeholder: "Ask Harness Bot... ('/' for commands, '@' to attach notes)",
+      placeholder: "Ask Harness Bot... ('/' for commands, '@' for notes)",
     });
 
     // Expand / Fullview button in top-right corner of textarea
@@ -332,11 +350,12 @@ export class HarnessChatView extends ItemView {
     });
 
     this.inputTextAreaEl.addEventListener('focus', () => {
-      setTimeout(() => {
-        if (this.messagesContainerEl) {
-          this.messagesContainerEl.scrollTop = this.messagesContainerEl.scrollHeight;
-        }
-      }, 300);
+      setTimeout(this.adjustForKeyboard, 100);
+      setTimeout(this.adjustForKeyboard, 350);
+    });
+
+    this.inputTextAreaEl.addEventListener('blur', () => {
+      setTimeout(this.adjustForKeyboard, 150);
     });
 
     this.inputTextAreaEl.addEventListener('keydown', (e) => {
@@ -369,10 +388,10 @@ export class HarnessChatView extends ItemView {
       }
     });
 
-    // Mobile Viewport Keyboard handling
+    // Mobile Viewport Keyboard handling for both normal and expanded mode
     if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', this.handleVisualViewportResize);
-      window.visualViewport.addEventListener('scroll', this.handleVisualViewportResize);
+      window.visualViewport.addEventListener('resize', this.adjustForKeyboard);
+      window.visualViewport.addEventListener('scroll', this.adjustForKeyboard);
     }
 
     this.renderMessages();
@@ -403,7 +422,7 @@ export class HarnessChatView extends ItemView {
       setIcon(this.expandBtnEl, 'minimize-2');
       this.expandBtnEl.setAttribute('aria-label', 'Collapse view');
       this.expandBtnEl.style.display = 'flex';
-      this.handleVisualViewportResize();
+      this.adjustForKeyboard();
       this.inputTextAreaEl.focus();
     } else {
       this.inputAreaEl.removeClass('is-expanded');
@@ -411,6 +430,7 @@ export class HarnessChatView extends ItemView {
       setIcon(this.expandBtnEl, 'maximize-2');
       this.expandBtnEl.setAttribute('aria-label', 'Expand to full view');
       this.autoResizeTextarea();
+      this.adjustForKeyboard();
       this.inputTextAreaEl.focus();
     }
   }
@@ -784,8 +804,8 @@ export class HarnessChatView extends ItemView {
       this.currentAbortController.abort();
     }
     if (window.visualViewport) {
-      window.visualViewport.removeEventListener('resize', this.handleVisualViewportResize);
-      window.visualViewport.removeEventListener('scroll', this.handleVisualViewportResize);
+      window.visualViewport.removeEventListener('resize', this.adjustForKeyboard);
+      window.visualViewport.removeEventListener('scroll', this.adjustForKeyboard);
     }
   }
 }

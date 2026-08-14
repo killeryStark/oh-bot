@@ -1959,14 +1959,29 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
     this.selectedSuggestIndex = 0;
     this.currentSuggestItems = [];
     this.currentAbortController = null;
-    this.handleVisualViewportResize = () => {
-      if (this.isInputExpanded && window.visualViewport) {
-        const vh = window.visualViewport.height;
-        const containerRect = this.containerEl.getBoundingClientRect();
-        const availableHeight = vh - containerRect.top;
-        if (availableHeight > 120) {
-          this.inputAreaEl.style.height = `${availableHeight}px`;
+    this.adjustForKeyboard = () => {
+      if (!this.inputAreaEl)
+        return;
+      if (window.visualViewport) {
+        const vv = window.visualViewport;
+        const keyboardHeight = Math.max(0, window.innerHeight - (vv.offsetTop + vv.height));
+        if (this.isInputExpanded) {
+          const containerRect = this.containerEl.getBoundingClientRect();
+          const availableHeight = vv.height - containerRect.top;
+          if (availableHeight > 100) {
+            this.inputAreaEl.style.height = `${availableHeight}px`;
+          }
+          this.inputAreaEl.style.paddingBottom = "max(16px, env(safe-area-inset-bottom))";
+        } else {
+          if (keyboardHeight > 0) {
+            this.inputAreaEl.style.paddingBottom = `${keyboardHeight + 6}px`;
+          } else {
+            this.inputAreaEl.style.paddingBottom = "calc(8px + env(safe-area-inset-bottom))";
+          }
         }
+      }
+      if (this.messagesContainerEl) {
+        this.messagesContainerEl.scrollTop = this.messagesContainerEl.scrollHeight;
       }
     };
     this.plugin = plugin;
@@ -2058,7 +2073,7 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
     const textareaWrapperEl = this.inputAreaEl.createEl("div", { cls: "harness-textarea-wrapper" });
     this.inputTextAreaEl = textareaWrapperEl.createEl("textarea", {
       cls: "harness-chat-textarea",
-      placeholder: "Ask Harness Bot... ('/' for commands, '@' to attach notes)"
+      placeholder: "Ask Harness Bot... ('/' for commands, '@' for notes)"
     });
     this.expandBtnEl = textareaWrapperEl.createEl("button", { cls: "harness-expand-btn clickable-icon" });
     this.expandBtnEl.setAttribute("aria-label", "Expand to full view");
@@ -2193,11 +2208,11 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
       this.handleInputSuggest();
     });
     this.inputTextAreaEl.addEventListener("focus", () => {
-      setTimeout(() => {
-        if (this.messagesContainerEl) {
-          this.messagesContainerEl.scrollTop = this.messagesContainerEl.scrollHeight;
-        }
-      }, 300);
+      setTimeout(this.adjustForKeyboard, 100);
+      setTimeout(this.adjustForKeyboard, 350);
+    });
+    this.inputTextAreaEl.addEventListener("blur", () => {
+      setTimeout(this.adjustForKeyboard, 150);
     });
     this.inputTextAreaEl.addEventListener("keydown", (e) => {
       if (this.activeSuggestType !== "none") {
@@ -2228,8 +2243,8 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
       }
     });
     if (window.visualViewport) {
-      window.visualViewport.addEventListener("resize", this.handleVisualViewportResize);
-      window.visualViewport.addEventListener("scroll", this.handleVisualViewportResize);
+      window.visualViewport.addEventListener("resize", this.adjustForKeyboard);
+      window.visualViewport.addEventListener("scroll", this.adjustForKeyboard);
     }
     this.renderMessages();
   }
@@ -2256,7 +2271,7 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
       (0, import_obsidian15.setIcon)(this.expandBtnEl, "minimize-2");
       this.expandBtnEl.setAttribute("aria-label", "Collapse view");
       this.expandBtnEl.style.display = "flex";
-      this.handleVisualViewportResize();
+      this.adjustForKeyboard();
       this.inputTextAreaEl.focus();
     } else {
       this.inputAreaEl.removeClass("is-expanded");
@@ -2264,6 +2279,7 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
       (0, import_obsidian15.setIcon)(this.expandBtnEl, "maximize-2");
       this.expandBtnEl.setAttribute("aria-label", "Expand to full view");
       this.autoResizeTextarea();
+      this.adjustForKeyboard();
       this.inputTextAreaEl.focus();
     }
   }
@@ -2594,8 +2610,8 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
       this.currentAbortController.abort();
     }
     if (window.visualViewport) {
-      window.visualViewport.removeEventListener("resize", this.handleVisualViewportResize);
-      window.visualViewport.removeEventListener("scroll", this.handleVisualViewportResize);
+      window.visualViewport.removeEventListener("resize", this.adjustForKeyboard);
+      window.visualViewport.removeEventListener("scroll", this.adjustForKeyboard);
     }
   }
 };
