@@ -385,6 +385,16 @@ export class HarnessChatView extends ItemView {
     bodyEl.setText(thoughtText);
   }
 
+  private formatContentForCard(rawStr: string): string {
+    if (!rawStr) return '';
+    try {
+      const parsed = JSON.parse(rawStr);
+      return JSON.stringify(parsed, null, 2);
+    } catch (e) {
+      return rawStr;
+    }
+  }
+
   private renderToolCallCard(parentEl: HTMLElement, toolName: string, argsStr: string, open = false) {
     const detailsEl = parentEl.createEl('details', { cls: 'harness-collapsible-card harness-tool-card' });
     if (open) detailsEl.open = true;
@@ -399,7 +409,7 @@ export class HarnessChatView extends ItemView {
 
     const bodyEl = detailsEl.createEl('div', { cls: 'harness-collapsible-body' });
     const pre = bodyEl.createEl('pre');
-    pre.createEl('code', { text: argsStr });
+    pre.createEl('code', { text: this.formatContentForCard(argsStr) });
   }
 
   private renderToolOutputCard(parentEl: HTMLElement, toolName: string, outputText: string, open = false) {
@@ -416,7 +426,7 @@ export class HarnessChatView extends ItemView {
 
     const bodyEl = detailsEl.createEl('div', { cls: 'harness-collapsible-body' });
     const pre = bodyEl.createEl('pre');
-    pre.createEl('code', { text: outputText });
+    pre.createEl('code', { text: this.formatContentForCard(outputText) });
   }
 
   private autoResizeTextarea() {

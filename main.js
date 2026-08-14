@@ -2266,6 +2266,16 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
     const bodyEl = detailsEl.createEl("div", { cls: "harness-collapsible-body harness-thinking-text" });
     bodyEl.setText(thoughtText);
   }
+  formatContentForCard(rawStr) {
+    if (!rawStr)
+      return "";
+    try {
+      const parsed = JSON.parse(rawStr);
+      return JSON.stringify(parsed, null, 2);
+    } catch (e) {
+      return rawStr;
+    }
+  }
   renderToolCallCard(parentEl, toolName, argsStr, open = false) {
     const detailsEl = parentEl.createEl("details", { cls: "harness-collapsible-card harness-tool-card" });
     if (open)
@@ -2278,7 +2288,7 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
     summaryEl.createEl("span", { text: "Args", cls: "harness-collapsible-badge" });
     const bodyEl = detailsEl.createEl("div", { cls: "harness-collapsible-body" });
     const pre = bodyEl.createEl("pre");
-    pre.createEl("code", { text: argsStr });
+    pre.createEl("code", { text: this.formatContentForCard(argsStr) });
   }
   renderToolOutputCard(parentEl, toolName, outputText, open = false) {
     const detailsEl = parentEl.createEl("details", { cls: "harness-collapsible-card harness-tool-card" });
@@ -2292,7 +2302,7 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
     summaryEl.createEl("span", { text: "Result", cls: "harness-collapsible-badge" });
     const bodyEl = detailsEl.createEl("div", { cls: "harness-collapsible-body" });
     const pre = bodyEl.createEl("pre");
-    pre.createEl("code", { text: outputText });
+    pre.createEl("code", { text: this.formatContentForCard(outputText) });
   }
   autoResizeTextarea() {
     if (this.isInputExpanded)
