@@ -2058,7 +2058,7 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
     const textareaWrapperEl = this.inputAreaEl.createEl("div", { cls: "harness-textarea-wrapper" });
     this.inputTextAreaEl = textareaWrapperEl.createEl("textarea", {
       cls: "harness-chat-textarea",
-      placeholder: "Ask Harness Bot... ('/' commands, '@' notes)"
+      placeholder: "Ask Harness Bot... ('/' for commands, '@' to attach notes)"
     });
     this.expandBtnEl = textareaWrapperEl.createEl("button", { cls: "harness-expand-btn clickable-icon" });
     this.expandBtnEl.setAttribute("aria-label", "Expand to full view");
@@ -2191,6 +2191,13 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
     this.inputTextAreaEl.addEventListener("input", () => {
       this.autoResizeTextarea();
       this.handleInputSuggest();
+    });
+    this.inputTextAreaEl.addEventListener("focus", () => {
+      setTimeout(() => {
+        if (this.messagesContainerEl) {
+          this.messagesContainerEl.scrollTop = this.messagesContainerEl.scrollHeight;
+        }
+      }, 300);
     });
     this.inputTextAreaEl.addEventListener("keydown", (e) => {
       if (this.activeSuggestType !== "none") {
@@ -2501,15 +2508,13 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
       return;
     this.messagesContainerEl.empty();
     if (this.currentSession.messages.length === 0) {
-      const emptyContainerEl = this.messagesContainerEl.createEl("div", {
-        cls: "harness-empty-state-container"
-      });
-      const placeholderEl = emptyContainerEl.createEl("div", { cls: "harness-empty-placeholder" });
-      placeholderEl.innerHTML = `Type a message to start, <strong>/</strong> for commands, or <strong>@</strong> to attach notes and folders.`;
       const previousSessions = this.plugin.settings.sessions.filter(
         (s) => s.id !== this.currentSession.id && s.messages.length > 0
       );
       if (previousSessions.length > 0) {
+        const emptyContainerEl = this.messagesContainerEl.createEl("div", {
+          cls: "harness-empty-state-container"
+        });
         const prevBoxEl = emptyContainerEl.createEl("div", { cls: "harness-prev-sessions-box" });
         prevBoxEl.style.width = "100%";
         prevBoxEl.style.maxWidth = "360px";

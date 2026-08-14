@@ -167,7 +167,7 @@ export class HarnessChatView extends ItemView {
 
     this.inputTextAreaEl = textareaWrapperEl.createEl('textarea', {
       cls: 'harness-chat-textarea',
-      placeholder: "Ask Harness Bot... ('/' commands, '@' notes)",
+      placeholder: "Ask Harness Bot... ('/' for commands, '@' to attach notes)",
     });
 
     // Expand / Fullview button in top-right corner of textarea
@@ -329,6 +329,14 @@ export class HarnessChatView extends ItemView {
     this.inputTextAreaEl.addEventListener('input', () => {
       this.autoResizeTextarea();
       this.handleInputSuggest();
+    });
+
+    this.inputTextAreaEl.addEventListener('focus', () => {
+      setTimeout(() => {
+        if (this.messagesContainerEl) {
+          this.messagesContainerEl.scrollTop = this.messagesContainerEl.scrollHeight;
+        }
+      }, 300);
     });
 
     this.inputTextAreaEl.addEventListener('keydown', (e) => {
@@ -677,20 +685,16 @@ export class HarnessChatView extends ItemView {
     this.messagesContainerEl.empty();
 
     if (this.currentSession.messages.length === 0) {
-      const emptyContainerEl = this.messagesContainerEl.createEl('div', {
-        cls: 'harness-empty-state-container',
-      });
-
-      // Subtle grey placeholder inside empty chat
-      const placeholderEl = emptyContainerEl.createEl('div', { cls: 'harness-empty-placeholder' });
-      placeholderEl.innerHTML = `Type a message to start, <strong>/</strong> for commands, or <strong>@</strong> to attach notes and folders.`;
-
-      // Previous Sessions quick switcher
+      // Previous Sessions quick switcher (if available)
       const previousSessions = this.plugin.settings.sessions.filter(
         (s) => s.id !== this.currentSession.id && s.messages.length > 0
       );
 
       if (previousSessions.length > 0) {
+        const emptyContainerEl = this.messagesContainerEl.createEl('div', {
+          cls: 'harness-empty-state-container',
+        });
+
         const prevBoxEl = emptyContainerEl.createEl('div', { cls: 'harness-prev-sessions-box' });
         prevBoxEl.style.width = '100%';
         prevBoxEl.style.maxWidth = '360px';
