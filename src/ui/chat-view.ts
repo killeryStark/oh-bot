@@ -79,26 +79,6 @@ export class HarnessChatView extends ItemView {
     return 'bot';
   }
 
-  private adjustForKeyboard = () => {
-    const container = this.containerEl.children[1] as HTMLElement;
-    if (!container) return;
-
-    if (window.visualViewport) {
-      const vv = window.visualViewport;
-      const containerTop = container.getBoundingClientRect().top;
-      const visibleHeight = vv.height - Math.max(0, containerTop);
-
-      if (visibleHeight > 100) {
-        container.style.height = `${visibleHeight}px`;
-        container.style.maxHeight = `${visibleHeight}px`;
-      }
-    }
-
-    if (this.messagesContainerEl) {
-      this.messagesContainerEl.scrollTop = this.messagesContainerEl.scrollHeight;
-    }
-  };
-
   async onOpen(): Promise<void> {
     const container = this.containerEl.children[1] as HTMLElement;
     container.empty();
@@ -341,13 +321,11 @@ export class HarnessChatView extends ItemView {
     });
 
     this.inputTextAreaEl.addEventListener('focus', () => {
-      setTimeout(this.adjustForKeyboard, 50);
-      setTimeout(this.adjustForKeyboard, 250);
-      setTimeout(this.adjustForKeyboard, 500);
-    });
-
-    this.inputTextAreaEl.addEventListener('blur', () => {
-      setTimeout(this.adjustForKeyboard, 100);
+      setTimeout(() => {
+        if (this.messagesContainerEl) {
+          this.messagesContainerEl.scrollTop = this.messagesContainerEl.scrollHeight;
+        }
+      }, 150);
     });
 
     this.inputTextAreaEl.addEventListener('keydown', (e) => {
@@ -380,13 +358,6 @@ export class HarnessChatView extends ItemView {
       }
     });
 
-    // Mobile Viewport Keyboard handling
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', this.adjustForKeyboard);
-      window.visualViewport.addEventListener('scroll', this.adjustForKeyboard);
-    }
-
-    this.adjustForKeyboard();
     this.renderMessages();
   }
 
@@ -415,14 +386,12 @@ export class HarnessChatView extends ItemView {
       setIcon(this.expandBtnEl, 'minimize-2');
       this.expandBtnEl.setAttribute('aria-label', 'Collapse view');
       this.expandBtnEl.style.display = 'flex';
-      this.adjustForKeyboard();
       this.inputTextAreaEl.focus();
     } else {
       this.inputAreaEl.removeClass('is-expanded');
       setIcon(this.expandBtnEl, 'maximize-2');
       this.expandBtnEl.setAttribute('aria-label', 'Expand to full view');
       this.autoResizeTextarea();
-      this.adjustForKeyboard();
       this.inputTextAreaEl.focus();
     }
   }
@@ -794,10 +763,6 @@ export class HarnessChatView extends ItemView {
   async onClose(): Promise<void> {
     if (this.currentAbortController) {
       this.currentAbortController.abort();
-    }
-    if (window.visualViewport) {
-      window.visualViewport.removeEventListener('resize', this.adjustForKeyboard);
-      window.visualViewport.removeEventListener('scroll', this.adjustForKeyboard);
     }
   }
 }
