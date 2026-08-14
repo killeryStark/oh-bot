@@ -1,5 +1,5 @@
 import { App } from 'obsidian';
-import { AgentStepEvent, HarnessSettings, LLMMessage, ToolCall } from '../types';
+import { AgentStepEvent, HarnessSettings, LLMMessage, ProviderConfig, ToolCall } from '../types';
 import { LLMProvider } from './providers/base';
 import { OpenRouterProvider } from './providers/openrouter';
 import { OpenAIProvider } from './providers/openai';
@@ -23,33 +23,39 @@ export class AgentHarness {
     this.secretManager = new SecretManager(app);
     this.toolRegistry = toolRegistry;
 
-    // Register LLM Providers
+    // Register Base LLM Providers
     this.providers.set('openrouter', new OpenRouterProvider());
     this.providers.set('openai', new OpenAIProvider());
+    this.providers.set('gemini', new OpenAIProvider());
+    this.providers.set('custom-openai', new OpenAIProvider());
     this.providers.set('anthropic', new AnthropicProvider());
     this.providers.set('ollama', new OllamaProvider());
   }
 
-  private getActiveProvider(): { provider: LLMProvider; apiKey: string } {
-    const providerType = this.settings.defaultProvider || 'openrouter';
-    const provider = this.providers.get(providerType);
+  private getActiveProviderConfig(providerId?: string): { provider: LLMProvider; config: ProviderConfig; apiKey: string } {
+    const targetId = providerId || this.settings.activeProviderId || 'openrouter';
+    const config = this.settings.providers.find((p) => p.id === targetId) || this.settings.providers[0];
+
+    if (!config) {
+      throw new Error(`No provider found for ID "${targetId}"`);
+    }
+
+    let provider = this.providers.get(config.type);
+    if (!provider) {
+      provider = this.providers.get('openai'); // Fallback to OpenAI-compatible
+    }
 
     if (!provider) {
-      throw new Error(`Unsupported provider type: ${providerType}`);
+      throw new Error(`Unsupported provider type: ${config.type}`);
     }
 
-    let secretName = '';
-    if (providerType === 'openrouter') secretName = this.settings.openRouterSecretName;
-    else if (providerType === 'openai') secretName = this.settings.openAiSecretName;
-    else if (providerType === 'anthropic') secretName = this.settings.anthropicSecretName;
+    const apiKey = config.apiKeySecretName ? this.secretManager.getSecret(config.apiKeySecretName) || '' : '';
 
-    const apiKey = secretName ? this.secretManager.getSecret(secretName) || '' : '';
-
-    if (providerType !== 'ollama' && !apiKey) {
-      throw new Error(`No API key found for secret "${secretName}". Please set it in plugin settings using SecretStorage.`);
+    if (config.type !== 'ollama' && !apiKey) {
+      throw new Error(`No API key found for provider "${config.name}". Please set it in Settings.`);
     }
 
-    return { provider, apiKey };
+    return { provider, config, apiKey };
   }
 
   /**
@@ -58,12 +64,15 @@ export class AgentHarness {
   async runTurn(
     history: LLMMessage[],
     onEvent: (event: AgentStepEvent) => void,
-    onConfirm?: ConfirmationCallback
+    onConfirm?: ConfirmationCallback,
+    overrideProviderId?: string,
+    overrideModel?: string
   ): Promise<LLMMessage[]> {
-    const { provider, apiKey } = this.getActiveProvider();
+    const { provider, config, apiKey } = this.getActiveProviderConfig(overrideProviderId);
+    const model = overrideModel || this.settings.activeModel || config.models[0] || 'anthropic/claude-3.7-sonnet';
     const messages: LLMMessage[] = [...history];
     const tools = this.toolRegistry.getSchemas();
-    const maxSteps = this.settings.maxAgentSteps || 10;
+    const maxSteps = 25; // Sensible internal step limit (pi-agent harness style)
 
     let step = 0;
     let keepRunning = true;
@@ -74,8 +83,8 @@ export class AgentHarness {
       let streamContent = '';
       const response = await provider.chatCompletion(
         apiKey,
-        this.settings.customBaseUrl,
-        this.settings.defaultModel,
+        config.baseUrl,
+        model,
         this.settings.systemPrompt,
         messages,
         tools,

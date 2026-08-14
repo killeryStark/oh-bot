@@ -28,108 +28,383 @@ __export(main_exports, {
   default: () => HarnessPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian11 = require("obsidian");
+var import_obsidian13 = require("obsidian");
 
 // src/types.ts
+var DEFAULT_PROVIDERS = [
+  {
+    id: "openrouter",
+    name: "OpenRouter",
+    type: "openrouter",
+    baseUrl: "https://openrouter.ai/api/v1",
+    apiKeySecretName: "oh_bot_secret_openrouter",
+    models: [
+      "anthropic/claude-3.7-sonnet",
+      "anthropic/claude-3.5-haiku",
+      "openai/gpt-4o",
+      "openai/gpt-4o-mini",
+      "deepseek/deepseek-r1",
+      "google/gemini-2.5-flash",
+      "meta-llama/llama-3.3-70b-instruct"
+    ],
+    enabled: true
+  },
+  {
+    id: "anthropic",
+    name: "Anthropic",
+    type: "anthropic",
+    baseUrl: "https://api.anthropic.com/v1",
+    apiKeySecretName: "oh_bot_secret_anthropic",
+    models: [
+      "claude-3-7-sonnet-20250219",
+      "claude-3-5-sonnet-20241022",
+      "claude-3-5-haiku-20241022"
+    ],
+    enabled: true
+  },
+  {
+    id: "gemini",
+    name: "Google Gemini (AI Studio)",
+    type: "gemini",
+    baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai/",
+    apiKeySecretName: "oh_bot_secret_gemini",
+    models: [
+      "gemini-2.5-flash",
+      "gemini-2.5-pro",
+      "gemini-2.0-flash",
+      "gemini-1.5-pro",
+      "gemini-1.5-flash"
+    ],
+    enabled: true
+  },
+  {
+    id: "openai",
+    name: "OpenAI",
+    type: "openai",
+    baseUrl: "https://api.openai.com/v1",
+    apiKeySecretName: "oh_bot_secret_openai",
+    models: [
+      "gpt-4o",
+      "gpt-4o-mini",
+      "gpt-4.5-preview",
+      "o3-mini",
+      "o1"
+    ],
+    enabled: true
+  },
+  {
+    id: "ollama",
+    name: "Ollama (Local)",
+    type: "ollama",
+    baseUrl: "http://localhost:11434/v1",
+    apiKeySecretName: "oh_bot_secret_ollama",
+    models: [
+      "llama3.3",
+      "qwen2.5-coder",
+      "deepseek-r1",
+      "mistral"
+    ],
+    enabled: true
+  }
+];
 var DEFAULT_SETTINGS = {
-  openRouterSecretName: "openrouter-api-key",
-  openAiSecretName: "openai-api-key",
-  anthropicSecretName: "anthropic-api-key",
-  defaultProvider: "openrouter",
-  defaultModel: "anthropic/claude-3.7-sonnet",
-  customBaseUrl: "http://localhost:11434/v1",
+  providers: DEFAULT_PROVIDERS,
+  activeProviderId: "openrouter",
+  activeModel: "anthropic/claude-3.7-sonnet",
   systemPrompt: "You are an autonomous AI Agent inside Obsidian. You have tools to read, create, patch, search, and inspect notes in the vault. Use these tools step-by-step to fulfill the user request.",
-  safetyMode: "strict",
-  maxAgentSteps: 10
+  safetyMode: "strict"
 };
 
 // src/ui/settings-tab.ts
+var import_obsidian3 = require("obsidian");
+
+// src/ui/components/add-provider-modal.ts
+var import_obsidian2 = require("obsidian");
+
+// src/utils/model-fetcher.ts
 var import_obsidian = require("obsidian");
-var HarnessSettingTab = class extends import_obsidian.PluginSettingTab {
+async function fetchAvailableModels(baseUrl, apiKey) {
+  try {
+    let cleanBase = baseUrl.replace(/\/+$/, "");
+    if (!cleanBase.endsWith("/models")) {
+      cleanBase = cleanBase + "/models";
+    }
+    const headers = {
+      "Content-Type": "application/json"
+    };
+    if (apiKey) {
+      headers["Authorization"] = `Bearer ${apiKey}`;
+    }
+    const res = await (0, import_obsidian.requestUrl)({
+      url: cleanBase,
+      method: "GET",
+      headers
+    });
+    const data = res.json;
+    if (data && Array.isArray(data.data)) {
+      return data.data.map((m) => m.id || m.name).filter((id) => typeof id === "string").sort();
+    } else if (Array.isArray(data)) {
+      return data.map((m) => typeof m === "string" ? m : m.id || m.name).filter((id) => typeof id === "string").sort();
+    }
+    return [];
+  } catch (err) {
+    console.error("Failed to fetch models from endpoint:", err);
+    return [];
+  }
+}
+
+// src/utils/secrets.ts
+var SecretManager = class {
+  constructor(app) {
+    this.app = app;
+  }
+  /**
+   * Retrieves the secret value associated with the given secret name using SecretStorage API.
+   */
+  getSecret(secretName) {
+    if (!secretName) {
+      return null;
+    }
+    const secretStorage = this.app.secretStorage;
+    if (secretStorage && typeof secretStorage.getSecret === "function") {
+      const secret = secretStorage.getSecret(secretName);
+      return secret || null;
+    }
+    return null;
+  }
+};
+
+// src/ui/components/add-provider-modal.ts
+var AddProviderModal = class extends import_obsidian2.Modal {
+  constructor(app, onAdd) {
+    super(app);
+    this.providerName = "";
+    this.baseUrl = "https://api.openai.com/v1";
+    this.secretName = `oh_bot_secret_custom_${Date.now()}`;
+    this.modelsStr = "";
+    this.onAdd = onAdd;
+    this.secretManager = new SecretManager(app);
+  }
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.addClass("harness-modal-content");
+    contentEl.createEl("h2", { text: "Add Custom OpenAI-Compatible Provider" });
+    new import_obsidian2.Setting(contentEl).setName("Provider Name").setDesc("e.g. DeepSeek, Groq, Together AI, LM Studio").addText(
+      (text) => text.setPlaceholder("My Custom Provider").onChange((val) => {
+        this.providerName = val.trim();
+      })
+    );
+    new import_obsidian2.Setting(contentEl).setName("Base URL").setDesc("API Base URL (e.g. https://api.deepseek.com/v1 or http://localhost:1234/v1)").addText(
+      (text) => text.setValue(this.baseUrl).onChange((val) => {
+        this.baseUrl = val.trim();
+      })
+    );
+    new import_obsidian2.Setting(contentEl).setName("API Key Secret").setDesc("Select or store secret in Obsidian SecretStorage").addComponent((el) => {
+      try {
+        return new import_obsidian2.SecretComponent(this.app, el).setValue(this.secretName).onChange((val) => {
+          this.secretName = val;
+        });
+      } catch {
+        const input = el.createEl("input", { type: "password", value: this.secretName });
+        input.addEventListener("change", (e) => {
+          this.secretName = e.target.value;
+        });
+        return el;
+      }
+    });
+    new import_obsidian2.Setting(contentEl).setName("Models (comma separated)").setDesc("e.g. deepseek-chat, deepseek-reasoner").addTextArea((text) => {
+      text.setPlaceholder("model-1, model-2").onChange((val) => {
+        this.modelsStr = val;
+      });
+    }).addButton(
+      (btn) => btn.setButtonText("\u{1F504} Auto-Fetch Models").onClick(async () => {
+        const apiKey = this.secretManager.getSecret(this.secretName) || "";
+        new import_obsidian2.Notice("Fetching models from endpoint...");
+        const fetched = await fetchAvailableModels(this.baseUrl, apiKey);
+        if (fetched.length > 0) {
+          this.modelsStr = fetched.join(", ");
+          new import_obsidian2.Notice(`Found ${fetched.length} models!`);
+          this.onOpen();
+        } else {
+          new import_obsidian2.Notice("Could not fetch models automatically. Please enter model names manually.");
+        }
+      })
+    );
+    new import_obsidian2.Setting(contentEl).addButton(
+      (btn) => btn.setButtonText("Cancel").onClick(() => {
+        this.close();
+      })
+    ).addButton(
+      (btn) => btn.setButtonText("Save Provider").setCta().onClick(async () => {
+        if (!this.providerName) {
+          new import_obsidian2.Notice("Please enter a provider name.");
+          return;
+        }
+        const modelList = this.modelsStr.split(",").map((m) => m.trim()).filter((m) => m.length > 0);
+        const newProvider = {
+          id: `custom_${Date.now()}`,
+          name: this.providerName,
+          type: "custom-openai",
+          baseUrl: this.baseUrl,
+          apiKeySecretName: this.secretName,
+          models: modelList.length > 0 ? modelList : ["default-model"],
+          enabled: true,
+          isCustom: true
+        };
+        await this.onAdd(newProvider);
+        new import_obsidian2.Notice(`Provider "${this.providerName}" added!`);
+        this.close();
+      })
+    );
+  }
+  onClose() {
+    this.contentEl.empty();
+  }
+};
+
+// src/ui/settings-tab.ts
+var HarnessSettingTab = class extends import_obsidian3.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.plugin = plugin;
+    this.secretManager = new SecretManager(app);
+    this.selectedConfigProviderId = this.plugin.settings.activeProviderId || this.plugin.settings.providers[0]?.id || "openrouter";
   }
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: "Obsidian Agent Harness Settings" });
-    new import_obsidian.Setting(containerEl).setName("OpenRouter Secret Name").setDesc("Select or create a secret for OpenRouter API Key using Obsidian SecretStorage").addComponent((el) => {
-      try {
-        return new import_obsidian.SecretComponent(this.app, el).setValue(this.plugin.settings.openRouterSecretName).onChange(async (value) => {
-          this.plugin.settings.openRouterSecretName = value;
-          await this.plugin.saveSettings();
-        });
-      } catch (e) {
-        const textInput = el.createEl("input", { type: "password", value: this.plugin.settings.openRouterSecretName });
-        textInput.addEventListener("change", async (ev) => {
-          this.plugin.settings.openRouterSecretName = ev.target.value;
-          await this.plugin.saveSettings();
-        });
-        return el;
+    containerEl.createEl("h2", { text: "Obsidian Harness Bot Settings" });
+    new import_obsidian3.Setting(containerEl).setName("Default Active Provider").setDesc("Select the default AI provider for agent operations").addDropdown((dropdown) => {
+      for (const prov of this.plugin.settings.providers) {
+        dropdown.addOption(prov.id, prov.name);
       }
-    });
-    new import_obsidian.Setting(containerEl).setName("OpenAI Secret Name").setDesc("Select or create a secret for OpenAI API Key").addComponent((el) => {
-      try {
-        return new import_obsidian.SecretComponent(this.app, el).setValue(this.plugin.settings.openAiSecretName).onChange(async (value) => {
-          this.plugin.settings.openAiSecretName = value;
-          await this.plugin.saveSettings();
-        });
-      } catch (e) {
-        const textInput = el.createEl("input", { type: "password", value: this.plugin.settings.openAiSecretName });
-        textInput.addEventListener("change", async (ev) => {
-          this.plugin.settings.openAiSecretName = ev.target.value;
-          await this.plugin.saveSettings();
-        });
-        return el;
-      }
-    });
-    new import_obsidian.Setting(containerEl).setName("Anthropic Secret Name").setDesc("Select or create a secret for Anthropic API Key").addComponent((el) => {
-      try {
-        return new import_obsidian.SecretComponent(this.app, el).setValue(this.plugin.settings.anthropicSecretName).onChange(async (value) => {
-          this.plugin.settings.anthropicSecretName = value;
-          await this.plugin.saveSettings();
-        });
-      } catch (e) {
-        const textInput = el.createEl("input", { type: "password", value: this.plugin.settings.anthropicSecretName });
-        textInput.addEventListener("change", async (ev) => {
-          this.plugin.settings.anthropicSecretName = ev.target.value;
-          await this.plugin.saveSettings();
-        });
-        return el;
-      }
-    });
-    new import_obsidian.Setting(containerEl).setName("Default Provider").setDesc("Select default LLM Provider").addDropdown(
-      (dropdown) => dropdown.addOption("openrouter", "OpenRouter").addOption("openai", "OpenAI").addOption("anthropic", "Anthropic").addOption("ollama", "Ollama / Custom OpenAI-Compatible").setValue(this.plugin.settings.defaultProvider).onChange(async (value) => {
-        this.plugin.settings.defaultProvider = value;
+      dropdown.setValue(this.plugin.settings.activeProviderId);
+      dropdown.onChange(async (val) => {
+        this.plugin.settings.activeProviderId = val;
+        const activeProv = this.plugin.settings.providers.find((p) => p.id === val);
+        if (activeProv && activeProv.models.length > 0) {
+          this.plugin.settings.activeModel = activeProv.models[0];
+        }
         await this.plugin.saveSettings();
+        this.display();
+      });
+    });
+    const currentActiveProvider = this.plugin.settings.providers.find(
+      (p) => p.id === this.plugin.settings.activeProviderId
+    ) || this.plugin.settings.providers[0];
+    new import_obsidian3.Setting(containerEl).setName("Default Active Model").setDesc(`Select model for ${currentActiveProvider?.name || "current provider"}`).addDropdown((dropdown) => {
+      const models = currentActiveProvider?.models || [];
+      for (const m of models) {
+        dropdown.addOption(m, m);
+      }
+      if (models.includes(this.plugin.settings.activeModel)) {
+        dropdown.setValue(this.plugin.settings.activeModel);
+      } else if (models.length > 0) {
+        dropdown.setValue(models[0]);
+      }
+      dropdown.onChange(async (val) => {
+        this.plugin.settings.activeModel = val;
+        await this.plugin.saveSettings();
+      });
+    });
+    containerEl.createEl("h3", { text: "Provider Configuration" });
+    new import_obsidian3.Setting(containerEl).setName("Select Provider to Configure").setDesc("Choose a provider from the list to update its API key, base URL, or model list").addDropdown((dropdown) => {
+      for (const prov of this.plugin.settings.providers) {
+        dropdown.addOption(prov.id, prov.name);
+      }
+      dropdown.setValue(this.selectedConfigProviderId);
+      dropdown.onChange((val) => {
+        this.selectedConfigProviderId = val;
+        this.display();
+      });
+    }).addButton(
+      (btn) => btn.setButtonText("+ Add Custom Provider").setCta().onClick(() => {
+        new AddProviderModal(this.app, async (newProvider) => {
+          this.plugin.settings.providers.push(newProvider);
+          this.selectedConfigProviderId = newProvider.id;
+          await this.plugin.saveSettings();
+          this.display();
+        }).open();
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Default Model ID").setDesc("Model identifier (e.g. anthropic/claude-3.7-sonnet, gpt-4o, llama3)").addText(
-      (text) => text.setPlaceholder("anthropic/claude-3.7-sonnet").setValue(this.plugin.settings.defaultModel).onChange(async (value) => {
-        this.plugin.settings.defaultModel = value.trim();
-        await this.plugin.saveSettings();
-      })
+    const configProvider = this.plugin.settings.providers.find(
+      (p) => p.id === this.selectedConfigProviderId
     );
-    new import_obsidian.Setting(containerEl).setName("Custom Base URL (Ollama / Local Server)").setDesc("Endpoint URL for Ollama or OpenAI-compatible custom servers").addText(
-      (text) => text.setPlaceholder("http://localhost:11434/v1").setValue(this.plugin.settings.customBaseUrl).onChange(async (value) => {
-        this.plugin.settings.customBaseUrl = value.trim();
-        await this.plugin.saveSettings();
-      })
-    );
-    new import_obsidian.Setting(containerEl).setName("Vault Modification Safety Mode").setDesc("Strict mode prompts for user confirmation before writing or modifying any Vault file").addDropdown(
+    if (configProvider) {
+      const providerCardEl = containerEl.createEl("div", { cls: "harness-provider-card" });
+      providerCardEl.style.border = "1px solid var(--background-modifier-border)";
+      providerCardEl.style.borderRadius = "8px";
+      providerCardEl.style.padding = "12px";
+      providerCardEl.style.marginBottom = "16px";
+      providerCardEl.style.backgroundColor = "var(--background-secondary)";
+      providerCardEl.createEl("h4", { text: `\u2699\uFE0F Settings for: ${configProvider.name}` });
+      new import_obsidian3.Setting(providerCardEl).setName("Base URL").setDesc("Endpoint URL for this provider").addText(
+        (text) => text.setValue(configProvider.baseUrl).onChange(async (val) => {
+          configProvider.baseUrl = val.trim();
+          await this.plugin.saveSettings();
+        })
+      );
+      new import_obsidian3.Setting(providerCardEl).setName("API Key Secret").setDesc(`Stored in Obsidian SecretStorage under ID: "${configProvider.apiKeySecretName}"`).addComponent((el) => {
+        try {
+          return new import_obsidian3.SecretComponent(this.app, el).setValue(configProvider.apiKeySecretName).onChange(async (val) => {
+            configProvider.apiKeySecretName = val;
+            await this.plugin.saveSettings();
+          });
+        } catch {
+          const input = el.createEl("input", { type: "password", value: configProvider.apiKeySecretName });
+          input.addEventListener("change", async (ev) => {
+            configProvider.apiKeySecretName = ev.target.value;
+            await this.plugin.saveSettings();
+          });
+          return el;
+        }
+      });
+      new import_obsidian3.Setting(providerCardEl).setName("Available Models").setDesc("Comma-separated list of model identifiers").addTextArea(
+        (text) => text.setValue(configProvider.models.join(", ")).onChange(async (val) => {
+          configProvider.models = val.split(",").map((m) => m.trim()).filter((m) => m.length > 0);
+          await this.plugin.saveSettings();
+        })
+      ).addButton(
+        (btn) => btn.setButtonText("\u{1F504} Fetch Models from Endpoint").onClick(async () => {
+          const apiKey = this.secretManager.getSecret(configProvider.apiKeySecretName) || "";
+          new import_obsidian3.Notice(`Fetching models for ${configProvider.name}...`);
+          const fetched = await fetchAvailableModels(configProvider.baseUrl, apiKey);
+          if (fetched.length > 0) {
+            configProvider.models = fetched;
+            await this.plugin.saveSettings();
+            new import_obsidian3.Notice(`Updated ${configProvider.name} with ${fetched.length} models!`);
+            this.display();
+          } else {
+            new import_obsidian3.Notice("Could not fetch models automatically from endpoint.");
+          }
+        })
+      );
+      if (configProvider.isCustom) {
+        new import_obsidian3.Setting(providerCardEl).setName("Delete Provider").setDesc("Remove this custom provider from your settings").addButton(
+          (btn) => btn.setButtonText("\u{1F5D1}\uFE0F Delete Provider").setWarning().onClick(async () => {
+            this.plugin.settings.providers = this.plugin.settings.providers.filter(
+              (p) => p.id !== configProvider.id
+            );
+            this.selectedConfigProviderId = this.plugin.settings.providers[0]?.id || "openrouter";
+            if (this.plugin.settings.activeProviderId === configProvider.id) {
+              this.plugin.settings.activeProviderId = this.selectedConfigProviderId;
+            }
+            await this.plugin.saveSettings();
+            new import_obsidian3.Notice(`Deleted provider "${configProvider.name}".`);
+            this.display();
+          })
+        );
+      }
+    }
+    containerEl.createEl("h3", { text: "General & Safety" });
+    new import_obsidian3.Setting(containerEl).setName("Vault Modification Safety Mode").setDesc("Strict mode prompts for user confirmation before writing or modifying any Vault file").addDropdown(
       (dropdown) => dropdown.addOption("strict", "Strict (Prompt before file edits)").addOption("auto", "Auto (Auto-approve file edits)").setValue(this.plugin.settings.safetyMode).onChange(async (value) => {
         this.plugin.settings.safetyMode = value;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Max Agent Iterations").setDesc("Maximum tool-execution steps per turn (1 to 25)").addSlider(
-      (slider) => slider.setLimits(1, 25, 1).setValue(this.plugin.settings.maxAgentSteps).setDynamicTooltip().onChange(async (value) => {
-        this.plugin.settings.maxAgentSteps = value;
-        await this.plugin.saveSettings();
-      })
-    );
-    new import_obsidian.Setting(containerEl).setName("System Prompt").setDesc("Base instructions for the Agent Harness").addTextArea(
+    new import_obsidian3.Setting(containerEl).setName("System Prompt").setDesc("Base instructions for the Agent Harness").addTextArea(
       (text) => text.setValue(this.plugin.settings.systemPrompt).onChange(async (value) => {
         this.plugin.settings.systemPrompt = value;
         await this.plugin.saveSettings();
@@ -139,7 +414,7 @@ var HarnessSettingTab = class extends import_obsidian.PluginSettingTab {
 };
 
 // src/ui/chat-view.ts
-var import_obsidian10 = require("obsidian");
+var import_obsidian12 = require("obsidian");
 
 // src/engine/providers/base.ts
 var LLMProvider = class {
@@ -219,7 +494,7 @@ var SSEStreamParser = class {
 };
 
 // src/engine/providers/openrouter.ts
-var import_obsidian2 = require("obsidian");
+var import_obsidian4 = require("obsidian");
 var OpenRouterProvider = class extends LLMProvider {
   constructor() {
     super(...arguments);
@@ -319,7 +594,7 @@ var OpenRouterProvider = class extends LLMProvider {
         toolCalls: finalToolCalls.length > 0 ? finalToolCalls : void 0
       };
     } catch (err) {
-      const reqRes = await (0, import_obsidian2.requestUrl)({
+      const reqRes = await (0, import_obsidian4.requestUrl)({
         url: endpoint,
         method: "POST",
         headers: {
@@ -339,7 +614,7 @@ var OpenRouterProvider = class extends LLMProvider {
 };
 
 // src/engine/providers/openai.ts
-var import_obsidian3 = require("obsidian");
+var import_obsidian5 = require("obsidian");
 var OpenAIProvider = class extends LLMProvider {
   constructor() {
     super(...arguments);
@@ -437,7 +712,7 @@ var OpenAIProvider = class extends LLMProvider {
         toolCalls: finalToolCalls.length > 0 ? finalToolCalls : void 0
       };
     } catch (err) {
-      const reqRes = await (0, import_obsidian3.requestUrl)({
+      const reqRes = await (0, import_obsidian5.requestUrl)({
         url: endpoint,
         method: "POST",
         headers: {
@@ -457,7 +732,7 @@ var OpenAIProvider = class extends LLMProvider {
 };
 
 // src/engine/providers/anthropic.ts
-var import_obsidian4 = require("obsidian");
+var import_obsidian6 = require("obsidian");
 var AnthropicProvider = class extends LLMProvider {
   constructor() {
     super(...arguments);
@@ -565,7 +840,7 @@ var AnthropicProvider = class extends LLMProvider {
         toolCalls: toolCallList.length > 0 ? toolCallList : void 0
       };
     } catch (err) {
-      const reqRes = await (0, import_obsidian4.requestUrl)({
+      const reqRes = await (0, import_obsidian6.requestUrl)({
         url: endpoint,
         method: "POST",
         headers: {
@@ -601,7 +876,7 @@ var AnthropicProvider = class extends LLMProvider {
 };
 
 // src/engine/providers/ollama.ts
-var import_obsidian5 = require("obsidian");
+var import_obsidian7 = require("obsidian");
 var OllamaProvider = class extends LLMProvider {
   constructor() {
     super(...arguments);
@@ -637,7 +912,7 @@ var OllamaProvider = class extends LLMProvider {
     if (apiKey) {
       headers["Authorization"] = `Bearer ${apiKey}`;
     }
-    const reqRes = await (0, import_obsidian5.requestUrl)({
+    const reqRes = await (0, import_obsidian7.requestUrl)({
       url: endpoint,
       method: "POST",
       headers,
@@ -663,27 +938,6 @@ var OllamaProvider = class extends LLMProvider {
   }
 };
 
-// src/utils/secrets.ts
-var SecretManager = class {
-  constructor(app) {
-    this.app = app;
-  }
-  /**
-   * Retrieves the secret value associated with the given secret name using SecretStorage API.
-   */
-  getSecret(secretName) {
-    if (!secretName) {
-      return null;
-    }
-    const secretStorage = this.app.secretStorage;
-    if (secretStorage && typeof secretStorage.getSecret === "function") {
-      const secret = secretStorage.getSecret(secretName);
-      return secret || null;
-    }
-    return null;
-  }
-};
-
 // src/engine/agent.ts
 var AgentHarness = class {
   constructor(app, settings, toolRegistry) {
@@ -694,36 +948,39 @@ var AgentHarness = class {
     this.toolRegistry = toolRegistry;
     this.providers.set("openrouter", new OpenRouterProvider());
     this.providers.set("openai", new OpenAIProvider());
+    this.providers.set("gemini", new OpenAIProvider());
+    this.providers.set("custom-openai", new OpenAIProvider());
     this.providers.set("anthropic", new AnthropicProvider());
     this.providers.set("ollama", new OllamaProvider());
   }
-  getActiveProvider() {
-    const providerType = this.settings.defaultProvider || "openrouter";
-    const provider = this.providers.get(providerType);
+  getActiveProviderConfig(providerId) {
+    const targetId = providerId || this.settings.activeProviderId || "openrouter";
+    const config = this.settings.providers.find((p) => p.id === targetId) || this.settings.providers[0];
+    if (!config) {
+      throw new Error(`No provider found for ID "${targetId}"`);
+    }
+    let provider = this.providers.get(config.type);
     if (!provider) {
-      throw new Error(`Unsupported provider type: ${providerType}`);
+      provider = this.providers.get("openai");
     }
-    let secretName = "";
-    if (providerType === "openrouter")
-      secretName = this.settings.openRouterSecretName;
-    else if (providerType === "openai")
-      secretName = this.settings.openAiSecretName;
-    else if (providerType === "anthropic")
-      secretName = this.settings.anthropicSecretName;
-    const apiKey = secretName ? this.secretManager.getSecret(secretName) || "" : "";
-    if (providerType !== "ollama" && !apiKey) {
-      throw new Error(`No API key found for secret "${secretName}". Please set it in plugin settings using SecretStorage.`);
+    if (!provider) {
+      throw new Error(`Unsupported provider type: ${config.type}`);
     }
-    return { provider, apiKey };
+    const apiKey = config.apiKeySecretName ? this.secretManager.getSecret(config.apiKeySecretName) || "" : "";
+    if (config.type !== "ollama" && !apiKey) {
+      throw new Error(`No API key found for provider "${config.name}". Please set it in Settings.`);
+    }
+    return { provider, config, apiKey };
   }
   /**
    * Runs the multi-step agent turn loop.
    */
-  async runTurn(history, onEvent, onConfirm) {
-    const { provider, apiKey } = this.getActiveProvider();
+  async runTurn(history, onEvent, onConfirm, overrideProviderId, overrideModel) {
+    const { provider, config, apiKey } = this.getActiveProviderConfig(overrideProviderId);
+    const model = overrideModel || this.settings.activeModel || config.models[0] || "anthropic/claude-3.7-sonnet";
     const messages = [...history];
     const tools = this.toolRegistry.getSchemas();
-    const maxSteps = this.settings.maxAgentSteps || 10;
+    const maxSteps = 25;
     let step = 0;
     let keepRunning = true;
     while (keepRunning && step < maxSteps) {
@@ -731,8 +988,8 @@ var AgentHarness = class {
       let streamContent = "";
       const response = await provider.chatCompletion(
         apiKey,
-        this.settings.customBaseUrl,
-        this.settings.defaultModel,
+        config.baseUrl,
+        model,
         this.settings.systemPrompt,
         messages,
         tools,
@@ -848,7 +1105,7 @@ var AgentTool = class {
 };
 
 // src/tools/vault/read-file.ts
-var import_obsidian6 = require("obsidian");
+var import_obsidian8 = require("obsidian");
 var VaultReadFileTool = class extends AgentTool {
   constructor() {
     super(...arguments);
@@ -869,7 +1126,7 @@ var VaultReadFileTool = class extends AgentTool {
   async execute(args, app) {
     try {
       const file = app.vault.getAbstractFileByPath(args.path);
-      if (!file || !(file instanceof import_obsidian6.TFile)) {
+      if (!file || !(file instanceof import_obsidian8.TFile)) {
         return {
           success: false,
           output: "",
@@ -947,7 +1204,7 @@ var VaultCreateFileTool = class extends AgentTool {
 };
 
 // src/tools/vault/patch-file.ts
-var import_obsidian7 = require("obsidian");
+var import_obsidian9 = require("obsidian");
 var VaultPatchFileTool = class extends AgentTool {
   constructor() {
     super(...arguments);
@@ -977,7 +1234,7 @@ var VaultPatchFileTool = class extends AgentTool {
   async execute(args, app) {
     try {
       const file = app.vault.getAbstractFileByPath(args.path);
-      if (!file || !(file instanceof import_obsidian7.TFile)) {
+      if (!file || !(file instanceof import_obsidian9.TFile)) {
         return {
           success: false,
           output: "",
@@ -1008,7 +1265,7 @@ var VaultPatchFileTool = class extends AgentTool {
 };
 
 // src/tools/vault/list-dir.ts
-var import_obsidian8 = require("obsidian");
+var import_obsidian10 = require("obsidian");
 var VaultListDirTool = class extends AgentTool {
   constructor() {
     super(...arguments);
@@ -1030,7 +1287,7 @@ var VaultListDirTool = class extends AgentTool {
     try {
       const folderPath = (args.path || "").replace(/^\//, "");
       const folder = folderPath === "" ? app.vault.getRoot() : app.vault.getAbstractFileByPath(folderPath);
-      if (!folder || !(folder instanceof import_obsidian8.TFolder)) {
+      if (!folder || !(folder instanceof import_obsidian10.TFolder)) {
         return {
           success: false,
           output: "",
@@ -1040,7 +1297,7 @@ var VaultListDirTool = class extends AgentTool {
       const items = folder.children.map((child) => ({
         name: child.name,
         path: child.path,
-        type: child instanceof import_obsidian8.TFolder ? "folder" : "file"
+        type: child instanceof import_obsidian10.TFolder ? "folder" : "file"
       }));
       return {
         success: true,
@@ -1202,8 +1459,8 @@ ${msg.content}
 };
 
 // src/ui/components/confirmation-modal.ts
-var import_obsidian9 = require("obsidian");
-var ConfirmationModal = class extends import_obsidian9.Modal {
+var import_obsidian11 = require("obsidian");
+var ConfirmationModal = class extends import_obsidian11.Modal {
   constructor(app, toolCall, onResult) {
     super(app);
     this.toolCall = toolCall;
@@ -1219,7 +1476,7 @@ var ConfirmationModal = class extends import_obsidian9.Modal {
     });
     const codeBlock = contentEl.createEl("pre");
     codeBlock.createEl("code", { text: this.toolCall.function.arguments });
-    new import_obsidian9.Setting(contentEl).addButton(
+    new import_obsidian11.Setting(contentEl).addButton(
       (btn) => btn.setButtonText("Deny").onClick(() => {
         this.onResult(false);
         this.close();
@@ -1239,20 +1496,24 @@ var ConfirmationModal = class extends import_obsidian9.Modal {
 
 // src/ui/chat-view.ts
 var HARNESS_VIEW_TYPE = "harness-chat-view";
-var HarnessChatView = class extends import_obsidian10.ItemView {
+var HarnessChatView = class extends import_obsidian12.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.conversationHistory = [];
+    this.currentProviderId = "openrouter";
+    this.currentModel = "anthropic/claude-3.7-sonnet";
     this.plugin = plugin;
     this.toolRegistry = new ToolRegistry();
     this.agentHarness = new AgentHarness(this.app, this.plugin.settings, this.toolRegistry);
     this.exporter = new MarkdownExporter(this.app);
+    this.currentProviderId = this.plugin.settings.activeProviderId || "openrouter";
+    this.currentModel = this.plugin.settings.activeModel || "anthropic/claude-3.7-sonnet";
   }
   getViewType() {
     return HARNESS_VIEW_TYPE;
   }
   getDisplayText() {
-    return "Agent Harness";
+    return "Harness Bot";
   }
   getIcon() {
     return "bot";
@@ -1262,41 +1523,36 @@ var HarnessChatView = class extends import_obsidian10.ItemView {
     container.empty();
     container.addClass("harness-chat-container");
     const headerEl = container.createEl("div", { cls: "harness-chat-header" });
-    headerEl.createEl("span", { text: "\u{1F916} Agent Harness", cls: "harness-title" });
-    const actionsEl = headerEl.createEl("div", { cls: "harness-chat-header-actions" });
-    this.providerSelectEl = actionsEl.createEl("select");
-    const providers = [
-      { id: "openrouter", label: "OpenRouter" },
-      { id: "openai", label: "OpenAI" },
-      { id: "anthropic", label: "Anthropic" },
-      { id: "ollama", label: "Ollama" }
-    ];
-    for (const p of providers) {
-      const opt = this.providerSelectEl.createEl("option", { value: p.id, text: p.label });
-      if (p.id === this.plugin.settings.defaultProvider)
-        opt.selected = true;
-    }
-    this.providerSelectEl.addEventListener("change", async () => {
-      this.plugin.settings.defaultProvider = this.providerSelectEl.value;
-      await this.plugin.saveSettings();
+    headerEl.createEl("span", { text: "\u{1F916} Harness Bot", cls: "harness-title" });
+    const selectorsEl = headerEl.createEl("div", { cls: "harness-chat-header-actions" });
+    this.providerSelectEl = selectorsEl.createEl("select");
+    this.refreshProviderDropdown();
+    this.providerSelectEl.addEventListener("change", () => {
+      this.currentProviderId = this.providerSelectEl.value;
+      this.refreshModelDropdown();
     });
-    const exportBtn = actionsEl.createEl("button", { text: "\u{1F4E4} Export" });
+    this.modelSelectEl = selectorsEl.createEl("select");
+    this.refreshModelDropdown();
+    this.modelSelectEl.addEventListener("change", () => {
+      this.currentModel = this.modelSelectEl.value;
+    });
+    const exportBtn = selectorsEl.createEl("button", { text: "\u{1F4E4} Export" });
     exportBtn.addEventListener("click", async () => {
       if (this.conversationHistory.length === 0) {
-        new import_obsidian10.Notice("No chat history to export.");
+        new import_obsidian12.Notice("No chat history to export.");
         return;
       }
       try {
         const exportedPath = await this.exporter.exportChatToMarkdown(
           this.conversationHistory,
-          this.plugin.settings.defaultModel
+          this.currentModel
         );
-        new import_obsidian10.Notice(`Chat exported to ${exportedPath}`);
+        new import_obsidian12.Notice(`Chat exported to ${exportedPath}`);
       } catch (e) {
-        new import_obsidian10.Notice(`Export failed: ${e.message}`);
+        new import_obsidian12.Notice(`Export failed: ${e.message}`);
       }
     });
-    const clearBtn = actionsEl.createEl("button", { text: "\u{1F5D1}\uFE0F Clear" });
+    const clearBtn = selectorsEl.createEl("button", { text: "\u{1F5D1}\uFE0F Clear" });
     clearBtn.addEventListener("click", () => {
       this.conversationHistory = [];
       this.renderMessages();
@@ -1306,7 +1562,7 @@ var HarnessChatView = class extends import_obsidian10.ItemView {
     const inputContainerEl = inputAreaEl.createEl("div", { cls: "harness-chat-input-container" });
     this.inputTextAreaEl = inputContainerEl.createEl("textarea", {
       cls: "harness-chat-textarea",
-      placeholder: "Ask the Agent to inspect, search, or write notes..."
+      placeholder: "Ask Harness Bot to read, search, plan, or create notes..."
     });
     this.sendButtonEl = inputContainerEl.createEl("button", { text: "Send", cls: "mod-cta" });
     const handleSend = async () => {
@@ -1321,7 +1577,7 @@ var HarnessChatView = class extends import_obsidian10.ItemView {
       const streamingMsgEl = this.messagesContainerEl.createEl("div", {
         cls: "harness-message harness-message-assistant"
       });
-      streamingMsgEl.createEl("div", { text: "\u{1F916} Agent thinking...", cls: "harness-message-header" });
+      streamingMsgEl.createEl("div", { text: `\u{1F916} Harness Bot (${this.currentModel})`, cls: "harness-message-header" });
       const textContentEl = streamingMsgEl.createEl("div", { cls: "harness-message-body" });
       try {
         const updatedHistory = await this.agentHarness.runTurn(
@@ -1342,11 +1598,13 @@ var HarnessChatView = class extends import_obsidian10.ItemView {
             return new Promise((resolve) => {
               new ConfirmationModal(this.app, toolCall, resolve).open();
             });
-          }
+          },
+          this.currentProviderId,
+          this.currentModel
         );
         this.conversationHistory = updatedHistory;
       } catch (err) {
-        new import_obsidian10.Notice(`Agent error: ${err.message}`);
+        new import_obsidian12.Notice(`Agent error: ${err.message}`);
         textContentEl.setText(`\u26A0\uFE0F Error: ${err.message}`);
       } finally {
         this.sendButtonEl.disabled = false;
@@ -1362,6 +1620,31 @@ var HarnessChatView = class extends import_obsidian10.ItemView {
     });
     this.renderMessages();
   }
+  refreshProviderDropdown() {
+    if (!this.providerSelectEl)
+      return;
+    this.providerSelectEl.empty();
+    for (const p of this.plugin.settings.providers) {
+      const opt = this.providerSelectEl.createEl("option", { value: p.id, text: p.name });
+      if (p.id === this.currentProviderId)
+        opt.selected = true;
+    }
+  }
+  refreshModelDropdown() {
+    if (!this.modelSelectEl)
+      return;
+    this.modelSelectEl.empty();
+    const currentProv = this.plugin.settings.providers.find((p) => p.id === this.currentProviderId);
+    const models = currentProv?.models || [];
+    for (const m of models) {
+      const opt = this.modelSelectEl.createEl("option", { value: m, text: m });
+      if (m === this.currentModel)
+        opt.selected = true;
+    }
+    if (models.length > 0 && !models.includes(this.currentModel)) {
+      this.currentModel = models[0];
+    }
+  }
   renderMessages() {
     if (!this.messagesContainerEl)
       return;
@@ -1369,7 +1652,7 @@ var HarnessChatView = class extends import_obsidian10.ItemView {
     if (this.conversationHistory.length === 0) {
       const emptyEl = this.messagesContainerEl.createEl("div", {
         cls: "harness-empty-state",
-        text: "No active conversation. Type a message below to start the Agent Harness."
+        text: "No active conversation. Type a message below to start Obsidian Harness Bot."
       });
       emptyEl.style.opacity = "0.6";
       emptyEl.style.textAlign = "center";
@@ -1380,12 +1663,18 @@ var HarnessChatView = class extends import_obsidian10.ItemView {
       if (msg.role === "user") {
         const msgEl = this.messagesContainerEl.createEl("div", { cls: "harness-message harness-message-user" });
         msgEl.createEl("div", { text: "\u{1F464} You", cls: "harness-message-header" });
-        msgEl.createEl("div", { text: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content || ""), cls: "harness-message-body" });
+        msgEl.createEl("div", {
+          text: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content || ""),
+          cls: "harness-message-body"
+        });
       } else if (msg.role === "assistant") {
         if (msg.content) {
           const msgEl = this.messagesContainerEl.createEl("div", { cls: "harness-message harness-message-assistant" });
-          msgEl.createEl("div", { text: "\u{1F916} Agent", cls: "harness-message-header" });
-          msgEl.createEl("div", { text: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content || ""), cls: "harness-message-body" });
+          msgEl.createEl("div", { text: "\u{1F916} Harness Bot", cls: "harness-message-header" });
+          msgEl.createEl("div", {
+            text: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content || ""),
+            cls: "harness-message-body"
+          });
         }
         if (msg.tool_calls) {
           for (const tc of msg.tool_calls) {
@@ -1399,7 +1688,9 @@ var HarnessChatView = class extends import_obsidian10.ItemView {
         const card = this.messagesContainerEl.createEl("div", { cls: "harness-tool-card" });
         card.createEl("div", { text: `\u2699\uFE0F Tool Output (${msg.name})`, cls: "harness-tool-title" });
         const outPre = card.createEl("pre");
-        outPre.createEl("code", { text: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content || "") });
+        outPre.createEl("code", {
+          text: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content || "")
+        });
       }
     }
     this.messagesContainerEl.scrollTop = this.messagesContainerEl.scrollHeight;
@@ -1409,7 +1700,7 @@ var HarnessChatView = class extends import_obsidian10.ItemView {
 };
 
 // src/main.ts
-var HarnessPlugin = class extends import_obsidian11.Plugin {
+var HarnessPlugin = class extends import_obsidian13.Plugin {
   constructor() {
     super(...arguments);
     this.settings = DEFAULT_SETTINGS;
@@ -1417,12 +1708,12 @@ var HarnessPlugin = class extends import_obsidian11.Plugin {
   async onload() {
     await this.loadSettings();
     this.registerView(HARNESS_VIEW_TYPE, (leaf) => new HarnessChatView(leaf, this));
-    this.addRibbonIcon("bot", "Open Agent Harness Chat", () => {
+    this.addRibbonIcon("bot", "Open Obsidian Harness Bot", () => {
       this.activateView();
     });
     this.addCommand({
-      id: "open-agent-harness-chat",
-      name: "Open Agent Harness Chat",
+      id: "open-obsidian-harness-bot",
+      name: "Open Obsidian Harness Bot",
       callback: () => {
         this.activateView();
       }
@@ -1452,6 +1743,9 @@ var HarnessPlugin = class extends import_obsidian11.Plugin {
   }
   async loadSettings() {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    if (!this.settings.providers || this.settings.providers.length === 0) {
+      this.settings.providers = DEFAULT_SETTINGS.providers;
+    }
   }
   async saveSettings() {
     await this.saveData(this.settings);

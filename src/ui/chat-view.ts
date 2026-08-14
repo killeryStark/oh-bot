@@ -1,6 +1,6 @@
-import { ItemView, WorkspaceLeaf, Notice, MarkdownView } from 'obsidian';
+import { ItemView, WorkspaceLeaf, Notice } from 'obsidian';
 import type HarnessPlugin from '../main';
-import { LLMMessage, ProviderType, ToolCall } from '../types';
+import { LLMMessage, ToolCall } from '../types';
 import { AgentHarness } from '../engine/agent';
 import { ToolRegistry } from '../tools/registry';
 import { MarkdownExporter } from '../utils/markdown-exporter';
@@ -19,6 +19,10 @@ export class HarnessChatView extends ItemView {
   private inputTextAreaEl!: HTMLTextAreaElement;
   private sendButtonEl!: HTMLButtonElement;
   private providerSelectEl!: HTMLSelectElement;
+  private modelSelectEl!: HTMLSelectElement;
+
+  private currentProviderId = 'openrouter';
+  private currentModel = 'anthropic/claude-3.7-sonnet';
 
   constructor(leaf: WorkspaceLeaf, plugin: HarnessPlugin) {
     super(leaf);
@@ -26,6 +30,8 @@ export class HarnessChatView extends ItemView {
     this.toolRegistry = new ToolRegistry();
     this.agentHarness = new AgentHarness(this.app, this.plugin.settings, this.toolRegistry);
     this.exporter = new MarkdownExporter(this.app);
+    this.currentProviderId = this.plugin.settings.activeProviderId || 'openrouter';
+    this.currentModel = this.plugin.settings.activeModel || 'anthropic/claude-3.7-sonnet';
   }
 
   getViewType(): string {
@@ -33,7 +39,7 @@ export class HarnessChatView extends ItemView {
   }
 
   getDisplayText(): string {
-    return 'Agent Harness';
+    return 'Harness Bot';
   }
 
   getIcon(): string {
@@ -47,29 +53,29 @@ export class HarnessChatView extends ItemView {
 
     // Header
     const headerEl = container.createEl('div', { cls: 'harness-chat-header' });
-    headerEl.createEl('span', { text: '🤖 Agent Harness', cls: 'harness-title' });
+    headerEl.createEl('span', { text: '🤖 Harness Bot', cls: 'harness-title' });
 
-    const actionsEl = headerEl.createEl('div', { cls: 'harness-chat-header-actions' });
+    const selectorsEl = headerEl.createEl('div', { cls: 'harness-chat-header-actions' });
 
     // Provider Selector
-    this.providerSelectEl = actionsEl.createEl('select');
-    const providers: { id: ProviderType; label: string }[] = [
-      { id: 'openrouter', label: 'OpenRouter' },
-      { id: 'openai', label: 'OpenAI' },
-      { id: 'anthropic', label: 'Anthropic' },
-      { id: 'ollama', label: 'Ollama' },
-    ];
-    for (const p of providers) {
-      const opt = this.providerSelectEl.createEl('option', { value: p.id, text: p.label });
-      if (p.id === this.plugin.settings.defaultProvider) opt.selected = true;
-    }
-    this.providerSelectEl.addEventListener('change', async () => {
-      this.plugin.settings.defaultProvider = this.providerSelectEl.value as ProviderType;
-      await this.plugin.saveSettings();
+    this.providerSelectEl = selectorsEl.createEl('select');
+    this.refreshProviderDropdown();
+
+    this.providerSelectEl.addEventListener('change', () => {
+      this.currentProviderId = this.providerSelectEl.value;
+      this.refreshModelDropdown();
+    });
+
+    // Model Selector
+    this.modelSelectEl = selectorsEl.createEl('select');
+    this.refreshModelDropdown();
+
+    this.modelSelectEl.addEventListener('change', () => {
+      this.currentModel = this.modelSelectEl.value;
     });
 
     // Export Button
-    const exportBtn = actionsEl.createEl('button', { text: '📤 Export' });
+    const exportBtn = selectorsEl.createEl('button', { text: '📤 Export' });
     exportBtn.addEventListener('click', async () => {
       if (this.conversationHistory.length === 0) {
         new Notice('No chat history to export.');
@@ -78,7 +84,7 @@ export class HarnessChatView extends ItemView {
       try {
         const exportedPath = await this.exporter.exportChatToMarkdown(
           this.conversationHistory,
-          this.plugin.settings.defaultModel
+          this.currentModel
         );
         new Notice(`Chat exported to ${exportedPath}`);
       } catch (e: any) {
@@ -87,7 +93,7 @@ export class HarnessChatView extends ItemView {
     });
 
     // Clear Button
-    const clearBtn = actionsEl.createEl('button', { text: '🗑️ Clear' });
+    const clearBtn = selectorsEl.createEl('button', { text: '🗑️ Clear' });
     clearBtn.addEventListener('click', () => {
       this.conversationHistory = [];
       this.renderMessages();
@@ -102,7 +108,7 @@ export class HarnessChatView extends ItemView {
 
     this.inputTextAreaEl = inputContainerEl.createEl('textarea', {
       cls: 'harness-chat-textarea',
-      placeholder: 'Ask the Agent to inspect, search, or write notes...',
+      placeholder: 'Ask Harness Bot to read, search, plan, or create notes...',
     });
 
     this.sendButtonEl = inputContainerEl.createEl('button', { text: 'Send', cls: 'mod-cta' });
@@ -123,7 +129,7 @@ export class HarnessChatView extends ItemView {
       const streamingMsgEl = this.messagesContainerEl.createEl('div', {
         cls: 'harness-message harness-message-assistant',
       });
-      streamingMsgEl.createEl('div', { text: '🤖 Agent thinking...', cls: 'harness-message-header' });
+      streamingMsgEl.createEl('div', { text: `🤖 Harness Bot (${this.currentModel})`, cls: 'harness-message-header' });
       const textContentEl = streamingMsgEl.createEl('div', { cls: 'harness-message-body' });
 
       try {
@@ -145,7 +151,9 @@ export class HarnessChatView extends ItemView {
             return new Promise<boolean>((resolve) => {
               new ConfirmationModal(this.app, toolCall, resolve).open();
             });
-          }
+          },
+          this.currentProviderId,
+          this.currentModel
         );
 
         this.conversationHistory = updatedHistory;
@@ -169,6 +177,32 @@ export class HarnessChatView extends ItemView {
     this.renderMessages();
   }
 
+  private refreshProviderDropdown() {
+    if (!this.providerSelectEl) return;
+    this.providerSelectEl.empty();
+    for (const p of this.plugin.settings.providers) {
+      const opt = this.providerSelectEl.createEl('option', { value: p.id, text: p.name });
+      if (p.id === this.currentProviderId) opt.selected = true;
+    }
+  }
+
+  private refreshModelDropdown() {
+    if (!this.modelSelectEl) return;
+    this.modelSelectEl.empty();
+
+    const currentProv = this.plugin.settings.providers.find((p) => p.id === this.currentProviderId);
+    const models = currentProv?.models || [];
+
+    for (const m of models) {
+      const opt = this.modelSelectEl.createEl('option', { value: m, text: m });
+      if (m === this.currentModel) opt.selected = true;
+    }
+
+    if (models.length > 0 && !models.includes(this.currentModel)) {
+      this.currentModel = models[0];
+    }
+  }
+
   private renderMessages() {
     if (!this.messagesContainerEl) return;
     this.messagesContainerEl.empty();
@@ -176,7 +210,7 @@ export class HarnessChatView extends ItemView {
     if (this.conversationHistory.length === 0) {
       const emptyEl = this.messagesContainerEl.createEl('div', {
         cls: 'harness-empty-state',
-        text: 'No active conversation. Type a message below to start the Agent Harness.',
+        text: 'No active conversation. Type a message below to start Obsidian Harness Bot.',
       });
       emptyEl.style.opacity = '0.6';
       emptyEl.style.textAlign = 'center';
@@ -188,12 +222,18 @@ export class HarnessChatView extends ItemView {
       if (msg.role === 'user') {
         const msgEl = this.messagesContainerEl.createEl('div', { cls: 'harness-message harness-message-user' });
         msgEl.createEl('div', { text: '👤 You', cls: 'harness-message-header' });
-        msgEl.createEl('div', { text: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content || ''), cls: 'harness-message-body' });
+        msgEl.createEl('div', {
+          text: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content || ''),
+          cls: 'harness-message-body',
+        });
       } else if (msg.role === 'assistant') {
         if (msg.content) {
           const msgEl = this.messagesContainerEl.createEl('div', { cls: 'harness-message harness-message-assistant' });
-          msgEl.createEl('div', { text: '🤖 Agent', cls: 'harness-message-header' });
-          msgEl.createEl('div', { text: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content || ''), cls: 'harness-message-body' });
+          msgEl.createEl('div', { text: '🤖 Harness Bot', cls: 'harness-message-header' });
+          msgEl.createEl('div', {
+            text: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content || ''),
+            cls: 'harness-message-body',
+          });
         }
         if (msg.tool_calls) {
           for (const tc of msg.tool_calls) {
@@ -207,7 +247,9 @@ export class HarnessChatView extends ItemView {
         const card = this.messagesContainerEl.createEl('div', { cls: 'harness-tool-card' });
         card.createEl('div', { text: `⚙️ Tool Output (${msg.name})`, cls: 'harness-tool-title' });
         const outPre = card.createEl('pre');
-        outPre.createEl('code', { text: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content || '') });
+        outPre.createEl('code', {
+          text: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content || ''),
+        });
       }
     }
 

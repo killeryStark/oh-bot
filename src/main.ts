@@ -13,14 +13,14 @@ export default class HarnessPlugin extends Plugin {
     this.registerView(HARNESS_VIEW_TYPE, (leaf) => new HarnessChatView(leaf, this));
 
     // Ribbon Icon
-    this.addRibbonIcon('bot', 'Open Agent Harness Chat', () => {
+    this.addRibbonIcon('bot', 'Open Obsidian Harness Bot', () => {
       this.activateView();
     });
 
     // Command Palette Command
     this.addCommand({
-      id: 'open-agent-harness-chat',
-      name: 'Open Agent Harness Chat',
+      id: 'open-obsidian-harness-bot',
+      name: 'Open Obsidian Harness Bot',
       callback: () => {
         this.activateView();
       },
@@ -58,6 +58,9 @@ export default class HarnessPlugin extends Plugin {
 
   async loadSettings() {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    if (!this.settings.providers || this.settings.providers.length === 0) {
+      this.settings.providers = DEFAULT_SETTINGS.providers;
+    }
   }
 
   async saveSettings() {

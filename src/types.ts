@@ -1,29 +1,109 @@
-export type ProviderType = 'openrouter' | 'openai' | 'anthropic' | 'ollama';
+export type ProviderType = 'openrouter' | 'anthropic' | 'gemini' | 'openai' | 'ollama' | 'custom-openai';
 
 export type SafetyMode = 'strict' | 'auto';
 
+export interface ProviderConfig {
+  id: string;
+  name: string;
+  type: ProviderType;
+  baseUrl: string;
+  apiKeySecretName: string;
+  models: string[];
+  enabled: boolean;
+  isCustom?: boolean;
+}
+
+export const DEFAULT_PROVIDERS: ProviderConfig[] = [
+  {
+    id: 'openrouter',
+    name: 'OpenRouter',
+    type: 'openrouter',
+    baseUrl: 'https://openrouter.ai/api/v1',
+    apiKeySecretName: 'oh_bot_secret_openrouter',
+    models: [
+      'anthropic/claude-3.7-sonnet',
+      'anthropic/claude-3.5-haiku',
+      'openai/gpt-4o',
+      'openai/gpt-4o-mini',
+      'deepseek/deepseek-r1',
+      'google/gemini-2.5-flash',
+      'meta-llama/llama-3.3-70b-instruct'
+    ],
+    enabled: true,
+  },
+  {
+    id: 'anthropic',
+    name: 'Anthropic',
+    type: 'anthropic',
+    baseUrl: 'https://api.anthropic.com/v1',
+    apiKeySecretName: 'oh_bot_secret_anthropic',
+    models: [
+      'claude-3-7-sonnet-20250219',
+      'claude-3-5-sonnet-20241022',
+      'claude-3-5-haiku-20241022'
+    ],
+    enabled: true,
+  },
+  {
+    id: 'gemini',
+    name: 'Google Gemini (AI Studio)',
+    type: 'gemini',
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai/',
+    apiKeySecretName: 'oh_bot_secret_gemini',
+    models: [
+      'gemini-2.5-flash',
+      'gemini-2.5-pro',
+      'gemini-2.0-flash',
+      'gemini-1.5-pro',
+      'gemini-1.5-flash'
+    ],
+    enabled: true,
+  },
+  {
+    id: 'openai',
+    name: 'OpenAI',
+    type: 'openai',
+    baseUrl: 'https://api.openai.com/v1',
+    apiKeySecretName: 'oh_bot_secret_openai',
+    models: [
+      'gpt-4o',
+      'gpt-4o-mini',
+      'gpt-4.5-preview',
+      'o3-mini',
+      'o1'
+    ],
+    enabled: true,
+  },
+  {
+    id: 'ollama',
+    name: 'Ollama (Local)',
+    type: 'ollama',
+    baseUrl: 'http://localhost:11434/v1',
+    apiKeySecretName: 'oh_bot_secret_ollama',
+    models: [
+      'llama3.3',
+      'qwen2.5-coder',
+      'deepseek-r1',
+      'mistral'
+    ],
+    enabled: true,
+  },
+];
+
 export interface HarnessSettings {
-  openRouterSecretName: string;
-  openAiSecretName: string;
-  anthropicSecretName: string;
-  defaultProvider: ProviderType;
-  defaultModel: string;
-  customBaseUrl: string;
+  providers: ProviderConfig[];
+  activeProviderId: string;
+  activeModel: string;
   systemPrompt: string;
   safetyMode: SafetyMode;
-  maxAgentSteps: number;
 }
 
 export const DEFAULT_SETTINGS: HarnessSettings = {
-  openRouterSecretName: 'openrouter-api-key',
-  openAiSecretName: 'openai-api-key',
-  anthropicSecretName: 'anthropic-api-key',
-  defaultProvider: 'openrouter',
-  defaultModel: 'anthropic/claude-3.7-sonnet',
-  customBaseUrl: 'http://localhost:11434/v1',
+  providers: DEFAULT_PROVIDERS,
+  activeProviderId: 'openrouter',
+  activeModel: 'anthropic/claude-3.7-sonnet',
   systemPrompt: 'You are an autonomous AI Agent inside Obsidian. You have tools to read, create, patch, search, and inspect notes in the vault. Use these tools step-by-step to fulfill the user request.',
   safetyMode: 'strict',
-  maxAgentSteps: 10,
 };
 
 export interface LLMMessage {
