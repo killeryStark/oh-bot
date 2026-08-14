@@ -1954,6 +1954,7 @@ var HARNESS_VIEW_TYPE = "harness-chat-view";
 var HarnessChatView = class extends import_obsidian15.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
+    this.isInputExpanded = false;
     this.activeSuggestType = "none";
     this.selectedSuggestIndex = 0;
     this.currentSuggestItems = [];
@@ -2041,26 +2042,31 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
       this.renderMessages();
     });
     this.messagesContainerEl = container.createEl("div", { cls: "harness-chat-messages" });
-    const inputAreaEl = container.createEl("div", { cls: "harness-chat-input-area" });
-    this.suggestPopupEl = inputAreaEl.createEl("div", { cls: "harness-suggest-popup" });
+    this.inputAreaEl = container.createEl("div", { cls: "harness-chat-input-area" });
+    this.suggestPopupEl = this.inputAreaEl.createEl("div", { cls: "harness-suggest-popup" });
     this.suggestPopupEl.style.display = "none";
-    this.inputTextAreaEl = inputAreaEl.createEl("textarea", {
+    const textareaWrapperEl = this.inputAreaEl.createEl("div", { cls: "harness-textarea-wrapper" });
+    this.inputTextAreaEl = textareaWrapperEl.createEl("textarea", {
       cls: "harness-chat-textarea",
-      placeholder: "Type a message, '/' for commands, '@' to attach notes..."
+      placeholder: "Ask Harness Bot, '/' for commands, '@' to attach notes..."
     });
-    const bottomRowEl = inputAreaEl.createEl("div", { cls: "harness-chat-bottom-row" });
-    const modelContainerEl = bottomRowEl.createEl("div");
-    modelContainerEl.style.display = "flex";
-    modelContainerEl.style.alignItems = "center";
-    modelContainerEl.style.gap = "6px";
-    this.modelSelectEl = modelContainerEl.createEl("select", { cls: "harness-model-select" });
+    this.expandBtnEl = textareaWrapperEl.createEl("button", { cls: "harness-expand-btn clickable-icon" });
+    this.expandBtnEl.setAttribute("aria-label", "Expand to full view");
+    this.expandBtnEl.style.display = "none";
+    (0, import_obsidian15.setIcon)(this.expandBtnEl, "maximize-2");
+    this.expandBtnEl.addEventListener("click", () => {
+      this.toggleInputExpand();
+    });
+    const bottomRowEl = this.inputAreaEl.createEl("div", { cls: "harness-chat-bottom-row" });
+    this.modelSelectEl = bottomRowEl.createEl("select", { cls: "harness-model-select" });
     this.refreshModelDropdown();
     this.modelSelectEl.addEventListener("change", async () => {
       this.currentSession.model = this.modelSelectEl.value;
       this.plugin.settings.activeModel = this.modelSelectEl.value;
       await this.saveSessionState();
     });
-    this.sendButtonEl = bottomRowEl.createEl("button", { text: "Send", cls: "mod-cta" });
+    this.sendButtonEl = bottomRowEl.createEl("button", { cls: "harness-send-btn mod-cta clickable-icon" });
+    this.setSendButtonState(false);
     const handleSendOrStop = async () => {
       if (this.currentAbortController) {
         this.currentAbortController.abort();
@@ -2075,16 +2081,19 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
       if (text === "/sessions" || text === "/history") {
         this.inputTextAreaEl.value = "";
         this.hideSuggest();
+        this.resetTextareaHeight();
         this.openSessionsModal();
         return;
       } else if (text === "/new") {
         this.inputTextAreaEl.value = "";
         this.hideSuggest();
+        this.resetTextareaHeight();
         this.createNewSession();
         return;
       } else if (text === "/clear") {
         this.inputTextAreaEl.value = "";
         this.hideSuggest();
+        this.resetTextareaHeight();
         this.currentSession.messages = [];
         await this.saveSessionState();
         this.renderMessages();
@@ -2092,6 +2101,7 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
       } else if (text === "/export") {
         this.inputTextAreaEl.value = "";
         this.hideSuggest();
+        this.resetTextareaHeight();
         exportBtn.click();
         return;
       }
@@ -2104,6 +2114,10 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
       }
       this.inputTextAreaEl.value = "";
       this.hideSuggest();
+      this.resetTextareaHeight();
+      if (this.isInputExpanded) {
+        this.toggleInputExpand();
+      }
       this.currentAbortController = new AbortController();
       this.setSendButtonState(true);
       if (this.currentSession.messages.length === 0) {
@@ -2165,6 +2179,7 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
     };
     this.sendButtonEl.addEventListener("click", handleSendOrStop);
     this.inputTextAreaEl.addEventListener("input", () => {
+      this.autoResizeTextarea();
       this.handleInputSuggest();
     });
     this.inputTextAreaEl.addEventListener("keydown", (e) => {
@@ -2197,17 +2212,52 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
     });
     this.renderMessages();
   }
+  autoResizeTextarea() {
+    if (this.isInputExpanded)
+      return;
+    this.inputTextAreaEl.style.height = "auto";
+    const nextHeight = Math.min(160, Math.max(48, this.inputTextAreaEl.scrollHeight));
+    this.inputTextAreaEl.style.height = `${nextHeight}px`;
+    const lineCount = this.inputTextAreaEl.value.split("\n").length;
+    const isLong = lineCount >= 4 || this.inputTextAreaEl.scrollHeight > 85;
+    this.expandBtnEl.style.display = isLong ? "flex" : "none";
+  }
+  resetTextareaHeight() {
+    if (this.isInputExpanded)
+      return;
+    this.inputTextAreaEl.style.height = "48px";
+    this.expandBtnEl.style.display = "none";
+  }
+  toggleInputExpand() {
+    this.isInputExpanded = !this.isInputExpanded;
+    if (this.isInputExpanded) {
+      this.inputAreaEl.addClass("is-expanded");
+      (0, import_obsidian15.setIcon)(this.expandBtnEl, "minimize-2");
+      this.expandBtnEl.setAttribute("aria-label", "Collapse view");
+      this.expandBtnEl.style.display = "flex";
+      this.inputTextAreaEl.focus();
+    } else {
+      this.inputAreaEl.removeClass("is-expanded");
+      (0, import_obsidian15.setIcon)(this.expandBtnEl, "maximize-2");
+      this.expandBtnEl.setAttribute("aria-label", "Expand to full view");
+      this.autoResizeTextarea();
+      this.inputTextAreaEl.focus();
+    }
+  }
   setSendButtonState(isGenerating) {
     if (!this.sendButtonEl)
       return;
+    this.sendButtonEl.empty();
     if (isGenerating) {
-      this.sendButtonEl.setText("Stop");
+      (0, import_obsidian15.setIcon)(this.sendButtonEl, "square");
       this.sendButtonEl.addClass("mod-warning");
       this.sendButtonEl.removeClass("mod-cta");
+      this.sendButtonEl.setAttribute("aria-label", "Stop generation");
     } else {
-      this.sendButtonEl.setText("Send");
+      (0, import_obsidian15.setIcon)(this.sendButtonEl, "send");
       this.sendButtonEl.addClass("mod-cta");
       this.sendButtonEl.removeClass("mod-warning");
+      this.sendButtonEl.setAttribute("aria-label", "Send message");
     }
   }
   handleInputSuggest() {
@@ -2243,6 +2293,7 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
         action: () => {
           this.inputTextAreaEl.value = "";
           this.hideSuggest();
+          this.resetTextareaHeight();
           this.openSessionsModal();
         }
       },
@@ -2252,6 +2303,7 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
         action: () => {
           this.inputTextAreaEl.value = "";
           this.hideSuggest();
+          this.resetTextareaHeight();
           this.createNewSession();
         }
       },
@@ -2261,6 +2313,7 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
         action: () => {
           this.inputTextAreaEl.value = "";
           this.hideSuggest();
+          this.resetTextareaHeight();
           this.currentSession.messages = [];
           this.saveSessionState();
           this.renderMessages();
@@ -2272,6 +2325,7 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
         action: () => {
           this.inputTextAreaEl.value = "";
           this.hideSuggest();
+          this.resetTextareaHeight();
           this.exporter.exportChatToMarkdown(
             this.currentSession.messages,
             this.currentSession.model || this.plugin.settings.activeModel || "default"
@@ -2315,6 +2369,7 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
         const after = text.slice(matchIndex + 1 + query.length);
         this.inputTextAreaEl.value = `${before}@${item.path} ${after}`;
         this.hideSuggest();
+        this.autoResizeTextarea();
         this.inputTextAreaEl.focus();
       };
       this.currentSuggestItems.push({ label: item.path, onSelect });
@@ -2433,17 +2488,10 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
       const emptyContainerEl = this.messagesContainerEl.createEl("div", {
         cls: "harness-empty-state-container"
       });
-      emptyContainerEl.style.padding = "24px 12px";
-      emptyContainerEl.style.display = "flex";
-      emptyContainerEl.style.flexDirection = "column";
-      emptyContainerEl.style.alignItems = "center";
-      emptyContainerEl.style.gap = "16px";
-      const introEl = emptyContainerEl.createEl("div");
-      introEl.style.textAlign = "center";
-      introEl.style.opacity = "0.8";
-      introEl.createEl("h3", { text: "Obsidian Harness Bot" });
-      introEl.createEl("p", {
-        text: "Type a message to start, '/' for commands, or '@' to attach notes from your Vault."
+      const hintBoxEl = emptyContainerEl.createEl("div", { cls: "harness-empty-hint-box" });
+      hintBoxEl.createEl("h3", { text: "Obsidian Harness Bot" });
+      hintBoxEl.createEl("p", {
+        text: "Type '/' to view slash commands, or '@' to attach notes and folders from your Vault."
       });
       const previousSessions = this.plugin.settings.sessions.filter(
         (s) => s.id !== this.currentSession.id && s.messages.length > 0

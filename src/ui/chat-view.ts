@@ -5,7 +5,7 @@ import { AgentHarness } from '../engine/agent';
 import { ToolRegistry } from '../tools/registry';
 import { MarkdownExporter } from '../utils/markdown-exporter';
 import { SessionManager } from '../utils/session-manager';
-import { MentionHelper, MentionItem } from '../utils/mention-helper';
+import { MentionHelper } from '../utils/mention-helper';
 import { ConfirmationModal } from './components/confirmation-modal';
 import { SessionsModal } from './components/sessions-modal';
 
@@ -25,11 +25,14 @@ export class HarnessChatView extends ItemView {
 
   private currentSession!: ChatSession;
   private messagesContainerEl!: HTMLElement;
+  private inputAreaEl!: HTMLElement;
   private inputTextAreaEl!: HTMLTextAreaElement;
+  private expandBtnEl!: HTMLButtonElement;
   private sendButtonEl!: HTMLButtonElement;
   private modelSelectEl!: HTMLSelectElement;
   private suggestPopupEl!: HTMLElement;
 
+  private isInputExpanded = false;
   private activeSuggestType: 'none' | 'slash' | 'mention' = 'none';
   private selectedSuggestIndex = 0;
   private currentSuggestItems: Array<{ label: string; onSelect: () => void }> = [];
@@ -143,26 +146,33 @@ export class HarnessChatView extends ItemView {
     this.messagesContainerEl = container.createEl('div', { cls: 'harness-chat-messages' });
 
     // Input Area
-    const inputAreaEl = container.createEl('div', { cls: 'harness-chat-input-area' });
+    this.inputAreaEl = container.createEl('div', { cls: 'harness-chat-input-area' });
 
-    // Suggestion Popup for / and @ (placed inside inputAreaEl so it pops up directly above input)
-    this.suggestPopupEl = inputAreaEl.createEl('div', { cls: 'harness-suggest-popup' });
+    // Suggestion Popup for / and @
+    this.suggestPopupEl = this.inputAreaEl.createEl('div', { cls: 'harness-suggest-popup' });
     this.suggestPopupEl.style.display = 'none';
 
-    this.inputTextAreaEl = inputAreaEl.createEl('textarea', {
+    const textareaWrapperEl = this.inputAreaEl.createEl('div', { cls: 'harness-textarea-wrapper' });
+
+    this.inputTextAreaEl = textareaWrapperEl.createEl('textarea', {
       cls: 'harness-chat-textarea',
-      placeholder: "Type a message, '/' for commands, '@' to attach notes...",
+      placeholder: "Ask Harness Bot, '/' for commands, '@' to attach notes...",
     });
 
-    const bottomRowEl = inputAreaEl.createEl('div', { cls: 'harness-chat-bottom-row' });
+    // Expand / Fullview button in top-right corner of textarea
+    this.expandBtnEl = textareaWrapperEl.createEl('button', { cls: 'harness-expand-btn clickable-icon' });
+    this.expandBtnEl.setAttribute('aria-label', 'Expand to full view');
+    this.expandBtnEl.style.display = 'none'; // Hidden until > 4 lines or clicked
+    setIcon(this.expandBtnEl, 'maximize-2');
 
-    // Model Selector at the bottom of the chat
-    const modelContainerEl = bottomRowEl.createEl('div');
-    modelContainerEl.style.display = 'flex';
-    modelContainerEl.style.alignItems = 'center';
-    modelContainerEl.style.gap = '6px';
+    this.expandBtnEl.addEventListener('click', () => {
+      this.toggleInputExpand();
+    });
 
-    this.modelSelectEl = modelContainerEl.createEl('select', { cls: 'harness-model-select' });
+    const bottomRowEl = this.inputAreaEl.createEl('div', { cls: 'harness-chat-bottom-row' });
+
+    // Model Selector on the left of bottom row
+    this.modelSelectEl = bottomRowEl.createEl('select', { cls: 'harness-model-select' });
     this.refreshModelDropdown();
 
     this.modelSelectEl.addEventListener('change', async () => {
@@ -171,10 +181,11 @@ export class HarnessChatView extends ItemView {
       await this.saveSessionState();
     });
 
-    this.sendButtonEl = bottomRowEl.createEl('button', { text: 'Send', cls: 'mod-cta' });
+    // Send / Stop button as an icon
+    this.sendButtonEl = bottomRowEl.createEl('button', { cls: 'harness-send-btn mod-cta clickable-icon' });
+    this.setSendButtonState(false);
 
     const handleSendOrStop = async () => {
-      // If currently generating, abort turn
       if (this.currentAbortController) {
         this.currentAbortController.abort();
         this.currentAbortController = null;
@@ -186,20 +197,23 @@ export class HarnessChatView extends ItemView {
       const text = this.inputTextAreaEl.value.trim();
       if (!text) return;
 
-      // Handle direct slash command invocation
+      // Handle slash commands
       if (text === '/sessions' || text === '/history') {
         this.inputTextAreaEl.value = '';
         this.hideSuggest();
+        this.resetTextareaHeight();
         this.openSessionsModal();
         return;
       } else if (text === '/new') {
         this.inputTextAreaEl.value = '';
         this.hideSuggest();
+        this.resetTextareaHeight();
         this.createNewSession();
         return;
       } else if (text === '/clear') {
         this.inputTextAreaEl.value = '';
         this.hideSuggest();
+        this.resetTextareaHeight();
         this.currentSession.messages = [];
         await this.saveSessionState();
         this.renderMessages();
@@ -207,6 +221,7 @@ export class HarnessChatView extends ItemView {
       } else if (text === '/export') {
         this.inputTextAreaEl.value = '';
         this.hideSuggest();
+        this.resetTextareaHeight();
         exportBtn.click();
         return;
       }
@@ -222,17 +237,21 @@ export class HarnessChatView extends ItemView {
 
       this.inputTextAreaEl.value = '';
       this.hideSuggest();
+      this.resetTextareaHeight();
+      if (this.isInputExpanded) {
+        this.toggleInputExpand();
+      }
 
-      // Set generating state (Stop button)
+      // Set generating state (Stop icon)
       this.currentAbortController = new AbortController();
       this.setSendButtonState(true);
 
-      // If new session, set auto-title
+      // Set auto-title on first message
       if (this.currentSession.messages.length === 0) {
         this.currentSession.title = SessionManager.generateTitle(text);
       }
 
-      // Enriched text with resolved @mentions (notes and folders)
+      // Enriched text with resolved @mentions
       const resolvedContent = await MentionHelper.resolveMentions(this.app, text);
 
       // Append clean user message to UI state (WITHOUT timestamp)
@@ -297,6 +316,7 @@ export class HarnessChatView extends ItemView {
     this.sendButtonEl.addEventListener('click', handleSendOrStop);
 
     this.inputTextAreaEl.addEventListener('input', () => {
+      this.autoResizeTextarea();
       this.handleInputSuggest();
     });
 
@@ -333,16 +353,54 @@ export class HarnessChatView extends ItemView {
     this.renderMessages();
   }
 
+  private autoResizeTextarea() {
+    if (this.isInputExpanded) return;
+
+    this.inputTextAreaEl.style.height = 'auto';
+    const nextHeight = Math.min(160, Math.max(48, this.inputTextAreaEl.scrollHeight));
+    this.inputTextAreaEl.style.height = `${nextHeight}px`;
+
+    const lineCount = this.inputTextAreaEl.value.split('\n').length;
+    const isLong = lineCount >= 4 || this.inputTextAreaEl.scrollHeight > 85;
+    this.expandBtnEl.style.display = isLong ? 'flex' : 'none';
+  }
+
+  private resetTextareaHeight() {
+    if (this.isInputExpanded) return;
+    this.inputTextAreaEl.style.height = '48px';
+    this.expandBtnEl.style.display = 'none';
+  }
+
+  private toggleInputExpand() {
+    this.isInputExpanded = !this.isInputExpanded;
+    if (this.isInputExpanded) {
+      this.inputAreaEl.addClass('is-expanded');
+      setIcon(this.expandBtnEl, 'minimize-2');
+      this.expandBtnEl.setAttribute('aria-label', 'Collapse view');
+      this.expandBtnEl.style.display = 'flex';
+      this.inputTextAreaEl.focus();
+    } else {
+      this.inputAreaEl.removeClass('is-expanded');
+      setIcon(this.expandBtnEl, 'maximize-2');
+      this.expandBtnEl.setAttribute('aria-label', 'Expand to full view');
+      this.autoResizeTextarea();
+      this.inputTextAreaEl.focus();
+    }
+  }
+
   private setSendButtonState(isGenerating: boolean) {
     if (!this.sendButtonEl) return;
+    this.sendButtonEl.empty();
     if (isGenerating) {
-      this.sendButtonEl.setText('Stop');
+      setIcon(this.sendButtonEl, 'square');
       this.sendButtonEl.addClass('mod-warning');
       this.sendButtonEl.removeClass('mod-cta');
+      this.sendButtonEl.setAttribute('aria-label', 'Stop generation');
     } else {
-      this.sendButtonEl.setText('Send');
+      setIcon(this.sendButtonEl, 'send');
       this.sendButtonEl.addClass('mod-cta');
       this.sendButtonEl.removeClass('mod-warning');
+      this.sendButtonEl.setAttribute('aria-label', 'Send message');
     }
   }
 
@@ -385,6 +443,7 @@ export class HarnessChatView extends ItemView {
         action: () => {
           this.inputTextAreaEl.value = '';
           this.hideSuggest();
+          this.resetTextareaHeight();
           this.openSessionsModal();
         },
       },
@@ -394,6 +453,7 @@ export class HarnessChatView extends ItemView {
         action: () => {
           this.inputTextAreaEl.value = '';
           this.hideSuggest();
+          this.resetTextareaHeight();
           this.createNewSession();
         },
       },
@@ -403,6 +463,7 @@ export class HarnessChatView extends ItemView {
         action: () => {
           this.inputTextAreaEl.value = '';
           this.hideSuggest();
+          this.resetTextareaHeight();
           this.currentSession.messages = [];
           this.saveSessionState();
           this.renderMessages();
@@ -414,6 +475,7 @@ export class HarnessChatView extends ItemView {
         action: () => {
           this.inputTextAreaEl.value = '';
           this.hideSuggest();
+          this.resetTextareaHeight();
           this.exporter.exportChatToMarkdown(
             this.currentSession.messages,
             this.currentSession.model || this.plugin.settings.activeModel || 'default'
@@ -467,6 +529,7 @@ export class HarnessChatView extends ItemView {
         const after = text.slice(matchIndex + 1 + query.length);
         this.inputTextAreaEl.value = `${before}@${item.path} ${after}`;
         this.hideSuggest();
+        this.autoResizeTextarea();
         this.inputTextAreaEl.focus();
       };
 
@@ -550,7 +613,6 @@ export class HarnessChatView extends ItemView {
   }
 
   private async saveSessionState() {
-    // Ensure active session is synced in sessions array
     const idx = this.plugin.settings.sessions.findIndex((s) => s.id === this.currentSession.id);
     if (idx !== -1) {
       this.plugin.settings.sessions[idx] = this.currentSession;
@@ -599,18 +661,11 @@ export class HarnessChatView extends ItemView {
       const emptyContainerEl = this.messagesContainerEl.createEl('div', {
         cls: 'harness-empty-state-container',
       });
-      emptyContainerEl.style.padding = '24px 12px';
-      emptyContainerEl.style.display = 'flex';
-      emptyContainerEl.style.flexDirection = 'column';
-      emptyContainerEl.style.alignItems = 'center';
-      emptyContainerEl.style.gap = '16px';
 
-      const introEl = emptyContainerEl.createEl('div');
-      introEl.style.textAlign = 'center';
-      introEl.style.opacity = '0.8';
-      introEl.createEl('h3', { text: 'Obsidian Harness Bot' });
-      introEl.createEl('p', {
-        text: "Type a message to start, '/' for commands, or '@' to attach notes from your Vault.",
+      const hintBoxEl = emptyContainerEl.createEl('div', { cls: 'harness-empty-hint-box' });
+      hintBoxEl.createEl('h3', { text: 'Obsidian Harness Bot' });
+      hintBoxEl.createEl('p', {
+        text: "Type '/' to view slash commands, or '@' to attach notes and folders from your Vault.",
       });
 
       // Previous Sessions quick switcher
