@@ -58,57 +58,35 @@ export class McpClient {
     }
 
     try {
-      // 1. Try SSE handshake via fetch with stream reading
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), Math.min(this.timeoutMs, 8000));
-
-      const sseHeaders = { ...this.getHeaders(), 'Accept': 'text/event-stream' };
-      const response = await fetch(this.url, {
+      const res = await requestUrl({
+        url: this.url,
         method: 'GET',
-        headers: sseHeaders,
-        signal: controller.signal,
+        headers: { ...this.getHeaders(), 'Accept': 'text/event-stream, text/plain, */*' },
+        throw: false,
       });
 
-      if (response.ok && response.body) {
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-
-        // Read first few chunks looking for the endpoint event
-        for (let i = 0; i < 5; i++) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-
-          // Parse SSE lines
-          const lines = buffer.split('\n');
-          for (let j = 0; j < lines.length; j++) {
-            const line = lines[j].trim();
-            if (line.startsWith('event: endpoint') || line.startsWith('event: message')) {
-              const dataLine = lines.slice(j + 1).find(l => l.trim().startsWith('data:'));
-              if (dataLine) {
-                const endpointData = dataLine.replace(/^data:\s*/, '').trim();
-                reader.cancel();
-                clearTimeout(timeoutId);
-
-                // Resolve relative URL
-                if (endpointData.startsWith('http://') || endpointData.startsWith('https://')) {
-                  this.postUrl = endpointData;
-                } else {
-                  const base = new URL(this.url);
-                  const resolved = new URL(endpointData, base.origin);
-                  this.postUrl = resolved.toString();
-                }
-                return this.postUrl;
+      if (res.status >= 200 && res.status < 300 && res.text) {
+        const lines = res.text.split('\n');
+        for (let j = 0; j < lines.length; j++) {
+          const line = lines[j].trim();
+          if (line.startsWith('event: endpoint') || line.startsWith('event: message')) {
+            const dataLine = lines.slice(j + 1).find((l) => l.trim().startsWith('data:'));
+            if (dataLine) {
+              const endpointData = dataLine.replace(/^data:\s*/, '').trim();
+              if (endpointData.startsWith('http://') || endpointData.startsWith('https://')) {
+                this.postUrl = endpointData;
+              } else {
+                const base = new URL(this.url);
+                const resolved = new URL(endpointData, base.origin);
+                this.postUrl = resolved.toString();
               }
+              return this.postUrl;
             }
           }
         }
-        reader.cancel();
       }
-      clearTimeout(timeoutId);
     } catch (err) {
-      // Ignore SSE handshake error and fallback to direct URL
+      // Fallback to direct URL
     }
 
     // Direct HTTP POST fallback (Standard Streamable HTTP MCP)

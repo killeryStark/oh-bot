@@ -4,10 +4,10 @@
     {
       "id": "todoist",
       "name": "Todoist (Official Hosted Remote MCP)",
-      "description": "Официальный облачный MCP сервер Todoist для управления задачами, проектами, секциями, комментариями и напоминаниями в реальном времени.",
+      "description": "Official hosted Todoist MCP server for managing tasks, projects, sections, comments, and reminders in real time.",
       "url": "https://ai.todoist.net/mcp",
       "authType": "bearer",
-      "authDescription": "Требуется персональный API токен из настроек Todoist: Интеграции -> Для разработчиков -> API-токен.",
+      "authDescription": "Requires Personal API Token from Todoist Settings -> Integrations -> Developer -> API token.",
       "docUrl": "https://app.todoist.com/app/settings/integrations/developer",
       "tags": ["tasks", "productivity", "todoist", "remote-sse"]
     }

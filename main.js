@@ -930,7 +930,7 @@ var McpServerEditModal = class extends import_obsidian7.Modal {
       this.name = serverToEdit.name;
       this.url = serverToEdit.url;
       this.description = serverToEdit.description || "";
-      this.authType = serverToEdit.authType;
+      this.authType = serverToEdit.authType || "bearer";
       this.customHeaderName = serverToEdit.customHeaderName || "X-API-Key";
       const existingToken = mcpManager.getAuthToken(serverToEdit);
       this.apiToken = existingToken || "";
@@ -974,15 +974,15 @@ var McpServerEditModal = class extends import_obsidian7.Modal {
       helperBox.style.backgroundColor = "var(--background-secondary-alt)";
       helperBox.style.border = "1px solid var(--interactive-accent)";
       const title = helperBox.createEl("div");
-      title.createEl("strong", { text: "\u{1F4A1} \u041A\u0430\u043A \u043F\u043E\u043B\u0443\u0447\u0438\u0442\u044C API-\u0442\u043E\u043A\u0435\u043D Todoist:" });
+      title.createEl("strong", { text: "\u{1F4A1} How to get your Todoist API Token:" });
       const desc = helperBox.createEl("p", {
-        text: "1. \u041D\u0430\u0436\u043C\u0438\u0442\u0435 \u043A\u043D\u043E\u043F\u043A\u0443 \u043D\u0438\u0436\u0435 \u0434\u043B\u044F \u043E\u0442\u043A\u0440\u044B\u0442\u0438\u044F \u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043A Todoist \u0432 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0435.\n2. \u0421\u043A\u043E\u043F\u0438\u0440\u0443\u0439\u0442\u0435 \u043F\u0435\u0440\u0441\u043E\u043D\u0430\u043B\u044C\u043D\u044B\u0439 API-\u0442\u043E\u043A\u0435\u043D.\n3. \u041D\u0430\u0436\u043C\u0438\u0442\u0435 \u043A\u043D\u043E\u043F\u043A\u0443 \xAB\u{1F4CB} \u0412\u0441\u0442\u0430\u0432\u0438\u0442\u044C\xBB \u0432 \u043F\u043E\u043B\u0435 API Token \u043D\u0438\u0436\u0435.",
+        text: '1. Click the button below to open Todoist Developer Settings in browser.\n2. Copy your Personal API Token.\n3. Click "Paste" in the API Token field below.',
         cls: "harness-subtext"
       });
       desc.style.margin = "4px 0 8px 0";
       desc.style.whiteSpace = "pre-line";
       const openBtn = helperBox.createEl("button", {
-        text: "\u{1F517} \u041E\u0442\u043A\u0440\u044B\u0442\u044C \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438 \u0442\u043E\u043A\u0435\u043D\u0430 Todoist",
+        text: "\u{1F517} Open Todoist Token Settings",
         cls: "harness-btn-sm mod-cta"
       });
       openBtn.addEventListener("click", () => {
@@ -1002,31 +1002,31 @@ var McpServerEditModal = class extends import_obsidian7.Modal {
         text.setPlaceholder("Paste your API token here...").setValue(this.apiToken).onChange((v) => this.apiToken = v);
         this.attachFocusScroll(text.inputEl);
         tokenSetting.addButton((pasteBtn) => {
-          pasteBtn.setButtonText("\u{1F4CB} \u0412\u0441\u0442\u0430\u0432\u0438\u0442\u044C");
-          pasteBtn.setTooltip("\u0412\u0441\u0442\u0430\u0432\u0438\u0442\u044C \u0442\u043E\u043A\u0435\u043D \u0438\u0437 \u0431\u0443\u0444\u0435\u0440\u0430 \u043E\u0431\u043C\u0435\u043D\u0430");
+          pasteBtn.setButtonText("Paste");
+          pasteBtn.setTooltip("Paste token from clipboard");
           pasteBtn.onClick(async () => {
             try {
               const clip = await navigator.clipboard.readText();
               if (clip && clip.trim()) {
                 this.apiToken = clip.trim();
                 text.setValue(this.apiToken);
-                new import_obsidian7.Notice("\u2713 \u0422\u043E\u043A\u0435\u043D \u0432\u0441\u0442\u0430\u0432\u043B\u0435\u043D \u0438\u0437 \u0431\u0443\u0444\u0435\u0440\u0430 \u043E\u0431\u043C\u0435\u043D\u0430!");
+                new import_obsidian7.Notice("\u2713 Token pasted from clipboard!");
               } else {
-                new import_obsidian7.Notice("\u0411\u0443\u0444\u0435\u0440 \u043E\u0431\u043C\u0435\u043D\u0430 \u043F\u0443\u0441\u0442.");
+                new import_obsidian7.Notice("Clipboard is empty.");
               }
             } catch (err) {
-              new import_obsidian7.Notice("\u041F\u043E\u0436\u0430\u043B\u0443\u0439\u0441\u0442\u0430, \u0432\u0441\u0442\u0430\u0432\u044C\u0442\u0435 \u0442\u043E\u043A\u0435\u043D \u0432\u0440\u0443\u0447\u043D\u0443\u044E \u0432 \u043F\u043E\u043B\u0435 \u0432\u0432\u043E\u0434\u0430.");
+              new import_obsidian7.Notice("Could not read clipboard. Please paste manually.");
             }
           });
         });
         tokenSetting.addButton((showBtn) => {
           (0, import_obsidian7.setIcon)(showBtn.buttonEl, this.showPassword ? "eye-off" : "eye");
-          showBtn.setTooltip(this.showPassword ? "\u0421\u043A\u0440\u044B\u0442\u044C \u0442\u043E\u043A\u0435\u043D" : "\u041F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u0442\u043E\u043A\u0435\u043D");
+          showBtn.setTooltip(this.showPassword ? "Hide Token" : "Show Token");
           showBtn.onClick(() => {
             this.showPassword = !this.showPassword;
             text.inputEl.type = this.showPassword ? "text" : "password";
             (0, import_obsidian7.setIcon)(showBtn.buttonEl, this.showPassword ? "eye-off" : "eye");
-            showBtn.setTooltip(this.showPassword ? "\u0421\u043A\u0440\u044B\u0442\u044C \u0442\u043E\u043A\u0435\u043D" : "\u041F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u0442\u043E\u043A\u0435\u043D");
+            showBtn.setTooltip(this.showPassword ? "Hide Token" : "Show Token");
           });
         });
       });
@@ -1041,17 +1041,17 @@ var McpServerEditModal = class extends import_obsidian7.Modal {
         text.setPlaceholder("Enter API key...").setValue(this.apiToken).onChange((v) => this.apiToken = v);
         this.attachFocusScroll(text.inputEl);
         headerValSetting.addButton((pasteBtn) => {
-          pasteBtn.setButtonText("\u{1F4CB} \u0412\u0441\u0442\u0430\u0432\u0438\u0442\u044C");
+          pasteBtn.setButtonText("Paste");
           pasteBtn.onClick(async () => {
             try {
               const clip = await navigator.clipboard.readText();
               if (clip && clip.trim()) {
                 this.apiToken = clip.trim();
                 text.setValue(this.apiToken);
-                new import_obsidian7.Notice("\u2713 \u041A\u043B\u044E\u0447 \u0432\u0441\u0442\u0430\u0432\u043B\u0435\u043D \u0438\u0437 \u0431\u0443\u0444\u0435\u0440\u0430!");
+                new import_obsidian7.Notice("\u2713 Key pasted from clipboard!");
               }
             } catch (e) {
-              new import_obsidian7.Notice("\u0412\u0441\u0442\u0430\u0432\u044C\u0442\u0435 \u043A\u043B\u044E\u0447 \u0432\u0440\u0443\u0447\u043D\u0443\u044E \u0432 \u043F\u043E\u043B\u0435.");
+              new import_obsidian7.Notice("Please paste key manually.");
             }
           });
         });
@@ -4703,47 +4703,32 @@ var McpClient = class {
       return this.postUrl;
     }
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), Math.min(this.timeoutMs, 8e3));
-      const sseHeaders = { ...this.getHeaders(), "Accept": "text/event-stream" };
-      const response = await fetch(this.url, {
+      const res = await (0, import_obsidian24.requestUrl)({
+        url: this.url,
         method: "GET",
-        headers: sseHeaders,
-        signal: controller.signal
+        headers: { ...this.getHeaders(), "Accept": "text/event-stream, text/plain, */*" },
+        throw: false
       });
-      if (response.ok && response.body) {
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-        for (let i = 0; i < 5; i++) {
-          const { value, done } = await reader.read();
-          if (done)
-            break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          for (let j = 0; j < lines.length; j++) {
-            const line = lines[j].trim();
-            if (line.startsWith("event: endpoint") || line.startsWith("event: message")) {
-              const dataLine = lines.slice(j + 1).find((l) => l.trim().startsWith("data:"));
-              if (dataLine) {
-                const endpointData = dataLine.replace(/^data:\s*/, "").trim();
-                reader.cancel();
-                clearTimeout(timeoutId);
-                if (endpointData.startsWith("http://") || endpointData.startsWith("https://")) {
-                  this.postUrl = endpointData;
-                } else {
-                  const base = new URL(this.url);
-                  const resolved = new URL(endpointData, base.origin);
-                  this.postUrl = resolved.toString();
-                }
-                return this.postUrl;
+      if (res.status >= 200 && res.status < 300 && res.text) {
+        const lines = res.text.split("\n");
+        for (let j = 0; j < lines.length; j++) {
+          const line = lines[j].trim();
+          if (line.startsWith("event: endpoint") || line.startsWith("event: message")) {
+            const dataLine = lines.slice(j + 1).find((l) => l.trim().startsWith("data:"));
+            if (dataLine) {
+              const endpointData = dataLine.replace(/^data:\s*/, "").trim();
+              if (endpointData.startsWith("http://") || endpointData.startsWith("https://")) {
+                this.postUrl = endpointData;
+              } else {
+                const base = new URL(this.url);
+                const resolved = new URL(endpointData, base.origin);
+                this.postUrl = resolved.toString();
               }
+              return this.postUrl;
             }
           }
         }
-        reader.cancel();
       }
-      clearTimeout(timeoutId);
     } catch (err) {
     }
     this.postUrl = this.url;
@@ -5045,10 +5030,10 @@ var DEFAULT_CATALOG = [
   {
     id: "todoist",
     name: "Todoist (Official Hosted Remote MCP)",
-    description: "\u041E\u0444\u0438\u0446\u0438\u0430\u043B\u044C\u043D\u044B\u0439 \u043E\u0431\u043B\u0430\u0447\u043D\u044B\u0439 MCP \u0441\u0435\u0440\u0432\u0435\u0440 Todoist \u0434\u043B\u044F \u0443\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u044F \u0437\u0430\u0434\u0430\u0447\u0430\u043C\u0438, \u043F\u0440\u043E\u0435\u043A\u0442\u0430\u043C\u0438, \u0441\u0435\u043A\u0446\u0438\u044F\u043C\u0438, \u043A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u044F\u043C\u0438 \u0438 \u043D\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u044F\u043C\u0438 \u0432 \u0440\u0435\u0430\u043B\u044C\u043D\u043E\u043C \u0432\u0440\u0435\u043C\u0435\u043D\u0438.",
+    description: "Official hosted Todoist MCP server for managing tasks, projects, sections, comments, and reminders in real time.",
     url: "https://ai.todoist.net/mcp",
     authType: "bearer",
-    authDescription: "\u0422\u0440\u0435\u0431\u0443\u0435\u0442\u0441\u044F \u043F\u0435\u0440\u0441\u043E\u043D\u0430\u043B\u044C\u043D\u044B\u0439 API \u0442\u043E\u043A\u0435\u043D \u0438\u0437 \u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043A Todoist (\u0418\u043D\u0442\u0435\u0433\u0440\u0430\u0446\u0438\u0438 -> \u0414\u043B\u044F \u0440\u0430\u0437\u0440\u0430\u0431\u043E\u0442\u0447\u0438\u043A\u043E\u0432 -> API-\u0442\u043E\u043A\u0435\u043D).",
+    authDescription: "Requires Personal API Token from Todoist Settings -> Integrations -> Developer -> API token.",
     docUrl: "https://app.todoist.com/app/settings/integrations/developer",
     tags: ["tasks", "productivity", "todoist", "remote-sse"]
   }

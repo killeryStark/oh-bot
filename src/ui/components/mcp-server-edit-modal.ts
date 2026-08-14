@@ -40,7 +40,7 @@ export class McpServerEditModal extends Modal {
       this.name = serverToEdit.name;
       this.url = serverToEdit.url;
       this.description = serverToEdit.description || '';
-      this.authType = serverToEdit.authType;
+      this.authType = serverToEdit.authType || 'bearer';
       this.customHeaderName = serverToEdit.customHeaderName || 'X-API-Key';
       
       const existingToken = mcpManager.getAuthToken(serverToEdit);
@@ -100,7 +100,7 @@ export class McpServerEditModal extends Modal {
         this.attachFocusScroll(text.inputEl);
       });
 
-    // Todoist Helper (if relevant)
+    // Todoist Token Helper (if relevant)
     if (this.url.includes('todoist') || this.name.toLowerCase().includes('todoist')) {
       const helperBox = contentEl.createEl('div', { cls: 'harness-mcp-helper-box' });
       helperBox.style.padding = '10px 12px';
@@ -110,17 +110,17 @@ export class McpServerEditModal extends Modal {
       helperBox.style.border = '1px solid var(--interactive-accent)';
 
       const title = helperBox.createEl('div');
-      title.createEl('strong', { text: '💡 Как получить API-токен Todoist:' });
+      title.createEl('strong', { text: '💡 How to get your Todoist API Token:' });
 
       const desc = helperBox.createEl('p', {
-        text: '1. Нажмите кнопку ниже для открытия настроек Todoist в браузере.\n2. Скопируйте персональный API-токен.\n3. Нажмите кнопку «📋 Вставить» в поле API Token ниже.',
+        text: '1. Click the button below to open Todoist Developer Settings in browser.\n2. Copy your Personal API Token.\n3. Click "Paste" in the API Token field below.',
         cls: 'harness-subtext',
       });
       desc.style.margin = '4px 0 8px 0';
       desc.style.whiteSpace = 'pre-line';
 
       const openBtn = helperBox.createEl('button', {
-        text: '🔗 Открыть настройки токена Todoist',
+        text: '🔗 Open Todoist Token Settings',
         cls: 'harness-btn-sm mod-cta',
       });
       openBtn.addEventListener('click', () => {
@@ -161,20 +161,20 @@ export class McpServerEditModal extends Modal {
 
         // Paste from Clipboard button
         tokenSetting.addButton((pasteBtn) => {
-          pasteBtn.setButtonText('📋 Вставить');
-          pasteBtn.setTooltip('Вставить токен из буфера обмена');
+          pasteBtn.setButtonText('Paste');
+          pasteBtn.setTooltip('Paste token from clipboard');
           pasteBtn.onClick(async () => {
             try {
               const clip = await navigator.clipboard.readText();
               if (clip && clip.trim()) {
                 this.apiToken = clip.trim();
                 text.setValue(this.apiToken);
-                new Notice('✓ Токен вставлен из буфера обмена!');
+                new Notice('✓ Token pasted from clipboard!');
               } else {
-                new Notice('Буфер обмена пуст.');
+                new Notice('Clipboard is empty.');
               }
             } catch (err) {
-              new Notice('Пожалуйста, вставьте токен вручную в поле ввода.');
+              new Notice('Could not read clipboard. Please paste manually.');
             }
           });
         });
@@ -182,12 +182,12 @@ export class McpServerEditModal extends Modal {
         // Show/Hide toggle button
         tokenSetting.addButton((showBtn) => {
           setIcon(showBtn.buttonEl, this.showPassword ? 'eye-off' : 'eye');
-          showBtn.setTooltip(this.showPassword ? 'Скрыть токен' : 'Показать токен');
+          showBtn.setTooltip(this.showPassword ? 'Hide Token' : 'Show Token');
           showBtn.onClick(() => {
             this.showPassword = !this.showPassword;
             text.inputEl.type = this.showPassword ? 'text' : 'password';
             setIcon(showBtn.buttonEl, this.showPassword ? 'eye-off' : 'eye');
-            showBtn.setTooltip(this.showPassword ? 'Скрыть токен' : 'Показать токен');
+            showBtn.setTooltip(this.showPassword ? 'Hide Token' : 'Show Token');
           });
         });
       });
@@ -216,17 +216,17 @@ export class McpServerEditModal extends Modal {
         this.attachFocusScroll(text.inputEl);
 
         headerValSetting.addButton((pasteBtn) => {
-          pasteBtn.setButtonText('📋 Вставить');
+          pasteBtn.setButtonText('Paste');
           pasteBtn.onClick(async () => {
             try {
               const clip = await navigator.clipboard.readText();
               if (clip && clip.trim()) {
                 this.apiToken = clip.trim();
                 text.setValue(this.apiToken);
-                new Notice('✓ Ключ вставлен из буфера!');
+                new Notice('✓ Key pasted from clipboard!');
               }
             } catch (e) {
-              new Notice('Вставьте ключ вручную в поле.');
+              new Notice('Please paste key manually.');
             }
           });
         });
@@ -326,6 +326,7 @@ export class McpServerEditModal extends Modal {
 
     const secretKeyName = `oh_bot_secret_mcp_${serverId}_token`;
 
+    // Save token to SecretManager
     if (this.apiToken.trim()) {
       this.secretManager.setSecret(secretKeyName, this.apiToken.trim());
     }
