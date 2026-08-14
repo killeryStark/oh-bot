@@ -32,7 +32,6 @@
 .harness-chat-messages {
   flex: 1 1 auto !important;
   min-height: 0 !important;
-  height: 100% !important;
   overflow-y: auto !important;
   padding: 12px;
   display: flex;
@@ -96,11 +95,11 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 8px 12px calc(8px + env(safe-area-inset-bottom)) 12px;
+  padding: 8px 12px;
   border-top: 1px solid var(--background-modifier-border);
   position: relative;
   background-color: var(--background-primary);
-  transition: all 0.15s ease-in-out;
+  transition: all 0.1s ease-in-out;
 }
 
 .harness-chat-input-area.is-expanded {
@@ -115,7 +114,6 @@
   border: none !important;
   border-radius: 0 !important;
   padding: 12px !important;
-  padding-bottom: max(16px, env(safe-area-inset-bottom)) !important;
   box-sizing: border-box !important;
   background-color: var(--background-primary) !important;
   display: flex !important;
@@ -148,9 +146,11 @@
   overflow-y: auto;
 }
 
-.harness-chat-textarea::placeholder {
+.harness-chat-textarea::placeholder,
+.harness-chat-textarea::-webkit-input-placeholder {
   color: var(--text-muted) !important;
-  opacity: 0.75 !important;
+  -webkit-text-fill-color: var(--text-muted) !important;
+  opacity: 0.85 !important;
 }
 
 .harness-chat-input-area.is-expanded .harness-chat-textarea {

@@ -80,26 +80,17 @@ export class HarnessChatView extends ItemView {
   }
 
   private adjustForKeyboard = () => {
-    if (!this.inputAreaEl) return;
+    const container = this.containerEl.children[1] as HTMLElement;
+    if (!container) return;
 
     if (window.visualViewport) {
       const vv = window.visualViewport;
-      // Calculate how many pixels the keyboard covers at the bottom
-      const keyboardHeight = Math.max(0, window.innerHeight - (vv.offsetTop + vv.height));
+      const containerTop = container.getBoundingClientRect().top;
+      const visibleHeight = vv.height - Math.max(0, containerTop);
 
-      if (this.isInputExpanded) {
-        const containerRect = this.containerEl.getBoundingClientRect();
-        const availableHeight = vv.height - containerRect.top;
-        if (availableHeight > 100) {
-          this.inputAreaEl.style.height = `${availableHeight}px`;
-        }
-        this.inputAreaEl.style.paddingBottom = 'max(16px, env(safe-area-inset-bottom))';
-      } else {
-        if (keyboardHeight > 0) {
-          this.inputAreaEl.style.paddingBottom = `${keyboardHeight + 6}px`;
-        } else {
-          this.inputAreaEl.style.paddingBottom = 'calc(8px + env(safe-area-inset-bottom))';
-        }
+      if (visibleHeight > 100) {
+        container.style.height = `${visibleHeight}px`;
+        container.style.maxHeight = `${visibleHeight}px`;
       }
     }
 
@@ -350,12 +341,13 @@ export class HarnessChatView extends ItemView {
     });
 
     this.inputTextAreaEl.addEventListener('focus', () => {
-      setTimeout(this.adjustForKeyboard, 100);
-      setTimeout(this.adjustForKeyboard, 350);
+      setTimeout(this.adjustForKeyboard, 50);
+      setTimeout(this.adjustForKeyboard, 250);
+      setTimeout(this.adjustForKeyboard, 500);
     });
 
     this.inputTextAreaEl.addEventListener('blur', () => {
-      setTimeout(this.adjustForKeyboard, 150);
+      setTimeout(this.adjustForKeyboard, 100);
     });
 
     this.inputTextAreaEl.addEventListener('keydown', (e) => {
@@ -388,12 +380,13 @@ export class HarnessChatView extends ItemView {
       }
     });
 
-    // Mobile Viewport Keyboard handling for both normal and expanded mode
+    // Mobile Viewport Keyboard handling
     if (window.visualViewport) {
       window.visualViewport.addEventListener('resize', this.adjustForKeyboard);
       window.visualViewport.addEventListener('scroll', this.adjustForKeyboard);
     }
 
+    this.adjustForKeyboard();
     this.renderMessages();
   }
 
@@ -426,7 +419,6 @@ export class HarnessChatView extends ItemView {
       this.inputTextAreaEl.focus();
     } else {
       this.inputAreaEl.removeClass('is-expanded');
-      this.inputAreaEl.style.height = '';
       setIcon(this.expandBtnEl, 'maximize-2');
       this.expandBtnEl.setAttribute('aria-label', 'Expand to full view');
       this.autoResizeTextarea();

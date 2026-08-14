@@ -1960,24 +1960,16 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
     this.currentSuggestItems = [];
     this.currentAbortController = null;
     this.adjustForKeyboard = () => {
-      if (!this.inputAreaEl)
+      const container = this.containerEl.children[1];
+      if (!container)
         return;
       if (window.visualViewport) {
         const vv = window.visualViewport;
-        const keyboardHeight = Math.max(0, window.innerHeight - (vv.offsetTop + vv.height));
-        if (this.isInputExpanded) {
-          const containerRect = this.containerEl.getBoundingClientRect();
-          const availableHeight = vv.height - containerRect.top;
-          if (availableHeight > 100) {
-            this.inputAreaEl.style.height = `${availableHeight}px`;
-          }
-          this.inputAreaEl.style.paddingBottom = "max(16px, env(safe-area-inset-bottom))";
-        } else {
-          if (keyboardHeight > 0) {
-            this.inputAreaEl.style.paddingBottom = `${keyboardHeight + 6}px`;
-          } else {
-            this.inputAreaEl.style.paddingBottom = "calc(8px + env(safe-area-inset-bottom))";
-          }
+        const containerTop = container.getBoundingClientRect().top;
+        const visibleHeight = vv.height - Math.max(0, containerTop);
+        if (visibleHeight > 100) {
+          container.style.height = `${visibleHeight}px`;
+          container.style.maxHeight = `${visibleHeight}px`;
         }
       }
       if (this.messagesContainerEl) {
@@ -2208,11 +2200,12 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
       this.handleInputSuggest();
     });
     this.inputTextAreaEl.addEventListener("focus", () => {
-      setTimeout(this.adjustForKeyboard, 100);
-      setTimeout(this.adjustForKeyboard, 350);
+      setTimeout(this.adjustForKeyboard, 50);
+      setTimeout(this.adjustForKeyboard, 250);
+      setTimeout(this.adjustForKeyboard, 500);
     });
     this.inputTextAreaEl.addEventListener("blur", () => {
-      setTimeout(this.adjustForKeyboard, 150);
+      setTimeout(this.adjustForKeyboard, 100);
     });
     this.inputTextAreaEl.addEventListener("keydown", (e) => {
       if (this.activeSuggestType !== "none") {
@@ -2246,6 +2239,7 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
       window.visualViewport.addEventListener("resize", this.adjustForKeyboard);
       window.visualViewport.addEventListener("scroll", this.adjustForKeyboard);
     }
+    this.adjustForKeyboard();
     this.renderMessages();
   }
   autoResizeTextarea() {
@@ -2275,7 +2269,6 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
       this.inputTextAreaEl.focus();
     } else {
       this.inputAreaEl.removeClass("is-expanded");
-      this.inputAreaEl.style.height = "";
       (0, import_obsidian15.setIcon)(this.expandBtnEl, "maximize-2");
       this.expandBtnEl.setAttribute("aria-label", "Expand to full view");
       this.autoResizeTextarea();
