@@ -109,8 +109,8 @@ var DEFAULT_PROVIDERS = [
 ];
 var DEFAULT_SETTINGS = {
   providers: DEFAULT_PROVIDERS,
-  activeProviderId: "openrouter",
-  activeModel: "anthropic/claude-3.7-sonnet",
+  activeProviderId: "",
+  activeModel: "",
   systemPrompt: "You are an autonomous AI Agent inside Obsidian. You have tools to read, create, patch, search, and inspect notes in the vault. Use these tools step-by-step to fulfill the user request.",
   safetyMode: "strict"
 };
@@ -159,7 +159,7 @@ var SecretManager = class {
     this.app = app;
   }
   /**
-   * Retrieves the secret value associated with the given secret name using SecretStorage API.
+   * Retrieves the secret value associated with the given secret name using SecretStorage API or fallback.
    */
   getSecret(secretName) {
     if (!secretName) {
@@ -168,9 +168,42 @@ var SecretManager = class {
     const secretStorage = this.app.secretStorage;
     if (secretStorage && typeof secretStorage.getSecret === "function") {
       const secret = secretStorage.getSecret(secretName);
-      return secret || null;
+      if (secret)
+        return secret;
+    }
+    try {
+      const localVal = window.localStorage.getItem(`oh_bot_${secretName}`);
+      if (localVal)
+        return localVal;
+    } catch (e) {
     }
     return null;
+  }
+  /**
+   * Stores secret value in SecretStorage and local storage fallback.
+   */
+  setSecret(secretName, value) {
+    if (!secretName)
+      return;
+    const secretStorage = this.app.secretStorage;
+    if (secretStorage && typeof secretStorage.setSecret === "function") {
+      secretStorage.setSecret(secretName, value);
+    }
+    try {
+      if (value) {
+        window.localStorage.setItem(`oh_bot_${secretName}`, value);
+      } else {
+        window.localStorage.removeItem(`oh_bot_${secretName}`);
+      }
+    } catch (e) {
+    }
+  }
+  /**
+   * Checks if a secret is present and non-empty.
+   */
+  hasSecret(secretName) {
+    const val = this.getSecret(secretName);
+    return !!val && val.trim().length > 0;
   }
 };
 
@@ -180,8 +213,8 @@ var AddProviderModal = class extends import_obsidian2.Modal {
     super(app);
     this.providerName = "";
     this.baseUrl = "https://api.openai.com/v1";
-    this.secretName = `oh_bot_secret_custom_${Date.now()}`;
-    this.modelsStr = "";
+    this.apiKey = "";
+    this.models = [];
     this.onAdd = onAdd;
     this.secretManager = new SecretManager(app);
   }
@@ -200,37 +233,32 @@ var AddProviderModal = class extends import_obsidian2.Modal {
         this.baseUrl = val.trim();
       })
     );
-    new import_obsidian2.Setting(contentEl).setName("API Key Secret").setDesc("Select or store secret in Obsidian SecretStorage").addComponent((el) => {
-      try {
-        return new import_obsidian2.SecretComponent(this.app, el).setValue(this.secretName).onChange((val) => {
-          this.secretName = val;
-        });
-      } catch {
-        const input = el.createEl("input", { type: "password", value: this.secretName });
-        input.addEventListener("change", (e) => {
-          this.secretName = e.target.value;
-        });
-        return el;
-      }
-    });
-    new import_obsidian2.Setting(contentEl).setName("Models (comma separated)").setDesc("e.g. deepseek-chat, deepseek-reasoner").addTextArea((text) => {
-      text.setPlaceholder("model-1, model-2").onChange((val) => {
-        this.modelsStr = val;
+    new import_obsidian2.Setting(contentEl).setName("API Key").setDesc("API Key will be automatically stored in Obsidian SecretStorage").addText((text) => {
+      text.inputEl.type = "password";
+      text.setPlaceholder("Enter API Key").onChange((val) => {
+        this.apiKey = val.trim();
       });
-    }).addButton(
-      (btn) => btn.setButtonText("\u{1F504} Auto-Fetch Models").onClick(async () => {
-        const apiKey = this.secretManager.getSecret(this.secretName) || "";
+    });
+    const modelsSetting = new import_obsidian2.Setting(contentEl).setName("Available Models").setDesc("List of models available on this provider").addTextArea((text) => {
+      text.setPlaceholder("model-name-1, model-name-2").setValue(this.models.join(", ")).onChange((val) => {
+        this.models = val.split(",").map((m) => m.trim()).filter((m) => m.length > 0);
+      });
+    });
+    modelsSetting.addButton((btn) => {
+      btn.setTooltip("Fetch Models from Endpoint");
+      (0, import_obsidian2.setIcon)(btn.buttonEl, "refresh-cw");
+      btn.onClick(async () => {
         new import_obsidian2.Notice("Fetching models from endpoint...");
-        const fetched = await fetchAvailableModels(this.baseUrl, apiKey);
+        const fetched = await fetchAvailableModels(this.baseUrl, this.apiKey);
         if (fetched.length > 0) {
-          this.modelsStr = fetched.join(", ");
+          this.models = fetched;
           new import_obsidian2.Notice(`Found ${fetched.length} models!`);
           this.onOpen();
         } else {
-          new import_obsidian2.Notice("Could not fetch models automatically. Please enter model names manually.");
+          new import_obsidian2.Notice("Could not fetch models automatically. Please specify model names manually.");
         }
-      })
-    );
+      });
+    });
     new import_obsidian2.Setting(contentEl).addButton(
       (btn) => btn.setButtonText("Cancel").onClick(() => {
         this.close();
@@ -241,14 +269,18 @@ var AddProviderModal = class extends import_obsidian2.Modal {
           new import_obsidian2.Notice("Please enter a provider name.");
           return;
         }
-        const modelList = this.modelsStr.split(",").map((m) => m.trim()).filter((m) => m.length > 0);
+        const uniqueId = `custom_${Date.now()}`;
+        const secretId = `oh_bot_secret_${uniqueId}`;
+        if (this.apiKey) {
+          this.secretManager.setSecret(secretId, this.apiKey);
+        }
         const newProvider = {
-          id: `custom_${Date.now()}`,
+          id: uniqueId,
           name: this.providerName,
           type: "custom-openai",
           baseUrl: this.baseUrl,
-          apiKeySecretName: this.secretName,
-          models: modelList.length > 0 ? modelList : ["default-model"],
+          apiKeySecretName: secretId,
+          models: this.models.length > 0 ? this.models : ["default-model"],
           enabled: true,
           isCustom: true
         };
@@ -276,15 +308,20 @@ var HarnessSettingTab = class extends import_obsidian3.PluginSettingTab {
     containerEl.empty();
     containerEl.createEl("h2", { text: "Obsidian Harness Bot Settings" });
     new import_obsidian3.Setting(containerEl).setName("Default Active Provider").setDesc("Select the default AI provider for agent operations").addDropdown((dropdown) => {
+      dropdown.addOption("", "(Not configured)");
       for (const prov of this.plugin.settings.providers) {
-        dropdown.addOption(prov.id, prov.name);
+        const hasKey = prov.type === "ollama" || this.secretManager.hasSecret(prov.apiKeySecretName);
+        const label = hasKey ? prov.name : `${prov.name} (Key missing)`;
+        dropdown.addOption(prov.id, label);
       }
-      dropdown.setValue(this.plugin.settings.activeProviderId);
+      dropdown.setValue(this.plugin.settings.activeProviderId || "");
       dropdown.onChange(async (val) => {
         this.plugin.settings.activeProviderId = val;
         const activeProv = this.plugin.settings.providers.find((p) => p.id === val);
         if (activeProv && activeProv.models.length > 0) {
           this.plugin.settings.activeModel = activeProv.models[0];
+        } else {
+          this.plugin.settings.activeModel = "";
         }
         await this.plugin.saveSettings();
         this.display();
@@ -292,24 +329,32 @@ var HarnessSettingTab = class extends import_obsidian3.PluginSettingTab {
     });
     const currentActiveProvider = this.plugin.settings.providers.find(
       (p) => p.id === this.plugin.settings.activeProviderId
-    ) || this.plugin.settings.providers[0];
-    new import_obsidian3.Setting(containerEl).setName("Default Active Model").setDesc(`Select model for ${currentActiveProvider?.name || "current provider"}`).addDropdown((dropdown) => {
-      const models = currentActiveProvider?.models || [];
-      for (const m of models) {
-        dropdown.addOption(m, m);
-      }
-      if (models.includes(this.plugin.settings.activeModel)) {
-        dropdown.setValue(this.plugin.settings.activeModel);
-      } else if (models.length > 0) {
-        dropdown.setValue(models[0]);
-      }
-      dropdown.onChange(async (val) => {
-        this.plugin.settings.activeModel = val;
-        await this.plugin.saveSettings();
+    );
+    const modelSetting = new import_obsidian3.Setting(containerEl).setName("Default Active Model").setDesc(currentActiveProvider ? `Select model for ${currentActiveProvider.name}` : "Select an active provider first");
+    if (currentActiveProvider && currentActiveProvider.models.length > 0) {
+      modelSetting.addDropdown((dropdown) => {
+        for (const m of currentActiveProvider.models) {
+          dropdown.addOption(m, m);
+        }
+        if (currentActiveProvider.models.includes(this.plugin.settings.activeModel)) {
+          dropdown.setValue(this.plugin.settings.activeModel);
+        } else {
+          dropdown.setValue(currentActiveProvider.models[0]);
+          this.plugin.settings.activeModel = currentActiveProvider.models[0];
+        }
+        dropdown.onChange(async (val) => {
+          this.plugin.settings.activeModel = val;
+          await this.plugin.saveSettings();
+        });
       });
-    });
+    } else {
+      modelSetting.addDropdown((dropdown) => {
+        dropdown.addOption("", "(No models configured)");
+        dropdown.setValue("");
+      });
+    }
     containerEl.createEl("h3", { text: "Provider Configuration" });
-    new import_obsidian3.Setting(containerEl).setName("Select Provider to Configure").setDesc("Choose a provider from the list to update its API key, base URL, or model list").addDropdown((dropdown) => {
+    const providerSelectSetting = new import_obsidian3.Setting(containerEl).setName("Select Provider to Configure").setDesc("Choose a provider to configure its API key, base URL, and model list").addDropdown((dropdown) => {
       for (const prov of this.plugin.settings.providers) {
         dropdown.addOption(prov.id, prov.name);
       }
@@ -318,16 +363,24 @@ var HarnessSettingTab = class extends import_obsidian3.PluginSettingTab {
         this.selectedConfigProviderId = val;
         this.display();
       });
-    }).addButton(
-      (btn) => btn.setButtonText("+ Add Custom Provider").setCta().onClick(() => {
+    });
+    providerSelectSetting.addButton((btn) => {
+      btn.setButtonText("Add Custom Provider");
+      (0, import_obsidian3.setIcon)(btn.buttonEl, "plus");
+      btn.setCta();
+      btn.onClick(() => {
         new AddProviderModal(this.app, async (newProvider) => {
           this.plugin.settings.providers.push(newProvider);
           this.selectedConfigProviderId = newProvider.id;
+          if (!this.plugin.settings.activeProviderId) {
+            this.plugin.settings.activeProviderId = newProvider.id;
+            this.plugin.settings.activeModel = newProvider.models[0] || "";
+          }
           await this.plugin.saveSettings();
           this.display();
         }).open();
-      })
-    );
+      });
+    });
     const configProvider = this.plugin.settings.providers.find(
       (p) => p.id === this.selectedConfigProviderId
     );
@@ -338,63 +391,88 @@ var HarnessSettingTab = class extends import_obsidian3.PluginSettingTab {
       providerCardEl.style.padding = "12px";
       providerCardEl.style.marginBottom = "16px";
       providerCardEl.style.backgroundColor = "var(--background-secondary)";
-      providerCardEl.createEl("h4", { text: `\u2699\uFE0F Settings for: ${configProvider.name}` });
-      new import_obsidian3.Setting(providerCardEl).setName("Base URL").setDesc("Endpoint URL for this provider").addText(
+      providerCardEl.createEl("h4", { text: `Configuration: ${configProvider.name}` });
+      new import_obsidian3.Setting(providerCardEl).setName("Base URL").setDesc("API Endpoint URL").addText(
         (text) => text.setValue(configProvider.baseUrl).onChange(async (val) => {
           configProvider.baseUrl = val.trim();
           await this.plugin.saveSettings();
         })
       );
-      new import_obsidian3.Setting(providerCardEl).setName("API Key Secret").setDesc(`Stored in Obsidian SecretStorage under ID: "${configProvider.apiKeySecretName}"`).addComponent((el) => {
-        try {
-          return new import_obsidian3.SecretComponent(this.app, el).setValue(configProvider.apiKeySecretName).onChange(async (val) => {
-            configProvider.apiKeySecretName = val;
+      const hasKey = this.secretManager.hasSecret(configProvider.apiKeySecretName);
+      const keySetting = new import_obsidian3.Setting(providerCardEl).setName("API Key").setDesc(hasKey ? "Key is configured in SecretStorage" : "Enter API Key to store securely");
+      keySetting.addText((text) => {
+        text.inputEl.type = "password";
+        text.setPlaceholder(hasKey ? "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" : "Enter API Key");
+        text.onChange(async (val) => {
+          const trimmed = val.trim();
+          if (trimmed) {
+            this.secretManager.setSecret(configProvider.apiKeySecretName, trimmed);
+            if (!this.plugin.settings.activeProviderId) {
+              this.plugin.settings.activeProviderId = configProvider.id;
+              this.plugin.settings.activeModel = configProvider.models[0] || "";
+            }
             await this.plugin.saveSettings();
-          });
-        } catch {
-          const input = el.createEl("input", { type: "password", value: configProvider.apiKeySecretName });
-          input.addEventListener("change", async (ev) => {
-            configProvider.apiKeySecretName = ev.target.value;
-            await this.plugin.saveSettings();
-          });
-          return el;
-        }
+            new import_obsidian3.Notice(`API Key saved for ${configProvider.name}`);
+          }
+        });
       });
-      new import_obsidian3.Setting(providerCardEl).setName("Available Models").setDesc("Comma-separated list of model identifiers").addTextArea(
-        (text) => text.setValue(configProvider.models.join(", ")).onChange(async (val) => {
+      if (hasKey) {
+        keySetting.addButton((btn) => {
+          btn.setButtonText("Clear Key");
+          btn.setWarning();
+          btn.onClick(async () => {
+            this.secretManager.setSecret(configProvider.apiKeySecretName, "");
+            new import_obsidian3.Notice(`API Key cleared for ${configProvider.name}`);
+            this.display();
+          });
+        });
+      }
+      const modelsSetting = new import_obsidian3.Setting(providerCardEl).setName("Available Models").setDesc("Models for this provider").addTextArea((text) => {
+        text.setValue(configProvider.models.join(", ")).setPlaceholder("model-1, model-2").onChange(async (val) => {
           configProvider.models = val.split(",").map((m) => m.trim()).filter((m) => m.length > 0);
           await this.plugin.saveSettings();
-        })
-      ).addButton(
-        (btn) => btn.setButtonText("\u{1F504} Fetch Models from Endpoint").onClick(async () => {
+        });
+      });
+      modelsSetting.addButton((btn) => {
+        btn.setTooltip("Fetch models from endpoint");
+        (0, import_obsidian3.setIcon)(btn.buttonEl, "refresh-cw");
+        btn.onClick(async () => {
           const apiKey = this.secretManager.getSecret(configProvider.apiKeySecretName) || "";
           new import_obsidian3.Notice(`Fetching models for ${configProvider.name}...`);
           const fetched = await fetchAvailableModels(configProvider.baseUrl, apiKey);
           if (fetched.length > 0) {
             configProvider.models = fetched;
+            if (this.plugin.settings.activeProviderId === configProvider.id && fetched.length > 0) {
+              this.plugin.settings.activeModel = fetched[0];
+            }
             await this.plugin.saveSettings();
             new import_obsidian3.Notice(`Updated ${configProvider.name} with ${fetched.length} models!`);
             this.display();
           } else {
             new import_obsidian3.Notice("Could not fetch models automatically from endpoint.");
           }
-        })
-      );
+        });
+      });
       if (configProvider.isCustom) {
-        new import_obsidian3.Setting(providerCardEl).setName("Delete Provider").setDesc("Remove this custom provider from your settings").addButton(
-          (btn) => btn.setButtonText("\u{1F5D1}\uFE0F Delete Provider").setWarning().onClick(async () => {
+        const deleteSetting = new import_obsidian3.Setting(providerCardEl).setName("Delete Provider").setDesc("Remove this custom provider from settings");
+        deleteSetting.addButton((btn) => {
+          btn.setButtonText("Delete Provider");
+          (0, import_obsidian3.setIcon)(btn.buttonEl, "trash");
+          btn.setWarning();
+          btn.onClick(async () => {
             this.plugin.settings.providers = this.plugin.settings.providers.filter(
               (p) => p.id !== configProvider.id
             );
             this.selectedConfigProviderId = this.plugin.settings.providers[0]?.id || "openrouter";
             if (this.plugin.settings.activeProviderId === configProvider.id) {
-              this.plugin.settings.activeProviderId = this.selectedConfigProviderId;
+              this.plugin.settings.activeProviderId = "";
+              this.plugin.settings.activeModel = "";
             }
             await this.plugin.saveSettings();
             new import_obsidian3.Notice(`Deleted provider "${configProvider.name}".`);
             this.display();
-          })
-        );
+          });
+        });
       }
     }
     containerEl.createEl("h3", { text: "General & Safety" });
@@ -1416,24 +1494,24 @@ created: ${dateStr}
 model: ${modelName}
 ---
 
-# \u{1F916} Agent Chat Session (${dateStr})
+# Harness Bot Chat Session (${dateStr})
 
 `;
     for (const msg of messages) {
       if (msg.role === "user") {
-        mdContent += `### \u{1F464} User
+        mdContent += `### User
 ${msg.content}
 
 `;
       } else if (msg.role === "assistant") {
         if (msg.content) {
-          mdContent += `### \u{1F916} Assistant
+          mdContent += `### Harness Bot
 ${msg.content}
 
 `;
         }
         if (msg.tool_calls && msg.tool_calls.length > 0) {
-          mdContent += `> \u{1F6E0}\uFE0F **Tool Calls Requested:**
+          mdContent += `> **Tool Calls Requested:**
 `;
           for (const tc of msg.tool_calls) {
             mdContent += `> - \`${tc.function.name}\` \`\`\`json
@@ -1445,7 +1523,7 @@ ${tc.function.arguments}
 `;
         }
       } else if (msg.role === "tool") {
-        mdContent += `> \u2699\uFE0F **Tool Result (${msg.name}):**
+        mdContent += `> **Tool Result (${msg.name}):**
 \`\`\`
 ${msg.content}
 \`\`\`
@@ -1470,7 +1548,7 @@ var ConfirmationModal = class extends import_obsidian11.Modal {
     const { contentEl } = this;
     contentEl.empty();
     contentEl.addClass("harness-modal-content");
-    contentEl.createEl("h3", { text: "\u26A0\uFE0F File Action Confirmation" });
+    contentEl.createEl("h3", { text: "File Action Confirmation" });
     contentEl.createEl("p", {
       text: `The AI Agent is requesting permission to execute tool: "${this.toolCall.function.name}".`
     });
@@ -1500,14 +1578,14 @@ var HarnessChatView = class extends import_obsidian12.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.conversationHistory = [];
-    this.currentProviderId = "openrouter";
-    this.currentModel = "anthropic/claude-3.7-sonnet";
+    this.currentProviderId = "";
+    this.currentModel = "";
     this.plugin = plugin;
     this.toolRegistry = new ToolRegistry();
     this.agentHarness = new AgentHarness(this.app, this.plugin.settings, this.toolRegistry);
     this.exporter = new MarkdownExporter(this.app);
-    this.currentProviderId = this.plugin.settings.activeProviderId || "openrouter";
-    this.currentModel = this.plugin.settings.activeModel || "anthropic/claude-3.7-sonnet";
+    this.currentProviderId = this.plugin.settings.activeProviderId || "";
+    this.currentModel = this.plugin.settings.activeModel || "";
   }
   getViewType() {
     return HARNESS_VIEW_TYPE;
@@ -1523,7 +1601,13 @@ var HarnessChatView = class extends import_obsidian12.ItemView {
     container.empty();
     container.addClass("harness-chat-container");
     const headerEl = container.createEl("div", { cls: "harness-chat-header" });
-    headerEl.createEl("span", { text: "\u{1F916} Harness Bot", cls: "harness-title" });
+    const titleEl = headerEl.createEl("div", { cls: "harness-title-container" });
+    titleEl.style.display = "flex";
+    titleEl.style.alignItems = "center";
+    titleEl.style.gap = "6px";
+    const botIconEl = titleEl.createEl("span");
+    (0, import_obsidian12.setIcon)(botIconEl, "bot");
+    titleEl.createEl("span", { text: "Harness Bot", cls: "harness-title" });
     const selectorsEl = headerEl.createEl("div", { cls: "harness-chat-header-actions" });
     this.providerSelectEl = selectorsEl.createEl("select");
     this.refreshProviderDropdown();
@@ -1536,7 +1620,9 @@ var HarnessChatView = class extends import_obsidian12.ItemView {
     this.modelSelectEl.addEventListener("change", () => {
       this.currentModel = this.modelSelectEl.value;
     });
-    const exportBtn = selectorsEl.createEl("button", { text: "\u{1F4E4} Export" });
+    const exportBtn = selectorsEl.createEl("button", { cls: "clickable-icon" });
+    exportBtn.setAttribute("aria-label", "Export Chat to Markdown");
+    (0, import_obsidian12.setIcon)(exportBtn, "upload");
     exportBtn.addEventListener("click", async () => {
       if (this.conversationHistory.length === 0) {
         new import_obsidian12.Notice("No chat history to export.");
@@ -1545,14 +1631,16 @@ var HarnessChatView = class extends import_obsidian12.ItemView {
       try {
         const exportedPath = await this.exporter.exportChatToMarkdown(
           this.conversationHistory,
-          this.currentModel
+          this.currentModel || "default"
         );
         new import_obsidian12.Notice(`Chat exported to ${exportedPath}`);
       } catch (e) {
         new import_obsidian12.Notice(`Export failed: ${e.message}`);
       }
     });
-    const clearBtn = selectorsEl.createEl("button", { text: "\u{1F5D1}\uFE0F Clear" });
+    const clearBtn = selectorsEl.createEl("button", { cls: "clickable-icon" });
+    clearBtn.setAttribute("aria-label", "Clear Conversation");
+    (0, import_obsidian12.setIcon)(clearBtn, "trash");
     clearBtn.addEventListener("click", () => {
       this.conversationHistory = [];
       this.renderMessages();
@@ -1569,6 +1657,10 @@ var HarnessChatView = class extends import_obsidian12.ItemView {
       const text = this.inputTextAreaEl.value.trim();
       if (!text)
         return;
+      if (!this.currentProviderId) {
+        new import_obsidian12.Notice("Please configure and select an AI provider in Settings first.");
+        return;
+      }
       this.inputTextAreaEl.value = "";
       this.sendButtonEl.disabled = true;
       const userMsg = { role: "user", content: text };
@@ -1577,7 +1669,10 @@ var HarnessChatView = class extends import_obsidian12.ItemView {
       const streamingMsgEl = this.messagesContainerEl.createEl("div", {
         cls: "harness-message harness-message-assistant"
       });
-      streamingMsgEl.createEl("div", { text: `\u{1F916} Harness Bot (${this.currentModel})`, cls: "harness-message-header" });
+      streamingMsgEl.createEl("div", {
+        text: `Harness Bot (${this.currentModel || this.currentProviderId})`,
+        cls: "harness-message-header"
+      });
       const textContentEl = streamingMsgEl.createEl("div", { cls: "harness-message-body" });
       try {
         const updatedHistory = await this.agentHarness.runTurn(
@@ -1589,7 +1684,7 @@ var HarnessChatView = class extends import_obsidian12.ItemView {
             } else if (event.type === "tool_call" && event.toolCall) {
               const card = this.messagesContainerEl.createEl("div", { cls: "harness-tool-card" });
               card.createEl("div", {
-                text: `\u{1F6E0}\uFE0F Tool requested: ${event.toolCall.function.name}`,
+                text: `Tool requested: ${event.toolCall.function.name}`,
                 cls: "harness-tool-title"
               });
             }
@@ -1605,7 +1700,7 @@ var HarnessChatView = class extends import_obsidian12.ItemView {
         this.conversationHistory = updatedHistory;
       } catch (err) {
         new import_obsidian12.Notice(`Agent error: ${err.message}`);
-        textContentEl.setText(`\u26A0\uFE0F Error: ${err.message}`);
+        textContentEl.setText(`Error: ${err.message}`);
       } finally {
         this.sendButtonEl.disabled = false;
         this.renderMessages();
@@ -1624,6 +1719,13 @@ var HarnessChatView = class extends import_obsidian12.ItemView {
     if (!this.providerSelectEl)
       return;
     this.providerSelectEl.empty();
+    if (!this.plugin.settings.providers || this.plugin.settings.providers.length === 0) {
+      this.providerSelectEl.createEl("option", { value: "", text: "(Not configured)" });
+      return;
+    }
+    if (!this.currentProviderId) {
+      this.currentProviderId = this.plugin.settings.activeProviderId || this.plugin.settings.providers[0].id;
+    }
     for (const p of this.plugin.settings.providers) {
       const opt = this.providerSelectEl.createEl("option", { value: p.id, text: p.name });
       if (p.id === this.currentProviderId)
@@ -1636,12 +1738,17 @@ var HarnessChatView = class extends import_obsidian12.ItemView {
     this.modelSelectEl.empty();
     const currentProv = this.plugin.settings.providers.find((p) => p.id === this.currentProviderId);
     const models = currentProv?.models || [];
+    if (models.length === 0) {
+      this.modelSelectEl.createEl("option", { value: "", text: "(No models)" });
+      this.currentModel = "";
+      return;
+    }
     for (const m of models) {
       const opt = this.modelSelectEl.createEl("option", { value: m, text: m });
       if (m === this.currentModel)
         opt.selected = true;
     }
-    if (models.length > 0 && !models.includes(this.currentModel)) {
+    if (!models.includes(this.currentModel)) {
       this.currentModel = models[0];
     }
   }
@@ -1662,7 +1769,7 @@ var HarnessChatView = class extends import_obsidian12.ItemView {
     for (const msg of this.conversationHistory) {
       if (msg.role === "user") {
         const msgEl = this.messagesContainerEl.createEl("div", { cls: "harness-message harness-message-user" });
-        msgEl.createEl("div", { text: "\u{1F464} You", cls: "harness-message-header" });
+        msgEl.createEl("div", { text: "You", cls: "harness-message-header" });
         msgEl.createEl("div", {
           text: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content || ""),
           cls: "harness-message-body"
@@ -1670,7 +1777,7 @@ var HarnessChatView = class extends import_obsidian12.ItemView {
       } else if (msg.role === "assistant") {
         if (msg.content) {
           const msgEl = this.messagesContainerEl.createEl("div", { cls: "harness-message harness-message-assistant" });
-          msgEl.createEl("div", { text: "\u{1F916} Harness Bot", cls: "harness-message-header" });
+          msgEl.createEl("div", { text: "Harness Bot", cls: "harness-message-header" });
           msgEl.createEl("div", {
             text: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content || ""),
             cls: "harness-message-body"
@@ -1679,14 +1786,14 @@ var HarnessChatView = class extends import_obsidian12.ItemView {
         if (msg.tool_calls) {
           for (const tc of msg.tool_calls) {
             const card = this.messagesContainerEl.createEl("div", { cls: "harness-tool-card" });
-            card.createEl("div", { text: `\u{1F6E0}\uFE0F Tool: ${tc.function.name}`, cls: "harness-tool-title" });
+            card.createEl("div", { text: `Tool: ${tc.function.name}`, cls: "harness-tool-title" });
             const argsPre = card.createEl("pre");
             argsPre.createEl("code", { text: tc.function.arguments });
           }
         }
       } else if (msg.role === "tool") {
         const card = this.messagesContainerEl.createEl("div", { cls: "harness-tool-card" });
-        card.createEl("div", { text: `\u2699\uFE0F Tool Output (${msg.name})`, cls: "harness-tool-title" });
+        card.createEl("div", { text: `Tool Output (${msg.name})`, cls: "harness-tool-title" });
         const outPre = card.createEl("pre");
         outPre.createEl("code", {
           text: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content || "")

@@ -100,8 +100,8 @@ export interface HarnessSettings {
 
 export const DEFAULT_SETTINGS: HarnessSettings = {
   providers: DEFAULT_PROVIDERS,
-  activeProviderId: 'openrouter',
-  activeModel: 'anthropic/claude-3.7-sonnet',
+  activeProviderId: '',
+  activeModel: '',
   systemPrompt: 'You are an autonomous AI Agent inside Obsidian. You have tools to read, create, patch, search, and inspect notes in the vault. Use these tools step-by-step to fulfill the user request.',
   safetyMode: 'strict',
 };

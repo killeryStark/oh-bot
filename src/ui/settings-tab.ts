@@ -1,6 +1,6 @@
-import { App, PluginSettingTab, Setting, SecretComponent, Notice } from 'obsidian';
+import { App, PluginSettingTab, Setting, Notice, setIcon } from 'obsidian';
 import type HarnessPlugin from '../main';
-import { SafetyMode, ProviderConfig } from '../types';
+import { SafetyMode } from '../types';
 import { AddProviderModal } from './components/add-provider-modal';
 import { fetchAvailableModels } from '../utils/model-fetcher';
 import { SecretManager } from '../utils/secrets';
@@ -28,51 +28,64 @@ export class HarnessSettingTab extends PluginSettingTab {
       .setName('Default Active Provider')
       .setDesc('Select the default AI provider for agent operations')
       .addDropdown((dropdown) => {
+        dropdown.addOption('', '(Not configured)');
         for (const prov of this.plugin.settings.providers) {
-          dropdown.addOption(prov.id, prov.name);
+          const hasKey = prov.type === 'ollama' || this.secretManager.hasSecret(prov.apiKeySecretName);
+          const label = hasKey ? prov.name : `${prov.name} (Key missing)`;
+          dropdown.addOption(prov.id, label);
         }
-        dropdown.setValue(this.plugin.settings.activeProviderId);
+        dropdown.setValue(this.plugin.settings.activeProviderId || '');
         dropdown.onChange(async (val) => {
           this.plugin.settings.activeProviderId = val;
           const activeProv = this.plugin.settings.providers.find((p) => p.id === val);
           if (activeProv && activeProv.models.length > 0) {
             this.plugin.settings.activeModel = activeProv.models[0];
+          } else {
+            this.plugin.settings.activeModel = '';
           }
           await this.plugin.saveSettings();
-          this.display(); // Refresh model dropdown
+          this.display();
         });
       });
 
     // Active Default Model
     const currentActiveProvider = this.plugin.settings.providers.find(
       (p) => p.id === this.plugin.settings.activeProviderId
-    ) || this.plugin.settings.providers[0];
+    );
 
-    new Setting(containerEl)
+    const modelSetting = new Setting(containerEl)
       .setName('Default Active Model')
-      .setDesc(`Select model for ${currentActiveProvider?.name || 'current provider'}`)
-      .addDropdown((dropdown) => {
-        const models = currentActiveProvider?.models || [];
-        for (const m of models) {
+      .setDesc(currentActiveProvider ? `Select model for ${currentActiveProvider.name}` : 'Select an active provider first');
+
+    if (currentActiveProvider && currentActiveProvider.models.length > 0) {
+      modelSetting.addDropdown((dropdown) => {
+        for (const m of currentActiveProvider.models) {
           dropdown.addOption(m, m);
         }
-        if (models.includes(this.plugin.settings.activeModel)) {
+        if (currentActiveProvider.models.includes(this.plugin.settings.activeModel)) {
           dropdown.setValue(this.plugin.settings.activeModel);
-        } else if (models.length > 0) {
-          dropdown.setValue(models[0]);
+        } else {
+          dropdown.setValue(currentActiveProvider.models[0]);
+          this.plugin.settings.activeModel = currentActiveProvider.models[0];
         }
         dropdown.onChange(async (val) => {
           this.plugin.settings.activeModel = val;
           await this.plugin.saveSettings();
         });
       });
+    } else {
+      modelSetting.addDropdown((dropdown) => {
+        dropdown.addOption('', '(No models configured)');
+        dropdown.setValue('');
+      });
+    }
 
     containerEl.createEl('h3', { text: 'Provider Configuration' });
 
     // Provider Config Selector
-    new Setting(containerEl)
+    const providerSelectSetting = new Setting(containerEl)
       .setName('Select Provider to Configure')
-      .setDesc('Choose a provider from the list to update its API key, base URL, or model list')
+      .setDesc('Choose a provider to configure its API key, base URL, and model list')
       .addDropdown((dropdown) => {
         for (const prov of this.plugin.settings.providers) {
           dropdown.addOption(prov.id, prov.name);
@@ -82,20 +95,25 @@ export class HarnessSettingTab extends PluginSettingTab {
           this.selectedConfigProviderId = val;
           this.display();
         });
-      })
-      .addButton((btn) =>
-        btn
-          .setButtonText('+ Add Custom Provider')
-          .setCta()
-          .onClick(() => {
-            new AddProviderModal(this.app, async (newProvider) => {
-              this.plugin.settings.providers.push(newProvider);
-              this.selectedConfigProviderId = newProvider.id;
-              await this.plugin.saveSettings();
-              this.display();
-            }).open();
-          })
-      );
+      });
+
+    providerSelectSetting.addButton((btn) => {
+      btn.setButtonText('Add Custom Provider');
+      setIcon(btn.buttonEl, 'plus');
+      btn.setCta();
+      btn.onClick(() => {
+        new AddProviderModal(this.app, async (newProvider) => {
+          this.plugin.settings.providers.push(newProvider);
+          this.selectedConfigProviderId = newProvider.id;
+          if (!this.plugin.settings.activeProviderId) {
+            this.plugin.settings.activeProviderId = newProvider.id;
+            this.plugin.settings.activeModel = newProvider.models[0] || '';
+          }
+          await this.plugin.saveSettings();
+          this.display();
+        }).open();
+      });
+    });
 
     const configProvider = this.plugin.settings.providers.find(
       (p) => p.id === this.selectedConfigProviderId
@@ -109,12 +127,12 @@ export class HarnessSettingTab extends PluginSettingTab {
       providerCardEl.style.marginBottom = '16px';
       providerCardEl.style.backgroundColor = 'var(--background-secondary)';
 
-      providerCardEl.createEl('h4', { text: `⚙️ Settings for: ${configProvider.name}` });
+      providerCardEl.createEl('h4', { text: `Configuration: ${configProvider.name}` });
 
       // Base URL Setting
       new Setting(providerCardEl)
         .setName('Base URL')
-        .setDesc('Endpoint URL for this provider')
+        .setDesc('API Endpoint URL')
         .addText((text) =>
           text.setValue(configProvider.baseUrl).onChange(async (val) => {
             configProvider.baseUrl = val.trim();
@@ -122,79 +140,103 @@ export class HarnessSettingTab extends PluginSettingTab {
           })
         );
 
-      // Secret Storage API Key Component
-      new Setting(providerCardEl)
-        .setName('API Key Secret')
-        .setDesc(`Stored in Obsidian SecretStorage under ID: "${configProvider.apiKeySecretName}"`)
-        .addComponent((el) => {
-          try {
-            return new SecretComponent(this.app, el)
-              .setValue(configProvider.apiKeySecretName)
-              .onChange(async (val) => {
-                configProvider.apiKeySecretName = val;
-                await this.plugin.saveSettings();
-              });
-          } catch {
-            const input = el.createEl('input', { type: 'password', value: configProvider.apiKeySecretName });
-            input.addEventListener('change', async (ev) => {
-              configProvider.apiKeySecretName = (ev.target as HTMLInputElement).value;
-              await this.plugin.saveSettings();
-            });
-            return el as any;
+      // API Key Input
+      const hasKey = this.secretManager.hasSecret(configProvider.apiKeySecretName);
+      const keySetting = new Setting(providerCardEl)
+        .setName('API Key')
+        .setDesc(hasKey ? 'Key is configured in SecretStorage' : 'Enter API Key to store securely');
+
+      keySetting.addText((text) => {
+        text.inputEl.type = 'password';
+        text.setPlaceholder(hasKey ? '••••••••••••••••' : 'Enter API Key');
+        text.onChange(async (val) => {
+          const trimmed = val.trim();
+          if (trimmed) {
+            this.secretManager.setSecret(configProvider.apiKeySecretName, trimmed);
+            if (!this.plugin.settings.activeProviderId) {
+              this.plugin.settings.activeProviderId = configProvider.id;
+              this.plugin.settings.activeModel = configProvider.models[0] || '';
+            }
+            await this.plugin.saveSettings();
+            new Notice(`API Key saved for ${configProvider.name}`);
           }
         });
+      });
 
-      // Models list management
-      new Setting(providerCardEl)
+      if (hasKey) {
+        keySetting.addButton((btn) => {
+          btn.setButtonText('Clear Key');
+          btn.setWarning();
+          btn.onClick(async () => {
+            this.secretManager.setSecret(configProvider.apiKeySecretName, '');
+            new Notice(`API Key cleared for ${configProvider.name}`);
+            this.display();
+          });
+        });
+      }
+
+      // Available Models
+      const modelsSetting = new Setting(providerCardEl)
         .setName('Available Models')
-        .setDesc('Comma-separated list of model identifiers')
-        .addTextArea((text) =>
-          text.setValue(configProvider.models.join(', ')).onChange(async (val) => {
-            configProvider.models = val
-              .split(',')
-              .map((m) => m.trim())
-              .filter((m) => m.length > 0);
-            await this.plugin.saveSettings();
-          })
-        )
-        .addButton((btn) =>
-          btn.setButtonText('🔄 Fetch Models from Endpoint').onClick(async () => {
-            const apiKey = this.secretManager.getSecret(configProvider.apiKeySecretName) || '';
-            new Notice(`Fetching models for ${configProvider.name}...`);
-            const fetched = await fetchAvailableModels(configProvider.baseUrl, apiKey);
-            if (fetched.length > 0) {
-              configProvider.models = fetched;
+        .setDesc('Models for this provider')
+        .addTextArea((text) => {
+          text
+            .setValue(configProvider.models.join(', '))
+            .setPlaceholder('model-1, model-2')
+            .onChange(async (val) => {
+              configProvider.models = val
+                .split(',')
+                .map((m) => m.trim())
+                .filter((m) => m.length > 0);
               await this.plugin.saveSettings();
-              new Notice(`Updated ${configProvider.name} with ${fetched.length} models!`);
-              this.display();
-            } else {
-              new Notice('Could not fetch models automatically from endpoint.');
+            });
+        });
+
+      modelsSetting.addButton((btn) => {
+        btn.setTooltip('Fetch models from endpoint');
+        setIcon(btn.buttonEl, 'refresh-cw');
+        btn.onClick(async () => {
+          const apiKey = this.secretManager.getSecret(configProvider.apiKeySecretName) || '';
+          new Notice(`Fetching models for ${configProvider.name}...`);
+          const fetched = await fetchAvailableModels(configProvider.baseUrl, apiKey);
+          if (fetched.length > 0) {
+            configProvider.models = fetched;
+            if (this.plugin.settings.activeProviderId === configProvider.id && fetched.length > 0) {
+              this.plugin.settings.activeModel = fetched[0];
             }
-          })
-        );
+            await this.plugin.saveSettings();
+            new Notice(`Updated ${configProvider.name} with ${fetched.length} models!`);
+            this.display();
+          } else {
+            new Notice('Could not fetch models automatically from endpoint.');
+          }
+        });
+      });
 
       // Delete custom provider button
       if (configProvider.isCustom) {
-        new Setting(providerCardEl)
+        const deleteSetting = new Setting(providerCardEl)
           .setName('Delete Provider')
-          .setDesc('Remove this custom provider from your settings')
-          .addButton((btn) =>
-            btn
-              .setButtonText('🗑️ Delete Provider')
-              .setWarning()
-              .onClick(async () => {
-                this.plugin.settings.providers = this.plugin.settings.providers.filter(
-                  (p) => p.id !== configProvider.id
-                );
-                this.selectedConfigProviderId = this.plugin.settings.providers[0]?.id || 'openrouter';
-                if (this.plugin.settings.activeProviderId === configProvider.id) {
-                  this.plugin.settings.activeProviderId = this.selectedConfigProviderId;
-                }
-                await this.plugin.saveSettings();
-                new Notice(`Deleted provider "${configProvider.name}".`);
-                this.display();
-              })
-          );
+          .setDesc('Remove this custom provider from settings');
+
+        deleteSetting.addButton((btn) => {
+          btn.setButtonText('Delete Provider');
+          setIcon(btn.buttonEl, 'trash');
+          btn.setWarning();
+          btn.onClick(async () => {
+            this.plugin.settings.providers = this.plugin.settings.providers.filter(
+              (p) => p.id !== configProvider.id
+            );
+            this.selectedConfigProviderId = this.plugin.settings.providers[0]?.id || 'openrouter';
+            if (this.plugin.settings.activeProviderId === configProvider.id) {
+              this.plugin.settings.activeProviderId = '';
+              this.plugin.settings.activeModel = '';
+            }
+            await this.plugin.saveSettings();
+            new Notice(`Deleted provider "${configProvider.name}".`);
+            this.display();
+          });
+        });
       }
     }
 

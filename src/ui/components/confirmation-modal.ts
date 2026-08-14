@@ -16,7 +16,7 @@ export class ConfirmationModal extends Modal {
     contentEl.empty();
     contentEl.addClass('harness-modal-content');
 
-    contentEl.createEl('h3', { text: '⚠️ File Action Confirmation' });
+    contentEl.createEl('h3', { text: 'File Action Confirmation' });
     contentEl.createEl('p', {
       text: `The AI Agent is requesting permission to execute tool: "${this.toolCall.function.name}".`,
     });

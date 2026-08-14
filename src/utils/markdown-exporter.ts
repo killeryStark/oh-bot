@@ -30,26 +30,26 @@ created: ${dateStr}
 model: ${modelName}
 ---
 
-# 🤖 Agent Chat Session (${dateStr})
+# Harness Bot Chat Session (${dateStr})
 
 `;
 
     for (const msg of messages) {
       if (msg.role === 'user') {
-        mdContent += `### 👤 User\n${msg.content}\n\n`;
+        mdContent += `### User\n${msg.content}\n\n`;
       } else if (msg.role === 'assistant') {
         if (msg.content) {
-          mdContent += `### 🤖 Assistant\n${msg.content}\n\n`;
+          mdContent += `### Harness Bot\n${msg.content}\n\n`;
         }
         if (msg.tool_calls && msg.tool_calls.length > 0) {
-          mdContent += `> 🛠️ **Tool Calls Requested:**\n`;
+          mdContent += `> **Tool Calls Requested:**\n`;
           for (const tc of msg.tool_calls) {
             mdContent += `> - \`${tc.function.name}\` \`\`\`json\n${tc.function.arguments}\n\`\`\`\n`;
           }
           mdContent += `\n`;
         }
       } else if (msg.role === 'tool') {
-        mdContent += `> ⚙️ **Tool Result (${msg.name}):**\n\`\`\`\n${msg.content}\n\`\`\`\n\n`;
+        mdContent += `> **Tool Result (${msg.name}):**\n\`\`\`\n${msg.content}\n\`\`\`\n\n`;
       }
     }
 
