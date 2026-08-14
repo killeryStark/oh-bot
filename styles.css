@@ -1051,7 +1051,7 @@
     max-height: 86vh !important;
     overflow-y: auto !important;
     -webkit-overflow-scrolling: touch !important;
-    padding: 14px 14px 280px 14px !important;
+    padding: 14px !important;
   }
 
   .harness-mcp-edit-modal .setting-item {

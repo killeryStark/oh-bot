@@ -37,8 +37,8 @@ export class McpServerEditModal extends Modal {
     this.onSaved = onSaved;
 
     if (serverToEdit) {
-      this.name = serverToEdit.name;
-      this.url = serverToEdit.url;
+      this.name = serverToEdit.name || '';
+      this.url = serverToEdit.url || '';
       this.description = serverToEdit.description || '';
       this.authType = serverToEdit.authType || 'bearer';
       this.customHeaderName = serverToEdit.customHeaderName || 'X-API-Key';
@@ -63,13 +63,14 @@ export class McpServerEditModal extends Modal {
     inputEl.addEventListener('focus', () => {
       setTimeout(() => {
         inputEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 300);
+      }, 250);
     });
   }
 
   private render() {
     const { contentEl } = this;
     contentEl.empty();
+    contentEl.addClass('harness-modal-content');
     contentEl.addClass('harness-mcp-edit-modal');
 
     // Header
@@ -169,12 +170,12 @@ export class McpServerEditModal extends Modal {
               if (clip && clip.trim()) {
                 this.apiToken = clip.trim();
                 text.setValue(this.apiToken);
-                new Notice('✓ Token pasted from clipboard!');
+                new Notice('[Debug] ✓ Token pasted from clipboard!');
               } else {
-                new Notice('Clipboard is empty.');
+                new Notice('[Debug] Clipboard is empty.');
               }
-            } catch (err) {
-              new Notice('Could not read clipboard. Please paste manually.');
+            } catch (err: any) {
+              new Notice(`[Debug] Could not read clipboard: ${err.message || 'permission denied'}`);
             }
           });
         });
@@ -223,10 +224,10 @@ export class McpServerEditModal extends Modal {
               if (clip && clip.trim()) {
                 this.apiToken = clip.trim();
                 text.setValue(this.apiToken);
-                new Notice('✓ Key pasted from clipboard!');
+                new Notice('[Debug] ✓ Key pasted from clipboard!');
               }
-            } catch (e) {
-              new Notice('Please paste key manually.');
+            } catch (e: any) {
+              new Notice(`[Debug] Clipboard error: ${e.message}`);
             }
           });
         });
@@ -289,33 +290,39 @@ export class McpServerEditModal extends Modal {
         this.attachFocusScroll(text.inputEl);
       });
 
-    // Action Buttons
-    const footerEl = contentEl.createEl('div', { cls: 'harness-modal-footer' });
-    footerEl.style.marginTop = '24px';
-    footerEl.style.marginBottom = '20px';
-    footerEl.style.display = 'flex';
-    footerEl.style.justifyContent = 'flex-end';
-    footerEl.style.gap = '10px';
+    // Action Buttons Row using Native Obsidian Setting API
+    const actionSetting = new Setting(contentEl);
+    actionSetting.settingEl.style.marginTop = '20px';
+    actionSetting.settingEl.style.borderTop = '1px solid var(--background-modifier-border)';
+    actionSetting.settingEl.style.paddingTop = '14px';
 
-    new ButtonComponent(footerEl)
-      .setButtonText('Cancel')
-      .onClick(() => this.close());
-
-    const saveButton = new ButtonComponent(footerEl)
-      .setButtonText(isEdit ? 'Save Changes' : 'Save & Test Connection')
-      .setCta()
-      .onClick(async () => {
-        await this.handleSave(saveButton);
+    actionSetting.addButton((btn) => {
+      btn.setButtonText('Cancel');
+      btn.onClick(() => {
+        new Notice('[Debug] Cancel clicked');
+        this.close();
       });
+    });
+
+    actionSetting.addButton((btn) => {
+      btn.setButtonText(isEdit ? 'Save Changes' : 'Save & Test Connection');
+      btn.setCta();
+      btn.onClick(async () => {
+        new Notice('[Debug] Save button clicked!');
+        await this.handleSave(btn);
+      });
+    });
   }
 
   private async handleSave(saveButton?: ButtonComponent) {
-    if (!this.name.trim()) {
-      new Notice('Please enter a server name.');
+    new Notice('[Debug] Starting validation...');
+
+    if (!this.name || !this.name.trim()) {
+      new Notice('[Error] Please enter a server name.');
       return;
     }
-    if (!this.url.trim()) {
-      new Notice('Please enter a valid remote URL.');
+    if (!this.url || !this.url.trim()) {
+      new Notice('[Error] Please enter a valid remote URL.');
       return;
     }
 
@@ -325,8 +332,10 @@ export class McpServerEditModal extends Modal {
 
     const secretKeyName = this.serverToEdit?.apiKeySecretName || `oh_bot_secret_mcp_${serverId}_token`;
 
+    new Notice(`[Debug] Saving secret for ${serverId}...`);
+
     // Save token to SecretManager
-    if (this.apiToken.trim()) {
+    if (this.apiToken && this.apiToken.trim()) {
       this.secretManager.setSecret(secretKeyName, this.apiToken.trim());
     }
 
@@ -358,23 +367,26 @@ export class McpServerEditModal extends Modal {
         saveButton.setButtonText('Testing Connection...');
       }
 
+      new Notice(`[Debug] Adding server ${serverConfig.name} to settings...`);
       await this.mcpManager.addServer(serverConfig);
+      new Notice(`[Debug] Server saved in settings!`);
 
       if (this.authType !== 'oauth2') {
+        new Notice(`[Debug] Testing connection to ${serverConfig.url}...`);
         try {
           const tools = await this.mcpManager.testAndSyncServer(serverId);
           new Notice(`✓ Connected! Discovered ${tools.length} tool(s).`);
         } catch (e: any) {
-          new Notice(`Server saved, but test connection reported: ${e.message}`);
+          new Notice(`Server saved, but test reported: ${e.message}`);
         }
       } else {
-        new Notice(`Server saved. Click "Connect with OAuth" to log in.`);
+        new Notice(`Server saved. Click "Login with OAuth" to authenticate.`);
       }
 
       this.onSaved();
       this.close();
     } catch (err: any) {
-      new Notice(`Failed to save server: ${err.message}`);
+      new Notice(`[Error] Failed to save server: ${err.message}`);
     } finally {
       if (saveButton) {
         saveButton.setDisabled(false);

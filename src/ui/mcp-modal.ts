@@ -228,12 +228,13 @@ export class McpModal extends Modal {
         .setButtonText('Sync & Test')
         .setClass('harness-btn-sm')
         .onClick(async () => {
+          new Notice(`[Debug] Syncing ${server.name}...`);
           try {
             const tools = await this.plugin.mcpManager.testAndSyncServer(server.id);
-            new Notice(`✓ ${server.name}: Synced ${tools.length} tool(s).`);
+            new Notice(`✓ [Debug] ${server.name}: Synced ${tools.length} tool(s).`);
             await this.render();
           } catch (err: any) {
-            new Notice(`Test failed: ${err.message}`);
+            new Notice(`[Error] Test failed: ${err.message}`);
             await this.render();
           }
         });
@@ -245,10 +246,11 @@ export class McpModal extends Modal {
           .setClass('harness-btn-sm')
           .setCta()
           .onClick(async () => {
+            new Notice(`[Debug] Starting OAuth for ${server.name}...`);
             try {
               await this.plugin.mcpManager.startOAuthFlow(server.id);
             } catch (err: any) {
-              new Notice(`OAuth error: ${err.message}`);
+              new Notice(`[Error] OAuth error: ${err.message}`);
             }
           });
       }
@@ -258,6 +260,7 @@ export class McpModal extends Modal {
         .setButtonText('View Tools')
         .setClass('harness-btn-sm')
         .onClick(() => {
+          new Notice(`[Debug] Viewing tools for ${server.name}`);
           new McpToolsViewModal(this.app, server).open();
         });
 
@@ -266,6 +269,7 @@ export class McpModal extends Modal {
         .setButtonText('Edit')
         .setClass('harness-btn-sm')
         .onClick(() => {
+          new Notice(`[Debug] Opening edit modal for ${server.name}`);
           new McpServerEditModal(this.app, this.plugin.mcpManager, () => this.render(), server).open();
         });
 
@@ -275,9 +279,14 @@ export class McpModal extends Modal {
         .setClass('harness-btn-sm')
         .setClass('mod-warning')
         .onClick(async () => {
-          await this.plugin.mcpManager.removeServer(server.id);
-          new Notice(`Removed ${server.name}`);
-          await this.render();
+          new Notice(`[Debug] Deleting server ${server.name}...`);
+          try {
+            await this.plugin.mcpManager.removeServer(server.id);
+            new Notice(`✓ [Debug] Removed server "${server.name}"`);
+            await this.render();
+          } catch (err: any) {
+            new Notice(`[Error] Delete failed: ${err.message}`);
+          }
         });
     }
   }

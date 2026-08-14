@@ -926,8 +926,8 @@ var McpServerEditModal = class extends import_obsidian7.Modal {
     this.serverToEdit = serverToEdit;
     this.onSaved = onSaved;
     if (serverToEdit) {
-      this.name = serverToEdit.name;
-      this.url = serverToEdit.url;
+      this.name = serverToEdit.name || "";
+      this.url = serverToEdit.url || "";
       this.description = serverToEdit.description || "";
       this.authType = serverToEdit.authType || "bearer";
       this.customHeaderName = serverToEdit.customHeaderName || "X-API-Key";
@@ -948,12 +948,13 @@ var McpServerEditModal = class extends import_obsidian7.Modal {
     inputEl.addEventListener("focus", () => {
       setTimeout(() => {
         inputEl.scrollIntoView({ behavior: "smooth", block: "center" });
-      }, 300);
+      }, 250);
     });
   }
   render() {
     const { contentEl } = this;
     contentEl.empty();
+    contentEl.addClass("harness-modal-content");
     contentEl.addClass("harness-mcp-edit-modal");
     const isEdit = !!this.serverToEdit;
     contentEl.createEl("h2", { text: isEdit ? `Edit MCP Server: ${this.name}` : "Add Web MCP Server" });
@@ -1009,12 +1010,12 @@ var McpServerEditModal = class extends import_obsidian7.Modal {
               if (clip && clip.trim()) {
                 this.apiToken = clip.trim();
                 text.setValue(this.apiToken);
-                new import_obsidian7.Notice("\u2713 Token pasted from clipboard!");
+                new import_obsidian7.Notice("[Debug] \u2713 Token pasted from clipboard!");
               } else {
-                new import_obsidian7.Notice("Clipboard is empty.");
+                new import_obsidian7.Notice("[Debug] Clipboard is empty.");
               }
             } catch (err) {
-              new import_obsidian7.Notice("Could not read clipboard. Please paste manually.");
+              new import_obsidian7.Notice(`[Debug] Could not read clipboard: ${err.message || "permission denied"}`);
             }
           });
         });
@@ -1047,10 +1048,10 @@ var McpServerEditModal = class extends import_obsidian7.Modal {
               if (clip && clip.trim()) {
                 this.apiToken = clip.trim();
                 text.setValue(this.apiToken);
-                new import_obsidian7.Notice("\u2713 Key pasted from clipboard!");
+                new import_obsidian7.Notice("[Debug] \u2713 Key pasted from clipboard!");
               }
             } catch (e) {
-              new import_obsidian7.Notice("Please paste key manually.");
+              new import_obsidian7.Notice(`[Debug] Clipboard error: ${e.message}`);
             }
           });
         });
@@ -1077,29 +1078,40 @@ var McpServerEditModal = class extends import_obsidian7.Modal {
       text.setPlaceholder("e.g. Task management in Todoist").setValue(this.description).onChange((v) => this.description = v);
       this.attachFocusScroll(text.inputEl);
     });
-    const footerEl = contentEl.createEl("div", { cls: "harness-modal-footer" });
-    footerEl.style.marginTop = "24px";
-    footerEl.style.marginBottom = "20px";
-    footerEl.style.display = "flex";
-    footerEl.style.justifyContent = "flex-end";
-    footerEl.style.gap = "10px";
-    new import_obsidian7.ButtonComponent(footerEl).setButtonText("Cancel").onClick(() => this.close());
-    const saveButton = new import_obsidian7.ButtonComponent(footerEl).setButtonText(isEdit ? "Save Changes" : "Save & Test Connection").setCta().onClick(async () => {
-      await this.handleSave(saveButton);
+    const actionSetting = new import_obsidian7.Setting(contentEl);
+    actionSetting.settingEl.style.marginTop = "20px";
+    actionSetting.settingEl.style.borderTop = "1px solid var(--background-modifier-border)";
+    actionSetting.settingEl.style.paddingTop = "14px";
+    actionSetting.addButton((btn) => {
+      btn.setButtonText("Cancel");
+      btn.onClick(() => {
+        new import_obsidian7.Notice("[Debug] Cancel clicked");
+        this.close();
+      });
+    });
+    actionSetting.addButton((btn) => {
+      btn.setButtonText(isEdit ? "Save Changes" : "Save & Test Connection");
+      btn.setCta();
+      btn.onClick(async () => {
+        new import_obsidian7.Notice("[Debug] Save button clicked!");
+        await this.handleSave(btn);
+      });
     });
   }
   async handleSave(saveButton) {
-    if (!this.name.trim()) {
-      new import_obsidian7.Notice("Please enter a server name.");
+    new import_obsidian7.Notice("[Debug] Starting validation...");
+    if (!this.name || !this.name.trim()) {
+      new import_obsidian7.Notice("[Error] Please enter a server name.");
       return;
     }
-    if (!this.url.trim()) {
-      new import_obsidian7.Notice("Please enter a valid remote URL.");
+    if (!this.url || !this.url.trim()) {
+      new import_obsidian7.Notice("[Error] Please enter a valid remote URL.");
       return;
     }
     const serverId = this.serverToEdit ? this.serverToEdit.id : this.name.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") || `mcp-${Date.now()}`;
     const secretKeyName = this.serverToEdit?.apiKeySecretName || `oh_bot_secret_mcp_${serverId}_token`;
-    if (this.apiToken.trim()) {
+    new import_obsidian7.Notice(`[Debug] Saving secret for ${serverId}...`);
+    if (this.apiToken && this.apiToken.trim()) {
       this.secretManager.setSecret(secretKeyName, this.apiToken.trim());
     }
     const serverConfig = {
@@ -1126,21 +1138,24 @@ var McpServerEditModal = class extends import_obsidian7.Modal {
         saveButton.setDisabled(true);
         saveButton.setButtonText("Testing Connection...");
       }
+      new import_obsidian7.Notice(`[Debug] Adding server ${serverConfig.name} to settings...`);
       await this.mcpManager.addServer(serverConfig);
+      new import_obsidian7.Notice(`[Debug] Server saved in settings!`);
       if (this.authType !== "oauth2") {
+        new import_obsidian7.Notice(`[Debug] Testing connection to ${serverConfig.url}...`);
         try {
           const tools = await this.mcpManager.testAndSyncServer(serverId);
           new import_obsidian7.Notice(`\u2713 Connected! Discovered ${tools.length} tool(s).`);
         } catch (e) {
-          new import_obsidian7.Notice(`Server saved, but test connection reported: ${e.message}`);
+          new import_obsidian7.Notice(`Server saved, but test reported: ${e.message}`);
         }
       } else {
-        new import_obsidian7.Notice(`Server saved. Click "Connect with OAuth" to log in.`);
+        new import_obsidian7.Notice(`Server saved. Click "Login with OAuth" to authenticate.`);
       }
       this.onSaved();
       this.close();
     } catch (err) {
-      new import_obsidian7.Notice(`Failed to save server: ${err.message}`);
+      new import_obsidian7.Notice(`[Error] Failed to save server: ${err.message}`);
     } finally {
       if (saveButton) {
         saveButton.setDisabled(false);
@@ -1319,34 +1334,43 @@ var McpModal = class extends import_obsidian8.Modal {
       authInfo.setText(authStatusText);
       const actionsEl = cardEl.createEl("div", { cls: "harness-mcp-actions" });
       new import_obsidian8.ButtonComponent(actionsEl).setButtonText("Sync & Test").setClass("harness-btn-sm").onClick(async () => {
+        new import_obsidian8.Notice(`[Debug] Syncing ${server.name}...`);
         try {
           const tools = await this.plugin.mcpManager.testAndSyncServer(server.id);
-          new import_obsidian8.Notice(`\u2713 ${server.name}: Synced ${tools.length} tool(s).`);
+          new import_obsidian8.Notice(`\u2713 [Debug] ${server.name}: Synced ${tools.length} tool(s).`);
           await this.render();
         } catch (err) {
-          new import_obsidian8.Notice(`Test failed: ${err.message}`);
+          new import_obsidian8.Notice(`[Error] Test failed: ${err.message}`);
           await this.render();
         }
       });
       if (server.authType === "oauth2") {
         new import_obsidian8.ButtonComponent(actionsEl).setButtonText(authToken ? "Re-login OAuth" : "Login with OAuth").setClass("harness-btn-sm").setCta().onClick(async () => {
+          new import_obsidian8.Notice(`[Debug] Starting OAuth for ${server.name}...`);
           try {
             await this.plugin.mcpManager.startOAuthFlow(server.id);
           } catch (err) {
-            new import_obsidian8.Notice(`OAuth error: ${err.message}`);
+            new import_obsidian8.Notice(`[Error] OAuth error: ${err.message}`);
           }
         });
       }
       new import_obsidian8.ButtonComponent(actionsEl).setButtonText("View Tools").setClass("harness-btn-sm").onClick(() => {
+        new import_obsidian8.Notice(`[Debug] Viewing tools for ${server.name}`);
         new McpToolsViewModal(this.app, server).open();
       });
       new import_obsidian8.ButtonComponent(actionsEl).setButtonText("Edit").setClass("harness-btn-sm").onClick(() => {
+        new import_obsidian8.Notice(`[Debug] Opening edit modal for ${server.name}`);
         new McpServerEditModal(this.app, this.plugin.mcpManager, () => this.render(), server).open();
       });
       new import_obsidian8.ButtonComponent(actionsEl).setButtonText("Delete").setClass("harness-btn-sm").setClass("mod-warning").onClick(async () => {
-        await this.plugin.mcpManager.removeServer(server.id);
-        new import_obsidian8.Notice(`Removed ${server.name}`);
-        await this.render();
+        new import_obsidian8.Notice(`[Debug] Deleting server ${server.name}...`);
+        try {
+          await this.plugin.mcpManager.removeServer(server.id);
+          new import_obsidian8.Notice(`\u2713 [Debug] Removed server "${server.name}"`);
+          await this.render();
+        } catch (err) {
+          new import_obsidian8.Notice(`[Error] Delete failed: ${err.message}`);
+        }
       });
     }
   }
