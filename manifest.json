@@ -1,7 +1,7 @@
 {
   "id": "obsidian-harness-bot",
   "name": "Obsidian Harness Bot",
-  "version": "0.0.19-alpha",
+  "version": "0.0.20-alpha",
   "minAppVersion": "1.6.0",
   "description": "Multi-step AI Agent Harness plugin for Obsidian with Vault tools, dynamic provider management, prompt caching, and mobile support.",
   "author": "Obsidian Harness Contributors",

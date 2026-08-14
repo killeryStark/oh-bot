@@ -617,13 +617,17 @@ var SkillsModal = class extends import_obsidian5.Modal {
       if (skill.localPath) {
         badgeEl.setAttribute("title", skill.localPath);
       }
-      const toggleWrapper = cardHeaderEl.createEl("div", { cls: "harness-toggle-wrapper" });
-      const toggleInput = toggleWrapper.createEl("input", { type: "checkbox" });
+      const toggleWrapper = cardHeaderEl.createEl("div", { cls: "harness-switch-wrapper" });
+      const toggleLabel = toggleWrapper.createEl("label", { cls: "harness-switch" });
+      toggleLabel.setAttribute("aria-label", skill.enabled ? "Disable Skill" : "Enable Skill");
+      const toggleInput = toggleLabel.createEl("input", { type: "checkbox" });
       toggleInput.checked = skill.enabled;
+      toggleLabel.createEl("span", { cls: "harness-slider round" });
       toggleInput.addEventListener("change", async () => {
         await this.plugin.skillManager.toggleSkill(skill.id, toggleInput.checked);
         cardEl.toggleClass("is-enabled", toggleInput.checked);
         cardEl.toggleClass("is-disabled", !toggleInput.checked);
+        toggleLabel.setAttribute("aria-label", toggleInput.checked ? "Disable Skill" : "Enable Skill");
       });
       if (skill.description) {
         cardEl.createEl("p", { text: skill.description, cls: "harness-skill-desc" });
@@ -2264,13 +2268,40 @@ var ToolRegistry = class {
   }
 };
 
+// src/utils/thought-helper.ts
+function parseThoughts(raw) {
+  if (!raw) {
+    return { thoughts: [], finalAnswer: "" };
+  }
+  const thoughts = [];
+  let clean = raw.replace(/<(?:thought|think)>([\s\S]*?)<\/(?:thought|think)>/gi, (_, thoughtContent) => {
+    const trimmed = thoughtContent.trim();
+    if (trimmed) {
+      thoughts.push(trimmed);
+    }
+    return "";
+  });
+  const openMatch = clean.match(/<(?:thought|think)>([\s\S]*)$/i);
+  if (openMatch) {
+    const trimmed = openMatch[1].trim();
+    if (trimmed) {
+      thoughts.push(trimmed);
+    }
+    clean = clean.slice(0, openMatch.index);
+  }
+  return {
+    thoughts,
+    finalAnswer: clean.trim()
+  };
+}
+
 // src/utils/markdown-exporter.ts
 var MarkdownExporter = class {
   constructor(app) {
     this.app = app;
   }
   /**
-   * Exports conversation history to a formatted Markdown note in the "Agent Chats/" Vault folder.
+   * Exports conversation history to a clean, formatted Markdown note in the "Agent Chats/" Vault folder.
    */
   async exportChatToMarkdown(messages, modelName) {
     const folderPath = "Agent Chats";
@@ -2294,34 +2325,48 @@ model: ${modelName}
 `;
     for (const msg of messages) {
       if (msg.role === "user") {
-        mdContent += `### User
-${msg.content}
+        const text = typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content);
+        mdContent += `### \u{1F464} User
+${text}
 
 `;
       } else if (msg.role === "assistant") {
-        if (msg.content) {
-          mdContent += `### Harness Bot
-${msg.content}
+        mdContent += `### \u{1F916} Harness Bot
+`;
+        const raw = typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content);
+        const parsed = parseThoughts(raw);
+        if (parsed.thoughts.length > 0) {
+          for (const thought of parsed.thoughts) {
+            mdContent += `> [!NOTE]- Reasoning / \u0420\u0430\u0441\u0441\u0443\u0436\u0434\u0435\u043D\u0438\u044F
+> ${thought.split("\n").join("\n> ")}
+
+`;
+          }
+        }
+        if (parsed.finalAnswer) {
+          mdContent += `${parsed.finalAnswer}
 
 `;
         }
         if (msg.tool_calls && msg.tool_calls.length > 0) {
-          mdContent += `> **Tool Calls Requested:**
+          mdContent += `> [!EXAMPLE]- Tool Calls Requested
 `;
           for (const tc of msg.tool_calls) {
-            mdContent += `> - \`${tc.function.name}\` \`\`\`json
-${tc.function.arguments}
-\`\`\`
+            mdContent += `> - **\`${tc.function.name}\`**
+> \`\`\`json
+> ${tc.function.arguments.split("\n").join("\n> ")}
+> \`\`\`
 `;
           }
           mdContent += `
 `;
         }
       } else if (msg.role === "tool") {
-        mdContent += `> **Tool Result (${msg.name}):**
-\`\`\`
-${msg.content}
-\`\`\`
+        const content = typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content);
+        mdContent += `> [!INFO]- Tool Output: ${msg.name || "tool"}
+> \`\`\`
+> ${content.split("\n").join("\n> ")}
+> \`\`\`
 
 `;
       }
@@ -2443,33 +2488,6 @@ ${attachedBlocks.join("\n\n")}`;
     return enrichedText;
   }
 };
-
-// src/utils/thought-helper.ts
-function parseThoughts(raw) {
-  if (!raw) {
-    return { thoughts: [], finalAnswer: "" };
-  }
-  const thoughts = [];
-  let clean = raw.replace(/<(?:thought|think)>([\s\S]*?)<\/(?:thought|think)>/gi, (_, thoughtContent) => {
-    const trimmed = thoughtContent.trim();
-    if (trimmed) {
-      thoughts.push(trimmed);
-    }
-    return "";
-  });
-  const openMatch = clean.match(/<(?:thought|think)>([\s\S]*)$/i);
-  if (openMatch) {
-    const trimmed = openMatch[1].trim();
-    if (trimmed) {
-      thoughts.push(trimmed);
-    }
-    clean = clean.slice(0, openMatch.index);
-  }
-  return {
-    thoughts,
-    finalAnswer: clean.trim()
-  };
-}
 
 // src/ui/components/confirmation-modal.ts
 var import_obsidian16 = require("obsidian");
@@ -2659,7 +2677,7 @@ var HarnessChatView = class extends import_obsidian18.ItemView {
     sessionsBtn.addEventListener("click", () => {
       this.openSessionsModal();
     });
-    const skillsBtn = headerActionsEl.createEl("button", { cls: "clickable-icon" });
+    const skillsBtn = headerActionsEl.createEl("button", { cls: "clickable-icon harness-header-skills-btn" });
     skillsBtn.setAttribute("aria-label", "Skills & Marketplace (/skills)");
     (0, import_obsidian18.setIcon)(skillsBtn, "sparkles");
     skillsBtn.addEventListener("click", () => {
@@ -2898,7 +2916,7 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
     });
     this.renderMessages();
   }
-  renderThinkingCard(parentEl, thoughtText, open = false) {
+  async renderThinkingCard(parentEl, thoughtText, open = false) {
     const detailsEl = parentEl.createEl("details", { cls: "harness-collapsible-card harness-thinking-card" });
     if (open)
       detailsEl.open = true;
@@ -2909,7 +2927,7 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
     leftEl.createEl("span", { text: "Reasoning / \u0420\u0430\u0441\u0441\u0443\u0436\u0434\u0435\u043D\u0438\u044F" });
     summaryEl.createEl("span", { text: "View", cls: "harness-collapsible-badge" });
     const bodyEl = detailsEl.createEl("div", { cls: "harness-collapsible-body harness-thinking-text" });
-    bodyEl.setText(thoughtText);
+    await import_obsidian18.MarkdownRenderer.render(this.app, thoughtText, bodyEl, "", this);
   }
   formatContentForCard(rawStr) {
     if (!rawStr || rawStr.trim() === "")
@@ -3240,7 +3258,7 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
       this.plugin.settings.activeModel = selectedModel;
     }
   }
-  renderMessages() {
+  async renderMessages() {
     if (!this.messagesContainerEl)
       return;
     this.messagesContainerEl.empty();
@@ -3279,11 +3297,11 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
             text: `${dateStr} \u2022 ${prev.messages.length} messages`,
             cls: "setting-item-description"
           });
-          itemBtn.addEventListener("click", () => {
+          itemBtn.addEventListener("click", async () => {
             this.currentSession = prev;
             this.plugin.settings.currentSessionId = prev.id;
-            this.saveSessionState();
-            this.renderMessages();
+            await this.saveSessionState();
+            await this.renderMessages();
             this.refreshModelDropdown();
           });
         }
@@ -3294,19 +3312,21 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
       if (msg.role === "user") {
         const msgEl = this.messagesContainerEl.createEl("div", { cls: "harness-message harness-message-user" });
         msgEl.createEl("div", { text: "You", cls: "harness-message-header" });
-        msgEl.createEl("div", {
-          text: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content || ""),
-          cls: "harness-message-body"
-        });
+        const bodyEl = msgEl.createEl("div", { cls: "harness-message-body" });
+        const rawContent = typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content || "");
+        await import_obsidian18.MarkdownRenderer.render(this.app, rawContent, bodyEl, "", this);
       } else if (msg.role === "assistant") {
         const msgEl = this.messagesContainerEl.createEl("div", { cls: "harness-message harness-message-assistant" });
-        msgEl.createEl("div", { text: "Harness Bot", cls: "harness-message-header" });
+        msgEl.createEl("div", {
+          text: `Harness Bot (${this.currentSession.model || this.plugin.settings.activeModel})`,
+          cls: "harness-message-header"
+        });
         const bodyEl = msgEl.createEl("div", { cls: "harness-message-body" });
         const rawContent = typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content || "");
         const parsed = parseThoughts(rawContent);
         if (parsed.thoughts.length > 0) {
           for (const thought of parsed.thoughts) {
-            this.renderThinkingCard(bodyEl, thought, false);
+            await this.renderThinkingCard(bodyEl, thought, false);
           }
         }
         if (msg.tool_calls) {
@@ -3315,7 +3335,8 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
           }
         }
         if (parsed.finalAnswer) {
-          bodyEl.createEl("div", { text: parsed.finalAnswer, cls: "harness-answer-text" });
+          const answerContainer = bodyEl.createEl("div", { cls: "harness-answer-text" });
+          await import_obsidian18.MarkdownRenderer.render(this.app, parsed.finalAnswer, answerContainer, "", this);
         }
       } else if (msg.role === "tool") {
         const rawContent = typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content || "");

@@ -1,5 +1,6 @@
-import { App, TFolder } from 'obsidian';
+import { App } from 'obsidian';
 import { LLMMessage } from '../types';
+import { parseThoughts } from './thought-helper';
 
 export class MarkdownExporter {
   private app: App;
@@ -9,7 +10,7 @@ export class MarkdownExporter {
   }
 
   /**
-   * Exports conversation history to a formatted Markdown note in the "Agent Chats/" Vault folder.
+   * Exports conversation history to a clean, formatted Markdown note in the "Agent Chats/" Vault folder.
    */
   async exportChatToMarkdown(messages: LLMMessage[], modelName: string): Promise<string> {
     const folderPath = 'Agent Chats';
@@ -36,20 +37,37 @@ model: ${modelName}
 
     for (const msg of messages) {
       if (msg.role === 'user') {
-        mdContent += `### User\n${msg.content}\n\n`;
+        const text = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
+        mdContent += `### 👤 User\n${text}\n\n`;
       } else if (msg.role === 'assistant') {
-        if (msg.content) {
-          mdContent += `### Harness Bot\n${msg.content}\n\n`;
+        mdContent += `### 🤖 Harness Bot\n`;
+
+        const raw = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
+        const parsed = parseThoughts(raw);
+
+        // Thoughts formatted as an Obsidian callout
+        if (parsed.thoughts.length > 0) {
+          for (const thought of parsed.thoughts) {
+            mdContent += `> [!NOTE]- Reasoning / Рассуждения\n> ${thought.split('\n').join('\n> ')}\n\n`;
+          }
         }
+
+        // Clean final markdown answer
+        if (parsed.finalAnswer) {
+          mdContent += `${parsed.finalAnswer}\n\n`;
+        }
+
+        // Tool Calls
         if (msg.tool_calls && msg.tool_calls.length > 0) {
-          mdContent += `> **Tool Calls Requested:**\n`;
+          mdContent += `> [!EXAMPLE]- Tool Calls Requested\n`;
           for (const tc of msg.tool_calls) {
-            mdContent += `> - \`${tc.function.name}\` \`\`\`json\n${tc.function.arguments}\n\`\`\`\n`;
+            mdContent += `> - **\`${tc.function.name}\`**\n> \`\`\`json\n> ${tc.function.arguments.split('\n').join('\n> ')}\n> \`\`\`\n`;
           }
           mdContent += `\n`;
         }
       } else if (msg.role === 'tool') {
-        mdContent += `> **Tool Result (${msg.name}):**\n\`\`\`\n${msg.content}\n\`\`\`\n\n`;
+        const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
+        mdContent += `> [!INFO]- Tool Output: ${msg.name || 'tool'}\n> \`\`\`\n> ${content.split('\n').join('\n> ')}\n> \`\`\`\n\n`;
       }
     }
 

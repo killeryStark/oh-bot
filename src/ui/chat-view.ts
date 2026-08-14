@@ -1,4 +1,4 @@
-import { ItemView, WorkspaceLeaf, Notice, setIcon } from 'obsidian';
+import { ItemView, WorkspaceLeaf, Notice, setIcon, MarkdownRenderer } from 'obsidian';
 import type HarnessPlugin from '../main';
 import { ChatSession, LLMMessage, ToolCall } from '../types';
 import { AgentHarness } from '../engine/agent';
@@ -115,7 +115,7 @@ export class HarnessChatView extends ItemView {
     });
 
     // Skills & Marketplace Button
-    const skillsBtn = headerActionsEl.createEl('button', { cls: 'clickable-icon' });
+    const skillsBtn = headerActionsEl.createEl('button', { cls: 'clickable-icon harness-header-skills-btn' });
     skillsBtn.setAttribute('aria-label', 'Skills & Marketplace (/skills)');
     setIcon(skillsBtn, 'sparkles');
     skillsBtn.addEventListener('click', () => {
@@ -402,7 +402,7 @@ export class HarnessChatView extends ItemView {
     this.renderMessages();
   }
 
-  private renderThinkingCard(parentEl: HTMLElement, thoughtText: string, open = false) {
+  private async renderThinkingCard(parentEl: HTMLElement, thoughtText: string, open = false) {
     const detailsEl = parentEl.createEl('details', { cls: 'harness-collapsible-card harness-thinking-card' });
     if (open) detailsEl.open = true;
 
@@ -415,7 +415,7 @@ export class HarnessChatView extends ItemView {
     summaryEl.createEl('span', { text: 'View', cls: 'harness-collapsible-badge' });
 
     const bodyEl = detailsEl.createEl('div', { cls: 'harness-collapsible-body harness-thinking-text' });
-    bodyEl.setText(thoughtText);
+    await MarkdownRenderer.render(this.app, thoughtText, bodyEl, '', this);
   }
 
   private formatContentForCard(rawStr: string): string {
@@ -787,7 +787,7 @@ export class HarnessChatView extends ItemView {
     }
   }
 
-  private renderMessages() {
+  private async renderMessages(): Promise<void> {
     if (!this.messagesContainerEl) return;
     this.messagesContainerEl.empty();
 
@@ -834,11 +834,11 @@ export class HarnessChatView extends ItemView {
             cls: 'setting-item-description',
           });
 
-          itemBtn.addEventListener('click', () => {
+          itemBtn.addEventListener('click', async () => {
             this.currentSession = prev;
             this.plugin.settings.currentSessionId = prev.id;
-            this.saveSessionState();
-            this.renderMessages();
+            await this.saveSessionState();
+            await this.renderMessages();
             this.refreshModelDropdown();
           });
         }
@@ -851,13 +851,15 @@ export class HarnessChatView extends ItemView {
       if (msg.role === 'user') {
         const msgEl = this.messagesContainerEl.createEl('div', { cls: 'harness-message harness-message-user' });
         msgEl.createEl('div', { text: 'You', cls: 'harness-message-header' });
-        msgEl.createEl('div', {
-          text: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content || ''),
-          cls: 'harness-message-body',
-        });
+        const bodyEl = msgEl.createEl('div', { cls: 'harness-message-body' });
+        const rawContent = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content || '');
+        await MarkdownRenderer.render(this.app, rawContent, bodyEl, '', this);
       } else if (msg.role === 'assistant') {
         const msgEl = this.messagesContainerEl.createEl('div', { cls: 'harness-message harness-message-assistant' });
-        msgEl.createEl('div', { text: 'Harness Bot', cls: 'harness-message-header' });
+        msgEl.createEl('div', {
+          text: `Harness Bot (${this.currentSession.model || this.plugin.settings.activeModel})`,
+          cls: 'harness-message-header',
+        });
         const bodyEl = msgEl.createEl('div', { cls: 'harness-message-body' });
 
         const rawContent = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content || '');
@@ -866,7 +868,7 @@ export class HarnessChatView extends ItemView {
         // Render Reasoning / Thoughts collapsible card
         if (parsed.thoughts.length > 0) {
           for (const thought of parsed.thoughts) {
-            this.renderThinkingCard(bodyEl, thought, false);
+            await this.renderThinkingCard(bodyEl, thought, false);
           }
         }
 
@@ -877,9 +879,10 @@ export class HarnessChatView extends ItemView {
           }
         }
 
-        // Render Final Answer
+        // Render Final Answer in rich Markdown
         if (parsed.finalAnswer) {
-          bodyEl.createEl('div', { text: parsed.finalAnswer, cls: 'harness-answer-text' });
+          const answerContainer = bodyEl.createEl('div', { cls: 'harness-answer-text' });
+          await MarkdownRenderer.render(this.app, parsed.finalAnswer, answerContainer, '', this);
         }
       } else if (msg.role === 'tool') {
         const rawContent = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content || '');

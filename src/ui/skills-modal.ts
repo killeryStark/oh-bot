@@ -168,13 +168,18 @@ export class SkillsModal extends Modal {
       }
 
       // Enable / Disable Toggle Switch
-      const toggleWrapper = cardHeaderEl.createEl('div', { cls: 'harness-toggle-wrapper' });
-      const toggleInput = toggleWrapper.createEl('input', { type: 'checkbox' });
+      const toggleWrapper = cardHeaderEl.createEl('div', { cls: 'harness-switch-wrapper' });
+      const toggleLabel = toggleWrapper.createEl('label', { cls: 'harness-switch' });
+      toggleLabel.setAttribute('aria-label', skill.enabled ? 'Disable Skill' : 'Enable Skill');
+      const toggleInput = toggleLabel.createEl('input', { type: 'checkbox' });
       toggleInput.checked = skill.enabled;
+      toggleLabel.createEl('span', { cls: 'harness-slider round' });
+
       toggleInput.addEventListener('change', async () => {
         await this.plugin.skillManager.toggleSkill(skill.id, toggleInput.checked);
         cardEl.toggleClass('is-enabled', toggleInput.checked);
         cardEl.toggleClass('is-disabled', !toggleInput.checked);
+        toggleLabel.setAttribute('aria-label', toggleInput.checked ? 'Disable Skill' : 'Enable Skill');
       });
 
       // Description
