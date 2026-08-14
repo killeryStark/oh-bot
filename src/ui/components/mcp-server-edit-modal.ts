@@ -1,4 +1,4 @@
-import { App, Modal, Notice, Setting, setIcon } from 'obsidian';
+import { App, Modal, Notice, Setting, setIcon, ButtonComponent } from 'obsidian';
 import { McpAuthType, McpServerConfig } from '../../mcp/types';
 import { McpManager } from '../../mcp/mcp-manager';
 import { SecretManager } from '../../utils/secrets';
@@ -297,20 +297,19 @@ export class McpServerEditModal extends Modal {
     footerEl.style.justifyContent = 'flex-end';
     footerEl.style.gap = '10px';
 
-    const cancelBtn = footerEl.createEl('button', { text: 'Cancel' });
-    cancelBtn.addEventListener('click', () => this.close());
+    new ButtonComponent(footerEl)
+      .setButtonText('Cancel')
+      .onClick(() => this.close());
 
-    const saveBtn = footerEl.createEl('button', {
-      text: isEdit ? 'Save Changes' : 'Save & Test Connection',
-      cls: 'mod-cta',
-    });
-
-    saveBtn.addEventListener('click', async () => {
-      await this.handleSave(saveBtn);
-    });
+    const saveButton = new ButtonComponent(footerEl)
+      .setButtonText(isEdit ? 'Save Changes' : 'Save & Test Connection')
+      .setCta()
+      .onClick(async () => {
+        await this.handleSave(saveButton);
+      });
   }
 
-  private async handleSave(saveBtn: HTMLButtonElement) {
+  private async handleSave(saveButton?: ButtonComponent) {
     if (!this.name.trim()) {
       new Notice('Please enter a server name.');
       return;
@@ -324,7 +323,7 @@ export class McpServerEditModal extends Modal {
       ? this.serverToEdit.id
       : this.name.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || `mcp-${Date.now()}`;
 
-    const secretKeyName = `oh_bot_secret_mcp_${serverId}_token`;
+    const secretKeyName = this.serverToEdit?.apiKeySecretName || `oh_bot_secret_mcp_${serverId}_token`;
 
     // Save token to SecretManager
     if (this.apiToken.trim()) {
@@ -354,8 +353,10 @@ export class McpServerEditModal extends Modal {
     };
 
     try {
-      saveBtn.disabled = true;
-      saveBtn.setText('Testing Connection...');
+      if (saveButton) {
+        saveButton.setDisabled(true);
+        saveButton.setButtonText('Testing Connection...');
+      }
 
       await this.mcpManager.addServer(serverConfig);
 
@@ -375,8 +376,10 @@ export class McpServerEditModal extends Modal {
     } catch (err: any) {
       new Notice(`Failed to save server: ${err.message}`);
     } finally {
-      saveBtn.disabled = false;
-      saveBtn.setText(this.serverToEdit ? 'Save Changes' : 'Save & Test Connection');
+      if (saveButton) {
+        saveButton.setDisabled(false);
+        saveButton.setButtonText(this.serverToEdit ? 'Save Changes' : 'Save & Test Connection');
+      }
     }
   }
 

@@ -830,9 +830,9 @@ var McpToolsViewModal = class extends import_obsidian6.Modal {
       cls: "harness-subtext"
     });
     if (tools.length === 0) {
-      const closeBtn2 = contentEl.createEl("button", { text: "Close", cls: "mod-cta" });
-      closeBtn2.style.marginTop = "16px";
-      closeBtn2.addEventListener("click", () => this.close());
+      const closeBtn = contentEl.createEl("button", { text: "Close", cls: "mod-cta" });
+      closeBtn.style.marginTop = "16px";
+      closeBtn.addEventListener("click", () => this.close());
       return;
     }
     const toolsContainer = contentEl.createEl("div", { cls: "harness-mcp-tools-list" });
@@ -867,8 +867,7 @@ var McpToolsViewModal = class extends import_obsidian6.Modal {
     }
     const footerEl = contentEl.createEl("div", { cls: "harness-modal-footer" });
     footerEl.style.marginTop = "16px";
-    const closeBtn = footerEl.createEl("button", { text: "Close", cls: "mod-cta" });
-    closeBtn.addEventListener("click", () => this.close());
+    new import_obsidian6.ButtonComponent(footerEl).setButtonText("Close").setCta().onClick(() => this.close());
   }
   onClose() {
     const { contentEl } = this;
@@ -1084,17 +1083,12 @@ var McpServerEditModal = class extends import_obsidian7.Modal {
     footerEl.style.display = "flex";
     footerEl.style.justifyContent = "flex-end";
     footerEl.style.gap = "10px";
-    const cancelBtn = footerEl.createEl("button", { text: "Cancel" });
-    cancelBtn.addEventListener("click", () => this.close());
-    const saveBtn = footerEl.createEl("button", {
-      text: isEdit ? "Save Changes" : "Save & Test Connection",
-      cls: "mod-cta"
-    });
-    saveBtn.addEventListener("click", async () => {
-      await this.handleSave(saveBtn);
+    new import_obsidian7.ButtonComponent(footerEl).setButtonText("Cancel").onClick(() => this.close());
+    const saveButton = new import_obsidian7.ButtonComponent(footerEl).setButtonText(isEdit ? "Save Changes" : "Save & Test Connection").setCta().onClick(async () => {
+      await this.handleSave(saveButton);
     });
   }
-  async handleSave(saveBtn) {
+  async handleSave(saveButton) {
     if (!this.name.trim()) {
       new import_obsidian7.Notice("Please enter a server name.");
       return;
@@ -1104,7 +1098,7 @@ var McpServerEditModal = class extends import_obsidian7.Modal {
       return;
     }
     const serverId = this.serverToEdit ? this.serverToEdit.id : this.name.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") || `mcp-${Date.now()}`;
-    const secretKeyName = `oh_bot_secret_mcp_${serverId}_token`;
+    const secretKeyName = this.serverToEdit?.apiKeySecretName || `oh_bot_secret_mcp_${serverId}_token`;
     if (this.apiToken.trim()) {
       this.secretManager.setSecret(secretKeyName, this.apiToken.trim());
     }
@@ -1128,8 +1122,10 @@ var McpServerEditModal = class extends import_obsidian7.Modal {
       cachedTools: this.serverToEdit ? this.serverToEdit.cachedTools : []
     };
     try {
-      saveBtn.disabled = true;
-      saveBtn.setText("Testing Connection...");
+      if (saveButton) {
+        saveButton.setDisabled(true);
+        saveButton.setButtonText("Testing Connection...");
+      }
       await this.mcpManager.addServer(serverConfig);
       if (this.authType !== "oauth2") {
         try {
@@ -1146,8 +1142,10 @@ var McpServerEditModal = class extends import_obsidian7.Modal {
     } catch (err) {
       new import_obsidian7.Notice(`Failed to save server: ${err.message}`);
     } finally {
-      saveBtn.disabled = false;
-      saveBtn.setText(this.serverToEdit ? "Save Changes" : "Save & Test Connection");
+      if (saveButton) {
+        saveButton.setDisabled(false);
+        saveButton.setButtonText(this.serverToEdit ? "Save Changes" : "Save & Test Connection");
+      }
     }
   }
   onClose() {
@@ -1320,28 +1318,18 @@ var McpModal = class extends import_obsidian8.Modal {
       }
       authInfo.setText(authStatusText);
       const actionsEl = cardEl.createEl("div", { cls: "harness-mcp-actions" });
-      const testBtn = actionsEl.createEl("button", { text: "Sync & Test", cls: "harness-btn-sm" });
-      testBtn.addEventListener("click", async () => {
+      new import_obsidian8.ButtonComponent(actionsEl).setButtonText("Sync & Test").setClass("harness-btn-sm").onClick(async () => {
         try {
-          testBtn.disabled = true;
-          testBtn.setText("Testing...");
           const tools = await this.plugin.mcpManager.testAndSyncServer(server.id);
           new import_obsidian8.Notice(`\u2713 ${server.name}: Synced ${tools.length} tool(s).`);
           await this.render();
         } catch (err) {
           new import_obsidian8.Notice(`Test failed: ${err.message}`);
           await this.render();
-        } finally {
-          testBtn.disabled = false;
-          testBtn.setText("Sync & Test");
         }
       });
       if (server.authType === "oauth2") {
-        const oauthBtn = actionsEl.createEl("button", {
-          text: authToken ? "Re-login OAuth" : "Login with OAuth",
-          cls: "harness-btn-sm mod-cta"
-        });
-        oauthBtn.addEventListener("click", async () => {
+        new import_obsidian8.ButtonComponent(actionsEl).setButtonText(authToken ? "Re-login OAuth" : "Login with OAuth").setClass("harness-btn-sm").setCta().onClick(async () => {
           try {
             await this.plugin.mcpManager.startOAuthFlow(server.id);
           } catch (err) {
@@ -1349,16 +1337,13 @@ var McpModal = class extends import_obsidian8.Modal {
           }
         });
       }
-      const viewToolsBtn = actionsEl.createEl("button", { text: "View Tools", cls: "harness-btn-sm" });
-      viewToolsBtn.addEventListener("click", () => {
+      new import_obsidian8.ButtonComponent(actionsEl).setButtonText("View Tools").setClass("harness-btn-sm").onClick(() => {
         new McpToolsViewModal(this.app, server).open();
       });
-      const editBtn = actionsEl.createEl("button", { text: "Edit", cls: "harness-btn-sm" });
-      editBtn.addEventListener("click", () => {
+      new import_obsidian8.ButtonComponent(actionsEl).setButtonText("Edit").setClass("harness-btn-sm").onClick(() => {
         new McpServerEditModal(this.app, this.plugin.mcpManager, () => this.render(), server).open();
       });
-      const deleteBtn = actionsEl.createEl("button", { text: "Delete", cls: "harness-btn-sm mod-warning" });
-      deleteBtn.addEventListener("click", async () => {
+      new import_obsidian8.ButtonComponent(actionsEl).setButtonText("Delete").setClass("harness-btn-sm").setClass("mod-warning").onClick(async () => {
         await this.plugin.mcpManager.removeServer(server.id);
         new import_obsidian8.Notice(`Removed ${server.name}`);
         await this.render();
@@ -1391,38 +1376,22 @@ var McpModal = class extends import_obsidian8.Modal {
       const actionsEl = cardEl.createEl("div", { cls: "harness-mcp-actions" });
       actionsEl.style.marginTop = "12px";
       if (isInstalled) {
-        const installedBtn = actionsEl.createEl("button", {
-          text: "Configured (Manage in Tab 1)",
-          cls: "harness-btn-sm"
-        });
-        installedBtn.addEventListener("click", () => {
+        new import_obsidian8.ButtonComponent(actionsEl).setButtonText("Configured (Manage in Tab 1)").setClass("harness-btn-sm").onClick(() => {
           this.activeTab = "configured";
           this.render();
         });
       } else {
-        const addTokenBtn = actionsEl.createEl("button", {
-          text: "Add & Set API Token",
-          cls: "harness-btn-sm mod-cta"
-        });
-        addTokenBtn.addEventListener("click", async () => {
+        new import_obsidian8.ButtonComponent(actionsEl).setButtonText("Add & Set API Token").setClass("harness-btn-sm").setCta().onClick(async () => {
           const serverConfig = await this.plugin.mcpManager.installFromCatalog(item);
           new McpServerEditModal(this.app, this.plugin.mcpManager, () => this.render(), serverConfig).open();
         });
         if (item.docUrl) {
-          const docBtn = actionsEl.createEl("button", {
-            text: "\u{1F517} Get API Token in Browser",
-            cls: "harness-btn-sm"
-          });
-          docBtn.addEventListener("click", () => {
+          new import_obsidian8.ButtonComponent(actionsEl).setButtonText("\u{1F517} Get API Token in Browser").setClass("harness-btn-sm").onClick(() => {
             openExternalUrl(item.docUrl);
           });
         }
         if (item.oauthDefaults && item.oauthDefaults.clientId) {
-          const addOAuthBtn = actionsEl.createEl("button", {
-            text: "Connect with OAuth",
-            cls: "harness-btn-sm"
-          });
-          addOAuthBtn.addEventListener("click", async () => {
+          new import_obsidian8.ButtonComponent(actionsEl).setButtonText("Connect with OAuth").setClass("harness-btn-sm").onClick(async () => {
             const serverConfig = await this.plugin.mcpManager.installFromCatalog(item);
             serverConfig.authType = "oauth2";
             await this.plugin.mcpManager.updateServer(serverConfig.id, serverConfig);
@@ -1440,11 +1409,7 @@ var McpModal = class extends import_obsidian8.Modal {
       text: "Connect any remote MCP server running over SSE or Streamable HTTP POST. Supports custom Bearer tokens, headers, or OAuth 2.1.",
       cls: "harness-subtext"
     });
-    const addCustomBtn = customSectionEl.createEl("button", {
-      text: "+ Add Custom MCP Server",
-      cls: "mod-cta"
-    });
-    addCustomBtn.addEventListener("click", () => {
+    new import_obsidian8.ButtonComponent(customSectionEl).setButtonText("+ Add Custom MCP Server").setCta().onClick(() => {
       new McpServerEditModal(this.app, this.plugin.mcpManager, () => {
         this.activeTab = "configured";
         this.render();

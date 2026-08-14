@@ -1,4 +1,4 @@
-import { App, Modal } from 'obsidian';
+import { App, Modal, ButtonComponent } from 'obsidian';
 import { McpServerConfig } from '../../mcp/types';
 import { ToolSchema } from '../../types';
 
@@ -78,8 +78,10 @@ export class McpToolsViewModal extends Modal {
 
     const footerEl = contentEl.createEl('div', { cls: 'harness-modal-footer' });
     footerEl.style.marginTop = '16px';
-    const closeBtn = footerEl.createEl('button', { text: 'Close', cls: 'mod-cta' });
-    closeBtn.addEventListener('click', () => this.close());
+    new ButtonComponent(footerEl)
+      .setButtonText('Close')
+      .setCta()
+      .onClick(() => this.close());
   }
 
   onClose() {

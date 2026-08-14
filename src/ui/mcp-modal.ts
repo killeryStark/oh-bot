@@ -1,4 +1,4 @@
-import { App, Modal, Notice, setIcon } from 'obsidian';
+import { App, Modal, Notice, setIcon, ButtonComponent } from 'obsidian';
 import type HarnessPlugin from '../main';
 import { McpServerConfig, McpCatalogItem } from '../mcp/types';
 import { McpToolsViewModal } from './components/mcp-tools-view-modal';
@@ -224,57 +224,61 @@ export class McpModal extends Modal {
       const actionsEl = cardEl.createEl('div', { cls: 'harness-mcp-actions' });
 
       // Sync & Test Button
-      const testBtn = actionsEl.createEl('button', { text: 'Sync & Test', cls: 'harness-btn-sm' });
-      testBtn.addEventListener('click', async () => {
-        try {
-          testBtn.disabled = true;
-          testBtn.setText('Testing...');
-          const tools = await this.plugin.mcpManager.testAndSyncServer(server.id);
-          new Notice(`✓ ${server.name}: Synced ${tools.length} tool(s).`);
-          await this.render();
-        } catch (err: any) {
-          new Notice(`Test failed: ${err.message}`);
-          await this.render();
-        } finally {
-          testBtn.disabled = false;
-          testBtn.setText('Sync & Test');
-        }
-      });
+      new ButtonComponent(actionsEl)
+        .setButtonText('Sync & Test')
+        .setClass('harness-btn-sm')
+        .onClick(async () => {
+          try {
+            const tools = await this.plugin.mcpManager.testAndSyncServer(server.id);
+            new Notice(`✓ ${server.name}: Synced ${tools.length} tool(s).`);
+            await this.render();
+          } catch (err: any) {
+            new Notice(`Test failed: ${err.message}`);
+            await this.render();
+          }
+        });
 
       // OAuth Login Button (if oauth2 auth type)
       if (server.authType === 'oauth2') {
-        const oauthBtn = actionsEl.createEl('button', {
-          text: authToken ? 'Re-login OAuth' : 'Login with OAuth',
-          cls: 'harness-btn-sm mod-cta',
-        });
-        oauthBtn.addEventListener('click', async () => {
-          try {
-            await this.plugin.mcpManager.startOAuthFlow(server.id);
-          } catch (err: any) {
-            new Notice(`OAuth error: ${err.message}`);
-          }
-        });
+        new ButtonComponent(actionsEl)
+          .setButtonText(authToken ? 'Re-login OAuth' : 'Login with OAuth')
+          .setClass('harness-btn-sm')
+          .setCta()
+          .onClick(async () => {
+            try {
+              await this.plugin.mcpManager.startOAuthFlow(server.id);
+            } catch (err: any) {
+              new Notice(`OAuth error: ${err.message}`);
+            }
+          });
       }
 
       // View Tools Button
-      const viewToolsBtn = actionsEl.createEl('button', { text: 'View Tools', cls: 'harness-btn-sm' });
-      viewToolsBtn.addEventListener('click', () => {
-        new McpToolsViewModal(this.app, server).open();
-      });
+      new ButtonComponent(actionsEl)
+        .setButtonText('View Tools')
+        .setClass('harness-btn-sm')
+        .onClick(() => {
+          new McpToolsViewModal(this.app, server).open();
+        });
 
       // Edit Button
-      const editBtn = actionsEl.createEl('button', { text: 'Edit', cls: 'harness-btn-sm' });
-      editBtn.addEventListener('click', () => {
-        new McpServerEditModal(this.app, this.plugin.mcpManager, () => this.render(), server).open();
-      });
+      new ButtonComponent(actionsEl)
+        .setButtonText('Edit')
+        .setClass('harness-btn-sm')
+        .onClick(() => {
+          new McpServerEditModal(this.app, this.plugin.mcpManager, () => this.render(), server).open();
+        });
 
       // Delete Button
-      const deleteBtn = actionsEl.createEl('button', { text: 'Delete', cls: 'harness-btn-sm mod-warning' });
-      deleteBtn.addEventListener('click', async () => {
-        await this.plugin.mcpManager.removeServer(server.id);
-        new Notice(`Removed ${server.name}`);
-        await this.render();
-      });
+      new ButtonComponent(actionsEl)
+        .setButtonText('Delete')
+        .setClass('harness-btn-sm')
+        .setClass('mod-warning')
+        .onClick(async () => {
+          await this.plugin.mcpManager.removeServer(server.id);
+          new Notice(`Removed ${server.name}`);
+          await this.render();
+        });
     }
   }
 
@@ -318,49 +322,46 @@ export class McpModal extends Modal {
       actionsEl.style.marginTop = '12px';
 
       if (isInstalled) {
-        const installedBtn = actionsEl.createEl('button', {
-          text: 'Configured (Manage in Tab 1)',
-          cls: 'harness-btn-sm',
-        });
-        installedBtn.addEventListener('click', () => {
-          this.activeTab = 'configured';
-          this.render();
-        });
+        new ButtonComponent(actionsEl)
+          .setButtonText('Configured (Manage in Tab 1)')
+          .setClass('harness-btn-sm')
+          .onClick(() => {
+            this.activeTab = 'configured';
+            this.render();
+          });
       } else {
         // Quick Add with Token
-        const addTokenBtn = actionsEl.createEl('button', {
-          text: 'Add & Set API Token',
-          cls: 'harness-btn-sm mod-cta',
-        });
-        addTokenBtn.addEventListener('click', async () => {
-          const serverConfig = await this.plugin.mcpManager.installFromCatalog(item);
-          new McpServerEditModal(this.app, this.plugin.mcpManager, () => this.render(), serverConfig).open();
-        });
+        new ButtonComponent(actionsEl)
+          .setButtonText('Add & Set API Token')
+          .setClass('harness-btn-sm')
+          .setCta()
+          .onClick(async () => {
+            const serverConfig = await this.plugin.mcpManager.installFromCatalog(item);
+            new McpServerEditModal(this.app, this.plugin.mcpManager, () => this.render(), serverConfig).open();
+          });
 
         if (item.docUrl) {
-          const docBtn = actionsEl.createEl('button', {
-            text: '🔗 Get API Token in Browser',
-            cls: 'harness-btn-sm',
-          });
-          docBtn.addEventListener('click', () => {
-            openExternalUrl(item.docUrl!);
-          });
+          new ButtonComponent(actionsEl)
+            .setButtonText('🔗 Get API Token in Browser')
+            .setClass('harness-btn-sm')
+            .onClick(() => {
+              openExternalUrl(item.docUrl!);
+            });
         }
 
         // Quick Add with OAuth (if supported and configured)
         if (item.oauthDefaults && item.oauthDefaults.clientId) {
-          const addOAuthBtn = actionsEl.createEl('button', {
-            text: 'Connect with OAuth',
-            cls: 'harness-btn-sm',
-          });
-          addOAuthBtn.addEventListener('click', async () => {
-            const serverConfig = await this.plugin.mcpManager.installFromCatalog(item);
-            serverConfig.authType = 'oauth2';
-            await this.plugin.mcpManager.updateServer(serverConfig.id, serverConfig);
-            await this.plugin.mcpManager.startOAuthFlow(serverConfig.id);
-            this.activeTab = 'configured';
-            await this.render();
-          });
+          new ButtonComponent(actionsEl)
+            .setButtonText('Connect with OAuth')
+            .setClass('harness-btn-sm')
+            .onClick(async () => {
+              const serverConfig = await this.plugin.mcpManager.installFromCatalog(item);
+              serverConfig.authType = 'oauth2';
+              await this.plugin.mcpManager.updateServer(serverConfig.id, serverConfig);
+              await this.plugin.mcpManager.startOAuthFlow(serverConfig.id);
+              this.activeTab = 'configured';
+              await this.render();
+            });
         }
       }
     }
@@ -375,16 +376,15 @@ export class McpModal extends Modal {
       cls: 'harness-subtext',
     });
 
-    const addCustomBtn = customSectionEl.createEl('button', {
-      text: '+ Add Custom MCP Server',
-      cls: 'mod-cta',
-    });
-    addCustomBtn.addEventListener('click', () => {
-      new McpServerEditModal(this.app, this.plugin.mcpManager, () => {
-        this.activeTab = 'configured';
-        this.render();
-      }).open();
-    });
+    new ButtonComponent(customSectionEl)
+      .setButtonText('+ Add Custom MCP Server')
+      .setCta()
+      .onClick(() => {
+        new McpServerEditModal(this.app, this.plugin.mcpManager, () => {
+          this.activeTab = 'configured';
+          this.render();
+        }).open();
+      });
   }
 
   onClose() {
