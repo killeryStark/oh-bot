@@ -15,10 +15,14 @@ export class SecretManager {
       return null;
     }
 
-    const secretStorage = (this.app as any).secretStorage;
-    if (secretStorage && typeof secretStorage.getSecret === 'function') {
-      const secret = secretStorage.getSecret(secretName);
-      if (secret) return secret;
+    try {
+      const secretStorage = (this.app as any).secretStorage;
+      if (secretStorage && typeof secretStorage.getSecret === 'function') {
+        const secret = secretStorage.getSecret(secretName);
+        if (secret) return secret;
+      }
+    } catch (e) {
+      // Ignore secretStorage errors
     }
 
     try {
@@ -37,9 +41,13 @@ export class SecretManager {
   setSecret(secretName: string, value: string): void {
     if (!secretName) return;
 
-    const secretStorage = (this.app as any).secretStorage;
-    if (secretStorage && typeof secretStorage.setSecret === 'function') {
-      secretStorage.setSecret(secretName, value);
+    try {
+      const secretStorage = (this.app as any).secretStorage;
+      if (secretStorage && typeof secretStorage.setSecret === 'function') {
+        secretStorage.setSecret(secretName, value);
+      }
+    } catch (e) {
+      // Ignore secretStorage errors
     }
 
     try {

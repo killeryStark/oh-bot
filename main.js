@@ -171,11 +171,14 @@ var SecretManager = class {
     if (!secretName) {
       return null;
     }
-    const secretStorage = this.app.secretStorage;
-    if (secretStorage && typeof secretStorage.getSecret === "function") {
-      const secret = secretStorage.getSecret(secretName);
-      if (secret)
-        return secret;
+    try {
+      const secretStorage = this.app.secretStorage;
+      if (secretStorage && typeof secretStorage.getSecret === "function") {
+        const secret = secretStorage.getSecret(secretName);
+        if (secret)
+          return secret;
+      }
+    } catch (e) {
     }
     try {
       const localVal = window.localStorage.getItem(`oh_bot_${secretName}`);
@@ -191,9 +194,12 @@ var SecretManager = class {
   setSecret(secretName, value) {
     if (!secretName)
       return;
-    const secretStorage = this.app.secretStorage;
-    if (secretStorage && typeof secretStorage.setSecret === "function") {
-      secretStorage.setSecret(secretName, value);
+    try {
+      const secretStorage = this.app.secretStorage;
+      if (secretStorage && typeof secretStorage.setSecret === "function") {
+        secretStorage.setSecret(secretName, value);
+      }
+    } catch (e) {
     }
     try {
       if (value) {
@@ -1099,41 +1105,46 @@ var McpServerEditModal = class extends import_obsidian7.Modal {
     });
   }
   async handleSave(saveButton) {
-    new import_obsidian7.Notice("[Debug] Starting validation...");
-    if (!this.name || !this.name.trim()) {
-      new import_obsidian7.Notice("[Error] Please enter a server name.");
-      return;
-    }
-    if (!this.url || !this.url.trim()) {
-      new import_obsidian7.Notice("[Error] Please enter a valid remote URL.");
-      return;
-    }
-    const serverId = this.serverToEdit ? this.serverToEdit.id : this.name.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") || `mcp-${Date.now()}`;
-    const secretKeyName = this.serverToEdit?.apiKeySecretName || `oh_bot_secret_mcp_${serverId}_token`;
-    new import_obsidian7.Notice(`[Debug] Saving secret for ${serverId}...`);
-    if (this.apiToken && this.apiToken.trim()) {
-      this.secretManager.setSecret(secretKeyName, this.apiToken.trim());
-    }
-    const serverConfig = {
-      id: serverId,
-      name: this.name.trim(),
-      description: this.description.trim(),
-      url: this.url.trim(),
-      enabled: this.serverToEdit ? this.serverToEdit.enabled : true,
-      authType: this.authType,
-      apiKeySecretName: this.authType === "bearer" || this.authType === "custom_headers" ? secretKeyName : void 0,
-      customHeaderName: this.authType === "custom_headers" ? this.customHeaderName.trim() : void 0,
-      oauthConfig: this.authType === "oauth2" ? {
-        authorizationUrl: this.oauthAuthUrl.trim(),
-        tokenUrl: this.oauthTokenUrl.trim(),
-        clientId: this.oauthClientId.trim() || void 0,
-        scopes: this.oauthScopes.trim() ? this.oauthScopes.trim().split(/\s+/) : void 0,
-        accessTokenSecretName: `oh_bot_secret_mcp_${serverId}_access`,
-        refreshTokenSecretName: `oh_bot_secret_mcp_${serverId}_refresh`
-      } : void 0,
-      cachedTools: this.serverToEdit ? this.serverToEdit.cachedTools : []
-    };
     try {
+      new import_obsidian7.Notice("[Debug] Starting validation...");
+      if (!this.name || !this.name.trim()) {
+        new import_obsidian7.Notice("[Error] Please enter a server name.");
+        return;
+      }
+      if (!this.url || !this.url.trim()) {
+        new import_obsidian7.Notice("[Error] Please enter a valid remote URL.");
+        return;
+      }
+      const serverId = this.serverToEdit ? this.serverToEdit.id : this.name.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") || `mcp-${Date.now()}`;
+      const secretKeyName = this.serverToEdit?.apiKeySecretName || `oh_bot_secret_mcp_${serverId}_token`;
+      new import_obsidian7.Notice(`[Debug] Saving secret for ${serverId}...`);
+      if (this.apiToken && this.apiToken.trim()) {
+        try {
+          this.secretManager.setSecret(secretKeyName, this.apiToken.trim());
+          new import_obsidian7.Notice("[Debug] Secret stored successfully");
+        } catch (e) {
+          new import_obsidian7.Notice(`[Debug Warning] Secret store error: ${e.message}`);
+        }
+      }
+      const serverConfig = {
+        id: serverId,
+        name: this.name.trim(),
+        description: this.description.trim(),
+        url: this.url.trim(),
+        enabled: this.serverToEdit ? this.serverToEdit.enabled : true,
+        authType: this.authType,
+        apiKeySecretName: this.authType === "bearer" || this.authType === "custom_headers" ? secretKeyName : void 0,
+        customHeaderName: this.authType === "custom_headers" ? this.customHeaderName.trim() : void 0,
+        oauthConfig: this.authType === "oauth2" ? {
+          authorizationUrl: this.oauthAuthUrl.trim(),
+          tokenUrl: this.oauthTokenUrl.trim(),
+          clientId: this.oauthClientId.trim() || void 0,
+          scopes: this.oauthScopes.trim() ? this.oauthScopes.trim().split(/\s+/) : void 0,
+          accessTokenSecretName: `oh_bot_secret_mcp_${serverId}_access`,
+          refreshTokenSecretName: `oh_bot_secret_mcp_${serverId}_refresh`
+        } : void 0,
+        cachedTools: this.serverToEdit ? this.serverToEdit.cachedTools : []
+      };
       if (saveButton) {
         saveButton.setDisabled(true);
         saveButton.setButtonText("Testing Connection...");

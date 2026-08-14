@@ -315,53 +315,58 @@ export class McpServerEditModal extends Modal {
   }
 
   private async handleSave(saveButton?: ButtonComponent) {
-    new Notice('[Debug] Starting validation...');
-
-    if (!this.name || !this.name.trim()) {
-      new Notice('[Error] Please enter a server name.');
-      return;
-    }
-    if (!this.url || !this.url.trim()) {
-      new Notice('[Error] Please enter a valid remote URL.');
-      return;
-    }
-
-    const serverId = this.serverToEdit
-      ? this.serverToEdit.id
-      : this.name.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || `mcp-${Date.now()}`;
-
-    const secretKeyName = this.serverToEdit?.apiKeySecretName || `oh_bot_secret_mcp_${serverId}_token`;
-
-    new Notice(`[Debug] Saving secret for ${serverId}...`);
-
-    // Save token to SecretManager
-    if (this.apiToken && this.apiToken.trim()) {
-      this.secretManager.setSecret(secretKeyName, this.apiToken.trim());
-    }
-
-    const serverConfig: McpServerConfig = {
-      id: serverId,
-      name: this.name.trim(),
-      description: this.description.trim(),
-      url: this.url.trim(),
-      enabled: this.serverToEdit ? this.serverToEdit.enabled : true,
-      authType: this.authType,
-      apiKeySecretName: (this.authType === 'bearer' || this.authType === 'custom_headers') ? secretKeyName : undefined,
-      customHeaderName: this.authType === 'custom_headers' ? this.customHeaderName.trim() : undefined,
-      oauthConfig: this.authType === 'oauth2'
-        ? {
-            authorizationUrl: this.oauthAuthUrl.trim(),
-            tokenUrl: this.oauthTokenUrl.trim(),
-            clientId: this.oauthClientId.trim() || undefined,
-            scopes: this.oauthScopes.trim() ? this.oauthScopes.trim().split(/\s+/) : undefined,
-            accessTokenSecretName: `oh_bot_secret_mcp_${serverId}_access`,
-            refreshTokenSecretName: `oh_bot_secret_mcp_${serverId}_refresh`,
-          }
-        : undefined,
-      cachedTools: this.serverToEdit ? this.serverToEdit.cachedTools : [],
-    };
-
     try {
+      new Notice('[Debug] Starting validation...');
+
+      if (!this.name || !this.name.trim()) {
+        new Notice('[Error] Please enter a server name.');
+        return;
+      }
+      if (!this.url || !this.url.trim()) {
+        new Notice('[Error] Please enter a valid remote URL.');
+        return;
+      }
+
+      const serverId = this.serverToEdit
+        ? this.serverToEdit.id
+        : this.name.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || `mcp-${Date.now()}`;
+
+      const secretKeyName = this.serverToEdit?.apiKeySecretName || `oh_bot_secret_mcp_${serverId}_token`;
+
+      new Notice(`[Debug] Saving secret for ${serverId}...`);
+
+      // Save token to SecretManager
+      if (this.apiToken && this.apiToken.trim()) {
+        try {
+          this.secretManager.setSecret(secretKeyName, this.apiToken.trim());
+          new Notice('[Debug] Secret stored successfully');
+        } catch (e: any) {
+          new Notice(`[Debug Warning] Secret store error: ${e.message}`);
+        }
+      }
+
+      const serverConfig: McpServerConfig = {
+        id: serverId,
+        name: this.name.trim(),
+        description: this.description.trim(),
+        url: this.url.trim(),
+        enabled: this.serverToEdit ? this.serverToEdit.enabled : true,
+        authType: this.authType,
+        apiKeySecretName: (this.authType === 'bearer' || this.authType === 'custom_headers') ? secretKeyName : undefined,
+        customHeaderName: this.authType === 'custom_headers' ? this.customHeaderName.trim() : undefined,
+        oauthConfig: this.authType === 'oauth2'
+          ? {
+              authorizationUrl: this.oauthAuthUrl.trim(),
+              tokenUrl: this.oauthTokenUrl.trim(),
+              clientId: this.oauthClientId.trim() || undefined,
+              scopes: this.oauthScopes.trim() ? this.oauthScopes.trim().split(/\s+/) : undefined,
+              accessTokenSecretName: `oh_bot_secret_mcp_${serverId}_access`,
+              refreshTokenSecretName: `oh_bot_secret_mcp_${serverId}_refresh`,
+            }
+          : undefined,
+        cachedTools: this.serverToEdit ? this.serverToEdit.cachedTools : [],
+      };
+
       if (saveButton) {
         saveButton.setDisabled(true);
         saveButton.setButtonText('Testing Connection...');
