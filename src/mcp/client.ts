@@ -10,6 +10,37 @@ export interface McpClientOptions {
   timeoutMs?: number;
 }
 
+function parseJsonSafely(str: string): any {
+  try {
+    return JSON.parse(str);
+  } catch (e) {
+    let inString = false;
+    let escaped = false;
+    let result = '';
+    for (let i = 0; i < str.length; i++) {
+      const char = str[i];
+      if (char === '"' && !escaped) {
+        inString = !inString;
+        result += char;
+      } else if (inString) {
+        if (char === '\n') {
+          result += '\\n';
+        } else if (char === '\r') {
+          result += '\\r';
+        } else if (char === '\t') {
+          result += '\\t';
+        } else {
+          result += char;
+        }
+      } else {
+        result += char;
+      }
+      escaped = char === '\\' && !escaped;
+    }
+    return JSON.parse(result);
+  }
+}
+
 export class McpClient {
   private url: string;
   private authType: McpAuthType;
@@ -136,9 +167,9 @@ export class McpClient {
         const endIdx = text.lastIndexOf('}');
         if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
           const jsonSubstring = text.substring(startIdx, endIdx + 1);
-          json = JSON.parse(jsonSubstring);
+          json = parseJsonSafely(jsonSubstring);
         } else {
-          json = JSON.parse(text);
+          json = parseJsonSafely(text);
         }
       }
     } catch (e: any) {
