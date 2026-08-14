@@ -28,7 +28,7 @@ __export(main_exports, {
   default: () => HarnessPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian13 = require("obsidian");
+var import_obsidian14 = require("obsidian");
 
 // src/types.ts
 var DEFAULT_PROVIDERS = [
@@ -116,7 +116,7 @@ var DEFAULT_SETTINGS = {
 };
 
 // src/ui/settings-tab.ts
-var import_obsidian3 = require("obsidian");
+var import_obsidian4 = require("obsidian");
 
 // src/ui/components/add-provider-modal.ts
 var import_obsidian2 = require("obsidian");
@@ -295,8 +295,110 @@ var AddProviderModal = class extends import_obsidian2.Modal {
   }
 };
 
+// src/ui/components/edit-models-modal.ts
+var import_obsidian3 = require("obsidian");
+var EditModelsModal = class extends import_obsidian3.Modal {
+  constructor(app, provider, onSave) {
+    super(app);
+    this.provider = provider;
+    this.models = [...provider.models];
+    this.onSave = onSave;
+  }
+  onOpen() {
+    this.render();
+  }
+  render() {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.addClass("harness-modal-content");
+    contentEl.createEl("h2", { text: `Edit Models: ${this.provider.name}` });
+    contentEl.createEl("p", {
+      text: "Manage, edit, or remove individual models for this provider.",
+      cls: "setting-item-description"
+    });
+    const listContainerEl = contentEl.createEl("div", { cls: "harness-models-edit-list" });
+    listContainerEl.style.display = "flex";
+    listContainerEl.style.flexDirection = "column";
+    listContainerEl.style.gap = "8px";
+    listContainerEl.style.maxHeight = "280px";
+    listContainerEl.style.overflowY = "auto";
+    listContainerEl.style.padding = "4px";
+    listContainerEl.style.marginBottom = "12px";
+    if (this.models.length === 0) {
+      listContainerEl.createEl("div", { text: "No models configured yet.", cls: "setting-item-description" });
+    }
+    this.models.forEach((modelName, index) => {
+      const rowEl = listContainerEl.createEl("div", { cls: "harness-model-row" });
+      rowEl.style.display = "flex";
+      rowEl.style.alignItems = "center";
+      rowEl.style.gap = "8px";
+      const input = rowEl.createEl("input", { type: "text", value: modelName });
+      input.style.flex = "1";
+      input.addEventListener("change", (e) => {
+        const val = e.target.value.trim();
+        if (val) {
+          this.models[index] = val;
+        }
+      });
+      const delBtn = rowEl.createEl("button", { cls: "harness-btn-icon-round" });
+      (0, import_obsidian3.setIcon)(delBtn, "trash");
+      delBtn.setAttribute("aria-label", "Delete model");
+      delBtn.addEventListener("click", () => {
+        this.models.splice(index, 1);
+        this.render();
+      });
+    });
+    const addRowEl = contentEl.createEl("div");
+    addRowEl.style.display = "flex";
+    addRowEl.style.gap = "8px";
+    addRowEl.style.marginBottom = "16px";
+    const addInput = addRowEl.createEl("input", {
+      type: "text",
+      placeholder: "Enter new model identifier (e.g. gpt-4o, claude-3-5-haiku)"
+    });
+    addInput.style.flex = "1";
+    const addBtn = addRowEl.createEl("button", { text: " Add Model" });
+    (0, import_obsidian3.setIcon)(addBtn, "plus");
+    const handleAdd = () => {
+      const val = addInput.value.trim();
+      if (!val) {
+        new import_obsidian3.Notice("Please enter a model identifier.");
+        return;
+      }
+      if (!this.models.includes(val)) {
+        this.models.push(val);
+        this.render();
+      } else {
+        new import_obsidian3.Notice("This model already exists in the list.");
+      }
+    };
+    addBtn.addEventListener("click", handleAdd);
+    addInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        handleAdd();
+      }
+    });
+    new import_obsidian3.Setting(contentEl).addButton(
+      (btn) => btn.setButtonText("Cancel").onClick(() => {
+        this.close();
+      })
+    ).addButton(
+      (btn) => btn.setButtonText("Save Changes").setCta().onClick(async () => {
+        const cleanModels = this.models.map((m) => m.trim()).filter((m) => m.length > 0);
+        await this.onSave(cleanModels);
+        new import_obsidian3.Notice(`Models updated for ${this.provider.name}`);
+        this.close();
+      })
+    );
+  }
+  onClose() {
+    this.contentEl.empty();
+  }
+};
+
 // src/ui/settings-tab.ts
-var HarnessSettingTab = class extends import_obsidian3.PluginSettingTab {
+var HarnessSettingTab = class extends import_obsidian4.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.plugin = plugin;
@@ -308,7 +410,7 @@ var HarnessSettingTab = class extends import_obsidian3.PluginSettingTab {
     containerEl.empty();
     containerEl.addClass("harness-settings-container");
     containerEl.createEl("h2", { text: "Obsidian Harness Bot Settings" });
-    new import_obsidian3.Setting(containerEl).setName("Default Active Provider").setDesc("Select the default AI provider for agent operations").addDropdown((dropdown) => {
+    new import_obsidian4.Setting(containerEl).setName("Default Active Provider").setDesc("Select the default AI provider for agent operations").addDropdown((dropdown) => {
       dropdown.addOption("", "(Not configured)");
       for (const prov of this.plugin.settings.providers) {
         const hasKey = prov.type === "ollama" || this.secretManager.hasSecret(prov.apiKeySecretName);
@@ -331,7 +433,7 @@ var HarnessSettingTab = class extends import_obsidian3.PluginSettingTab {
     const currentActiveProvider = this.plugin.settings.providers.find(
       (p) => p.id === this.plugin.settings.activeProviderId
     );
-    const modelSetting = new import_obsidian3.Setting(containerEl).setName("Default Active Model").setDesc(currentActiveProvider ? `Select model for ${currentActiveProvider.name}` : "Select an active provider first");
+    const modelSetting = new import_obsidian4.Setting(containerEl).setName("Default Active Model").setDesc(currentActiveProvider ? `Select model for ${currentActiveProvider.name}` : "Select an active provider first");
     if (currentActiveProvider && currentActiveProvider.models.length > 0) {
       modelSetting.addDropdown((dropdown) => {
         for (const m of currentActiveProvider.models) {
@@ -355,7 +457,7 @@ var HarnessSettingTab = class extends import_obsidian3.PluginSettingTab {
       });
     }
     containerEl.createEl("h3", { text: "Provider Configuration" });
-    const providerSelectSetting = new import_obsidian3.Setting(containerEl).setName("Select Provider to Configure").setDesc("Choose a provider to configure its API key, base URL, and model list").addDropdown((dropdown) => {
+    const providerSelectSetting = new import_obsidian4.Setting(containerEl).setName("Select Provider to Configure").setDesc("Choose a provider to configure its API key, base URL, and model list").addDropdown((dropdown) => {
       for (const prov of this.plugin.settings.providers) {
         dropdown.addOption(prov.id, prov.name);
       }
@@ -392,14 +494,14 @@ var HarnessSettingTab = class extends import_obsidian3.PluginSettingTab {
       providerCardEl.style.marginBottom = "16px";
       providerCardEl.style.backgroundColor = "var(--background-secondary)";
       providerCardEl.createEl("h4", { text: `Configuration: ${configProvider.name}` });
-      new import_obsidian3.Setting(providerCardEl).setName("Base URL").setDesc("API Endpoint URL").addText(
+      new import_obsidian4.Setting(providerCardEl).setName("Base URL").setDesc("API Endpoint URL").addText(
         (text) => text.setValue(configProvider.baseUrl).onChange(async (val) => {
           configProvider.baseUrl = val.trim();
           await this.plugin.saveSettings();
         })
       );
       const hasKey = this.secretManager.hasSecret(configProvider.apiKeySecretName);
-      const keySetting = new import_obsidian3.Setting(providerCardEl).setName("API Key").setDesc(hasKey ? "Key is configured in SecretStorage" : "Enter API Key to store securely");
+      const keySetting = new import_obsidian4.Setting(providerCardEl).setName("API Key").setDesc(hasKey ? "Key is configured in SecretStorage" : "Enter API Key to store securely");
       keySetting.addText((text) => {
         text.inputEl.type = "password";
         text.setPlaceholder(hasKey ? "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" : "Enter API Key");
@@ -412,7 +514,7 @@ var HarnessSettingTab = class extends import_obsidian3.PluginSettingTab {
               this.plugin.settings.activeModel = configProvider.models[0] || "";
             }
             await this.plugin.saveSettings();
-            new import_obsidian3.Notice(`API Key saved for ${configProvider.name}`);
+            new import_obsidian4.Notice(`API Key saved for ${configProvider.name}`);
           }
         });
       });
@@ -422,12 +524,12 @@ var HarnessSettingTab = class extends import_obsidian3.PluginSettingTab {
           btn.setWarning();
           btn.onClick(async () => {
             this.secretManager.setSecret(configProvider.apiKeySecretName, "");
-            new import_obsidian3.Notice(`API Key cleared for ${configProvider.name}`);
+            new import_obsidian4.Notice(`API Key cleared for ${configProvider.name}`);
             this.display();
           });
         });
       }
-      const modelsSetting = new import_obsidian3.Setting(providerCardEl).setName("Available Models").setDesc(`${configProvider.models.length} model(s) loaded`);
+      const modelsSetting = new import_obsidian4.Setting(providerCardEl).setName("Available Models").setDesc(`${configProvider.models.length} model(s) configured`);
       if (configProvider.models.length > 0) {
         modelsSetting.addDropdown((dropdown) => {
           for (const m of configProvider.models) {
@@ -442,11 +544,11 @@ var HarnessSettingTab = class extends import_obsidian3.PluginSettingTab {
       }
       modelsSetting.addButton((btn) => {
         btn.setClass("harness-btn-icon-round");
-        btn.setTooltip("Fetch Models from Endpoint");
-        (0, import_obsidian3.setIcon)(btn.buttonEl, "refresh-cw");
+        btn.setTooltip("Fetch models from endpoint");
+        (0, import_obsidian4.setIcon)(btn.buttonEl, "refresh-cw");
         btn.onClick(async () => {
           const apiKey = this.secretManager.getSecret(configProvider.apiKeySecretName) || "";
-          new import_obsidian3.Notice(`Fetching models for ${configProvider.name}...`);
+          new import_obsidian4.Notice(`Fetching models for ${configProvider.name}...`);
           const fetched = await fetchAvailableModels(configProvider.baseUrl, apiKey);
           if (fetched.length > 0) {
             configProvider.models = fetched;
@@ -454,24 +556,35 @@ var HarnessSettingTab = class extends import_obsidian3.PluginSettingTab {
               this.plugin.settings.activeModel = fetched[0];
             }
             await this.plugin.saveSettings();
-            new import_obsidian3.Notice(`Updated ${configProvider.name} with ${fetched.length} models!`);
+            new import_obsidian4.Notice(`Updated ${configProvider.name} with ${fetched.length} models!`);
             this.display();
           } else {
-            new import_obsidian3.Notice("Could not fetch models automatically from endpoint.");
+            new import_obsidian4.Notice("Could not fetch models automatically from endpoint.");
           }
         });
       });
-      new import_obsidian3.Setting(providerCardEl).setName("Edit Models List").setDesc("Comma-separated list of model identifiers").addTextArea((text) => {
-        text.setValue(configProvider.models.join(", ")).setPlaceholder("model-1, model-2").onChange(async (val) => {
-          configProvider.models = val.split(",").map((m) => m.trim()).filter((m) => m.length > 0);
-          await this.plugin.saveSettings();
+      modelsSetting.addButton((btn) => {
+        btn.setClass("harness-btn-icon-round");
+        btn.setTooltip("Edit models list");
+        (0, import_obsidian4.setIcon)(btn.buttonEl, "pencil");
+        btn.onClick(() => {
+          new EditModelsModal(this.app, configProvider, async (updatedModels) => {
+            configProvider.models = updatedModels;
+            if (this.plugin.settings.activeProviderId === configProvider.id) {
+              if (!updatedModels.includes(this.plugin.settings.activeModel)) {
+                this.plugin.settings.activeModel = updatedModels[0] || "";
+              }
+            }
+            await this.plugin.saveSettings();
+            this.display();
+          }).open();
         });
       });
       if (configProvider.isCustom) {
-        const deleteSetting = new import_obsidian3.Setting(providerCardEl).setName("Delete Provider").setDesc("Remove this custom provider from settings");
+        const deleteSetting = new import_obsidian4.Setting(providerCardEl).setName("Delete Provider").setDesc("Remove this custom provider from settings");
         deleteSetting.addButton((btn) => {
           btn.setButtonText("Delete Provider");
-          (0, import_obsidian3.setIcon)(btn.buttonEl, "trash");
+          (0, import_obsidian4.setIcon)(btn.buttonEl, "trash");
           btn.setWarning();
           btn.onClick(async () => {
             this.plugin.settings.providers = this.plugin.settings.providers.filter(
@@ -483,20 +596,20 @@ var HarnessSettingTab = class extends import_obsidian3.PluginSettingTab {
               this.plugin.settings.activeModel = "";
             }
             await this.plugin.saveSettings();
-            new import_obsidian3.Notice(`Deleted provider "${configProvider.name}".`);
+            new import_obsidian4.Notice(`Deleted provider "${configProvider.name}".`);
             this.display();
           });
         });
       }
     }
     containerEl.createEl("h3", { text: "General & Safety" });
-    new import_obsidian3.Setting(containerEl).setName("Vault Modification Safety Mode").setDesc("Strict mode prompts for user confirmation before writing or modifying any Vault file").addDropdown(
+    new import_obsidian4.Setting(containerEl).setName("Vault Modification Safety Mode").setDesc("Strict mode prompts for user confirmation before writing or modifying any Vault file").addDropdown(
       (dropdown) => dropdown.addOption("strict", "Strict (Prompt before file edits)").addOption("auto", "Auto (Auto-approve file edits)").setValue(this.plugin.settings.safetyMode).onChange(async (value) => {
         this.plugin.settings.safetyMode = value;
         await this.plugin.saveSettings();
       })
     );
-    const promptSetting = new import_obsidian3.Setting(containerEl).setName("System Prompt").setDesc("Base instructions for the Agent Harness");
+    const promptSetting = new import_obsidian4.Setting(containerEl).setName("System Prompt").setDesc("Base instructions for the Agent Harness");
     promptSetting.setClass("harness-fullwidth-setting");
     promptSetting.addTextArea((text) => {
       text.inputEl.addClass("harness-fullwidth-textarea");
@@ -517,7 +630,7 @@ var HarnessSettingTab = class extends import_obsidian3.PluginSettingTab {
 };
 
 // src/ui/chat-view.ts
-var import_obsidian12 = require("obsidian");
+var import_obsidian13 = require("obsidian");
 
 // src/engine/providers/base.ts
 var LLMProvider = class {
@@ -597,7 +710,7 @@ var SSEStreamParser = class {
 };
 
 // src/engine/providers/openrouter.ts
-var import_obsidian4 = require("obsidian");
+var import_obsidian5 = require("obsidian");
 var OpenRouterProvider = class extends LLMProvider {
   constructor() {
     super(...arguments);
@@ -697,7 +810,7 @@ var OpenRouterProvider = class extends LLMProvider {
         toolCalls: finalToolCalls.length > 0 ? finalToolCalls : void 0
       };
     } catch (err) {
-      const reqRes = await (0, import_obsidian4.requestUrl)({
+      const reqRes = await (0, import_obsidian5.requestUrl)({
         url: endpoint,
         method: "POST",
         headers: {
@@ -717,7 +830,7 @@ var OpenRouterProvider = class extends LLMProvider {
 };
 
 // src/engine/providers/openai.ts
-var import_obsidian5 = require("obsidian");
+var import_obsidian6 = require("obsidian");
 var OpenAIProvider = class extends LLMProvider {
   constructor() {
     super(...arguments);
@@ -815,7 +928,7 @@ var OpenAIProvider = class extends LLMProvider {
         toolCalls: finalToolCalls.length > 0 ? finalToolCalls : void 0
       };
     } catch (err) {
-      const reqRes = await (0, import_obsidian5.requestUrl)({
+      const reqRes = await (0, import_obsidian6.requestUrl)({
         url: endpoint,
         method: "POST",
         headers: {
@@ -835,7 +948,7 @@ var OpenAIProvider = class extends LLMProvider {
 };
 
 // src/engine/providers/anthropic.ts
-var import_obsidian6 = require("obsidian");
+var import_obsidian7 = require("obsidian");
 var AnthropicProvider = class extends LLMProvider {
   constructor() {
     super(...arguments);
@@ -943,7 +1056,7 @@ var AnthropicProvider = class extends LLMProvider {
         toolCalls: toolCallList.length > 0 ? toolCallList : void 0
       };
     } catch (err) {
-      const reqRes = await (0, import_obsidian6.requestUrl)({
+      const reqRes = await (0, import_obsidian7.requestUrl)({
         url: endpoint,
         method: "POST",
         headers: {
@@ -979,7 +1092,7 @@ var AnthropicProvider = class extends LLMProvider {
 };
 
 // src/engine/providers/ollama.ts
-var import_obsidian7 = require("obsidian");
+var import_obsidian8 = require("obsidian");
 var OllamaProvider = class extends LLMProvider {
   constructor() {
     super(...arguments);
@@ -1015,7 +1128,7 @@ var OllamaProvider = class extends LLMProvider {
     if (apiKey) {
       headers["Authorization"] = `Bearer ${apiKey}`;
     }
-    const reqRes = await (0, import_obsidian7.requestUrl)({
+    const reqRes = await (0, import_obsidian8.requestUrl)({
       url: endpoint,
       method: "POST",
       headers,
@@ -1208,7 +1321,7 @@ var AgentTool = class {
 };
 
 // src/tools/vault/read-file.ts
-var import_obsidian8 = require("obsidian");
+var import_obsidian9 = require("obsidian");
 var VaultReadFileTool = class extends AgentTool {
   constructor() {
     super(...arguments);
@@ -1229,7 +1342,7 @@ var VaultReadFileTool = class extends AgentTool {
   async execute(args, app) {
     try {
       const file = app.vault.getAbstractFileByPath(args.path);
-      if (!file || !(file instanceof import_obsidian8.TFile)) {
+      if (!file || !(file instanceof import_obsidian9.TFile)) {
         return {
           success: false,
           output: "",
@@ -1307,7 +1420,7 @@ var VaultCreateFileTool = class extends AgentTool {
 };
 
 // src/tools/vault/patch-file.ts
-var import_obsidian9 = require("obsidian");
+var import_obsidian10 = require("obsidian");
 var VaultPatchFileTool = class extends AgentTool {
   constructor() {
     super(...arguments);
@@ -1337,7 +1450,7 @@ var VaultPatchFileTool = class extends AgentTool {
   async execute(args, app) {
     try {
       const file = app.vault.getAbstractFileByPath(args.path);
-      if (!file || !(file instanceof import_obsidian9.TFile)) {
+      if (!file || !(file instanceof import_obsidian10.TFile)) {
         return {
           success: false,
           output: "",
@@ -1368,7 +1481,7 @@ var VaultPatchFileTool = class extends AgentTool {
 };
 
 // src/tools/vault/list-dir.ts
-var import_obsidian10 = require("obsidian");
+var import_obsidian11 = require("obsidian");
 var VaultListDirTool = class extends AgentTool {
   constructor() {
     super(...arguments);
@@ -1390,7 +1503,7 @@ var VaultListDirTool = class extends AgentTool {
     try {
       const folderPath = (args.path || "").replace(/^\//, "");
       const folder = folderPath === "" ? app.vault.getRoot() : app.vault.getAbstractFileByPath(folderPath);
-      if (!folder || !(folder instanceof import_obsidian10.TFolder)) {
+      if (!folder || !(folder instanceof import_obsidian11.TFolder)) {
         return {
           success: false,
           output: "",
@@ -1400,7 +1513,7 @@ var VaultListDirTool = class extends AgentTool {
       const items = folder.children.map((child) => ({
         name: child.name,
         path: child.path,
-        type: child instanceof import_obsidian10.TFolder ? "folder" : "file"
+        type: child instanceof import_obsidian11.TFolder ? "folder" : "file"
       }));
       return {
         success: true,
@@ -1562,8 +1675,8 @@ ${msg.content}
 };
 
 // src/ui/components/confirmation-modal.ts
-var import_obsidian11 = require("obsidian");
-var ConfirmationModal = class extends import_obsidian11.Modal {
+var import_obsidian12 = require("obsidian");
+var ConfirmationModal = class extends import_obsidian12.Modal {
   constructor(app, toolCall, onResult) {
     super(app);
     this.toolCall = toolCall;
@@ -1579,7 +1692,7 @@ var ConfirmationModal = class extends import_obsidian11.Modal {
     });
     const codeBlock = contentEl.createEl("pre");
     codeBlock.createEl("code", { text: this.toolCall.function.arguments });
-    new import_obsidian11.Setting(contentEl).addButton(
+    new import_obsidian12.Setting(contentEl).addButton(
       (btn) => btn.setButtonText("Deny").onClick(() => {
         this.onResult(false);
         this.close();
@@ -1599,7 +1712,7 @@ var ConfirmationModal = class extends import_obsidian11.Modal {
 
 // src/ui/chat-view.ts
 var HARNESS_VIEW_TYPE = "harness-chat-view";
-var HarnessChatView = class extends import_obsidian12.ItemView {
+var HarnessChatView = class extends import_obsidian13.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.conversationHistory = [];
@@ -1631,7 +1744,7 @@ var HarnessChatView = class extends import_obsidian12.ItemView {
     titleEl.style.alignItems = "center";
     titleEl.style.gap = "6px";
     const botIconEl = titleEl.createEl("span");
-    (0, import_obsidian12.setIcon)(botIconEl, "bot");
+    (0, import_obsidian13.setIcon)(botIconEl, "bot");
     titleEl.createEl("span", { text: "Harness Bot", cls: "harness-title" });
     const selectorsEl = headerEl.createEl("div", { cls: "harness-chat-header-actions" });
     this.providerSelectEl = selectorsEl.createEl("select");
@@ -1647,10 +1760,10 @@ var HarnessChatView = class extends import_obsidian12.ItemView {
     });
     const exportBtn = selectorsEl.createEl("button", { cls: "clickable-icon" });
     exportBtn.setAttribute("aria-label", "Export Chat to Markdown");
-    (0, import_obsidian12.setIcon)(exportBtn, "upload");
+    (0, import_obsidian13.setIcon)(exportBtn, "upload");
     exportBtn.addEventListener("click", async () => {
       if (this.conversationHistory.length === 0) {
-        new import_obsidian12.Notice("No chat history to export.");
+        new import_obsidian13.Notice("No chat history to export.");
         return;
       }
       try {
@@ -1658,14 +1771,14 @@ var HarnessChatView = class extends import_obsidian12.ItemView {
           this.conversationHistory,
           this.currentModel || "default"
         );
-        new import_obsidian12.Notice(`Chat exported to ${exportedPath}`);
+        new import_obsidian13.Notice(`Chat exported to ${exportedPath}`);
       } catch (e) {
-        new import_obsidian12.Notice(`Export failed: ${e.message}`);
+        new import_obsidian13.Notice(`Export failed: ${e.message}`);
       }
     });
     const clearBtn = selectorsEl.createEl("button", { cls: "clickable-icon" });
     clearBtn.setAttribute("aria-label", "Clear Conversation");
-    (0, import_obsidian12.setIcon)(clearBtn, "trash");
+    (0, import_obsidian13.setIcon)(clearBtn, "trash");
     clearBtn.addEventListener("click", () => {
       this.conversationHistory = [];
       this.renderMessages();
@@ -1683,7 +1796,7 @@ var HarnessChatView = class extends import_obsidian12.ItemView {
       if (!text)
         return;
       if (!this.currentProviderId) {
-        new import_obsidian12.Notice("Please configure and select an AI provider in Settings first.");
+        new import_obsidian13.Notice("Please configure and select an AI provider in Settings first.");
         return;
       }
       this.inputTextAreaEl.value = "";
@@ -1724,7 +1837,7 @@ var HarnessChatView = class extends import_obsidian12.ItemView {
         );
         this.conversationHistory = updatedHistory;
       } catch (err) {
-        new import_obsidian12.Notice(`Agent error: ${err.message}`);
+        new import_obsidian13.Notice(`Agent error: ${err.message}`);
         textContentEl.setText(`Error: ${err.message}`);
       } finally {
         this.sendButtonEl.disabled = false;
@@ -1832,7 +1945,7 @@ var HarnessChatView = class extends import_obsidian12.ItemView {
 };
 
 // src/main.ts
-var HarnessPlugin = class extends import_obsidian13.Plugin {
+var HarnessPlugin = class extends import_obsidian14.Plugin {
   constructor() {
     super(...arguments);
     this.settings = DEFAULT_SETTINGS;

@@ -2,6 +2,7 @@ import { App, PluginSettingTab, Setting, Notice, setIcon } from 'obsidian';
 import type HarnessPlugin from '../main';
 import { SafetyMode } from '../types';
 import { AddProviderModal } from './components/add-provider-modal';
+import { EditModelsModal } from './components/edit-models-modal';
 import { fetchAvailableModels } from '../utils/model-fetcher';
 import { SecretManager } from '../utils/secrets';
 
@@ -175,10 +176,10 @@ export class HarnessSettingTab extends PluginSettingTab {
         });
       }
 
-      // Available Models Dropdown + Compact Round Refresh Button
+      // Available Models Dropdown + Round Refresh Button + Round Edit Pencil Button
       const modelsSetting = new Setting(providerCardEl)
         .setName('Available Models')
-        .setDesc(`${configProvider.models.length} model(s) loaded`);
+        .setDesc(`${configProvider.models.length} model(s) configured`);
 
       if (configProvider.models.length > 0) {
         modelsSetting.addDropdown((dropdown) => {
@@ -193,9 +194,10 @@ export class HarnessSettingTab extends PluginSettingTab {
         });
       }
 
+      // Round Refresh Button
       modelsSetting.addButton((btn) => {
         btn.setClass('harness-btn-icon-round');
-        btn.setTooltip('Fetch Models from Endpoint');
+        btn.setTooltip('Fetch models from endpoint');
         setIcon(btn.buttonEl, 'refresh-cw');
         btn.onClick(async () => {
           const apiKey = this.secretManager.getSecret(configProvider.apiKeySecretName) || '';
@@ -215,22 +217,24 @@ export class HarnessSettingTab extends PluginSettingTab {
         });
       });
 
-      // Edit Models Raw List Setting
-      new Setting(providerCardEl)
-        .setName('Edit Models List')
-        .setDesc('Comma-separated list of model identifiers')
-        .addTextArea((text) => {
-          text
-            .setValue(configProvider.models.join(', '))
-            .setPlaceholder('model-1, model-2')
-            .onChange(async (val) => {
-              configProvider.models = val
-                .split(',')
-                .map((m) => m.trim())
-                .filter((m) => m.length > 0);
-              await this.plugin.saveSettings();
-            });
+      // Round Edit (Pencil) Button
+      modelsSetting.addButton((btn) => {
+        btn.setClass('harness-btn-icon-round');
+        btn.setTooltip('Edit models list');
+        setIcon(btn.buttonEl, 'pencil');
+        btn.onClick(() => {
+          new EditModelsModal(this.app, configProvider, async (updatedModels) => {
+            configProvider.models = updatedModels;
+            if (this.plugin.settings.activeProviderId === configProvider.id) {
+              if (!updatedModels.includes(this.plugin.settings.activeModel)) {
+                this.plugin.settings.activeModel = updatedModels[0] || '';
+              }
+            }
+            await this.plugin.saveSettings();
+            this.display();
+          }).open();
         });
+      });
 
       // Delete custom provider button
       if (configProvider.isCustom) {
