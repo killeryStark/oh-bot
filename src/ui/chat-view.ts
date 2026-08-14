@@ -156,13 +156,13 @@ export class HarnessChatView extends ItemView {
 
     this.inputTextAreaEl = textareaWrapperEl.createEl('textarea', {
       cls: 'harness-chat-textarea',
-      placeholder: "Ask Harness Bot, '/' for commands, '@' to attach notes...",
+      placeholder: "Ask Harness Bot... ('/' commands, '@' notes)",
     });
 
     // Expand / Fullview button in top-right corner of textarea
     this.expandBtnEl = textareaWrapperEl.createEl('button', { cls: 'harness-expand-btn clickable-icon' });
     this.expandBtnEl.setAttribute('aria-label', 'Expand to full view');
-    this.expandBtnEl.style.display = 'none'; // Hidden until > 4 lines or clicked
+    this.expandBtnEl.style.display = 'none';
     setIcon(this.expandBtnEl, 'maximize-2');
 
     this.expandBtnEl.addEventListener('click', () => {
@@ -662,11 +662,9 @@ export class HarnessChatView extends ItemView {
         cls: 'harness-empty-state-container',
       });
 
-      const hintBoxEl = emptyContainerEl.createEl('div', { cls: 'harness-empty-hint-box' });
-      hintBoxEl.createEl('h3', { text: 'Obsidian Harness Bot' });
-      hintBoxEl.createEl('p', {
-        text: "Type '/' to view slash commands, or '@' to attach notes and folders from your Vault.",
-      });
+      // Subtle grey placeholder inside empty chat
+      const placeholderEl = emptyContainerEl.createEl('div', { cls: 'harness-empty-placeholder' });
+      placeholderEl.innerHTML = `Type a message to start, <strong>/</strong> for commands, or <strong>@</strong> to attach notes and folders.`;
 
       // Previous Sessions quick switcher
       const previousSessions = this.plugin.settings.sessions.filter(
