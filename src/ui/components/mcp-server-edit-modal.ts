@@ -1,4 +1,4 @@
-import { App, Modal, Notice, Setting } from 'obsidian';
+import { App, Modal, Notice, Setting, setIcon } from 'obsidian';
 import { McpAuthType, McpServerConfig } from '../../mcp/types';
 import { McpManager } from '../../mcp/mcp-manager';
 import { SecretManager } from '../../utils/secrets';
@@ -16,6 +16,7 @@ export class McpServerEditModal extends Modal {
   private authType: McpAuthType = 'bearer';
   private customHeaderName: string = 'X-API-Key';
   private apiToken: string = '';
+  private showPassword: boolean = false;
 
   // OAuth fields
   private oauthAuthUrl: string = '';
@@ -58,6 +59,14 @@ export class McpServerEditModal extends Modal {
     this.render();
   }
 
+  private attachFocusScroll(inputEl: HTMLElement) {
+    inputEl.addEventListener('focus', () => {
+      setTimeout(() => {
+        inputEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 300);
+    });
+  }
+
   private render() {
     const { contentEl } = this;
     contentEl.empty();
@@ -70,50 +79,41 @@ export class McpServerEditModal extends Modal {
     // Server Name
     new Setting(contentEl)
       .setName('Server Name')
-      .setDesc('A friendly display name for this remote MCP service.')
-      .addText((text) =>
+      .setDesc('Friendly display name for this remote MCP service.')
+      .addText((text) => {
         text
-          .setPlaceholder('e.g. My Remote Tools')
+          .setPlaceholder('e.g. Todoist (Remote MCP)')
           .setValue(this.name)
-          .onChange((v) => (this.name = v))
-      );
+          .onChange((v) => (this.name = v));
+        this.attachFocusScroll(text.inputEl);
+      });
 
     // Endpoint URL
     new Setting(contentEl)
-      .setName('Remote SSE / Streamable HTTP URL')
-      .setDesc('The remote URL endpoint (supports standard MCP SSE or Streamable HTTP POST).')
-      .addText((text) =>
+      .setName('Remote URL')
+      .setDesc('Remote SSE or Streamable HTTP POST endpoint.')
+      .addText((text) => {
         text
-          .setPlaceholder('https://example.com/mcp or https://example.com/sse')
+          .setPlaceholder('https://ai.todoist.net/mcp')
           .setValue(this.url)
-          .onChange((v) => (this.url = v))
-      );
+          .onChange((v) => (this.url = v));
+        this.attachFocusScroll(text.inputEl);
+      });
 
-    // Description
-    new Setting(contentEl)
-      .setName('Description (Optional)')
-      .setDesc('Brief summary of tools provided by this server.')
-      .addText((text) =>
-        text
-          .setPlaceholder('e.g. Web search and article fetching')
-          .setValue(this.description)
-          .onChange((v) => (this.description = v))
-      );
-
-    // Todoist Helper
+    // Todoist Helper (if relevant)
     if (this.url.includes('todoist') || this.name.toLowerCase().includes('todoist')) {
       const helperBox = contentEl.createEl('div', { cls: 'harness-mcp-helper-box' });
       helperBox.style.padding = '10px 12px';
-      helperBox.style.margin = '10px 0 14px 0';
+      helperBox.style.margin = '8px 0 14px 0';
       helperBox.style.borderRadius = '6px';
       helperBox.style.backgroundColor = 'var(--background-secondary-alt)';
       helperBox.style.border = '1px solid var(--interactive-accent)';
 
       const title = helperBox.createEl('div');
-      title.createEl('strong', { text: '💡 Как подключить Todoist:' });
+      title.createEl('strong', { text: '💡 Как получить API-токен Todoist:' });
 
       const desc = helperBox.createEl('p', {
-        text: '1. Нажмите кнопку ниже, чтобы открыть страницу разработчика Todoist в браузере.\n2. Скопируйте ваш персональный API-токен.\n3. Вставьте его в поле "API Token / Secret" ниже.',
+        text: '1. Нажмите кнопку ниже для открытия настроек Todoist в браузере.\n2. Скопируйте персональный API-токен.\n3. Нажмите кнопку «📋 Вставить» в поле API Token ниже.',
         cls: 'harness-subtext',
       });
       desc.style.margin = '4px 0 8px 0';
@@ -131,10 +131,10 @@ export class McpServerEditModal extends Modal {
     // Auth Type Dropdown
     new Setting(contentEl)
       .setName('Authentication Method')
-      .setDesc('Select how the client should authenticate with this MCP endpoint.')
+      .setDesc('Select how the client authenticates.')
       .addDropdown((dropdown) =>
         dropdown
-          .addOption('bearer', 'Bearer Token (Authorization: Bearer ...)')
+          .addOption('bearer', 'Bearer Token (API Key / Personal Token)')
           .addOption('custom_headers', 'Custom Header (e.g. X-API-Key)')
           .addOption('oauth2', 'OAuth 2.1 (PKCE Web Redirect)')
           .addOption('none', 'No Authentication (Public Endpoint)')
@@ -145,84 +145,154 @@ export class McpServerEditModal extends Modal {
           })
       );
 
-    // Auth Details Section
+    // Auth Details Section (with Paste button and Visibility toggle)
     if (this.authType === 'bearer') {
-      new Setting(contentEl)
+      const tokenSetting = new Setting(contentEl)
         .setName('API Token / Secret')
-        .setDesc('Stored securely in Obsidian SecretManager. Will not appear in plain text.')
-        .addText((text) => {
-          text.inputEl.type = 'password';
-          text
-            .setPlaceholder('Enter API token or secret key...')
-            .setValue(this.apiToken)
-            .onChange((v) => (this.apiToken = v));
+        .setDesc('Stored securely in Obsidian SecretManager.');
+
+      tokenSetting.addText((text) => {
+        text.inputEl.type = this.showPassword ? 'text' : 'password';
+        text
+          .setPlaceholder('Paste your API token here...')
+          .setValue(this.apiToken)
+          .onChange((v) => (this.apiToken = v));
+        this.attachFocusScroll(text.inputEl);
+
+        // Paste from Clipboard button
+        tokenSetting.addButton((pasteBtn) => {
+          pasteBtn.setButtonText('📋 Вставить');
+          pasteBtn.setTooltip('Вставить токен из буфера обмена');
+          pasteBtn.onClick(async () => {
+            try {
+              const clip = await navigator.clipboard.readText();
+              if (clip && clip.trim()) {
+                this.apiToken = clip.trim();
+                text.setValue(this.apiToken);
+                new Notice('✓ Токен вставлен из буфера обмена!');
+              } else {
+                new Notice('Буфер обмена пуст.');
+              }
+            } catch (err) {
+              new Notice('Пожалуйста, вставьте токен вручную в поле ввода.');
+            }
+          });
         });
+
+        // Show/Hide toggle button
+        tokenSetting.addButton((showBtn) => {
+          setIcon(showBtn.buttonEl, this.showPassword ? 'eye-off' : 'eye');
+          showBtn.setTooltip(this.showPassword ? 'Скрыть токен' : 'Показать токен');
+          showBtn.onClick(() => {
+            this.showPassword = !this.showPassword;
+            text.inputEl.type = this.showPassword ? 'text' : 'password';
+            setIcon(showBtn.buttonEl, this.showPassword ? 'eye-off' : 'eye');
+            showBtn.setTooltip(this.showPassword ? 'Скрыть токен' : 'Показать токен');
+          });
+        });
+      });
     } else if (this.authType === 'custom_headers') {
       new Setting(contentEl)
         .setName('Custom Header Name')
-        .setDesc('HTTP header name to include.')
-        .addText((text) =>
+        .setDesc('HTTP header name to send.')
+        .addText((text) => {
           text
             .setPlaceholder('X-API-Key')
             .setValue(this.customHeaderName)
-            .onChange((v) => (this.customHeaderName = v))
-        );
-
-      new Setting(contentEl)
-        .setName('Header Value / API Key')
-        .setDesc('Stored securely in Obsidian SecretManager.')
-        .addText((text) => {
-          text.inputEl.type = 'password';
-          text
-            .setPlaceholder('Enter API key...')
-            .setValue(this.apiToken)
-            .onChange((v) => (this.apiToken = v));
+            .onChange((v) => (this.customHeaderName = v));
+          this.attachFocusScroll(text.inputEl);
         });
+
+      const headerValSetting = new Setting(contentEl)
+        .setName('Header Value / API Key')
+        .setDesc('Stored securely in Obsidian SecretManager.');
+
+      headerValSetting.addText((text) => {
+        text.inputEl.type = this.showPassword ? 'text' : 'password';
+        text
+          .setPlaceholder('Enter API key...')
+          .setValue(this.apiToken)
+          .onChange((v) => (this.apiToken = v));
+        this.attachFocusScroll(text.inputEl);
+
+        headerValSetting.addButton((pasteBtn) => {
+          pasteBtn.setButtonText('📋 Вставить');
+          pasteBtn.onClick(async () => {
+            try {
+              const clip = await navigator.clipboard.readText();
+              if (clip && clip.trim()) {
+                this.apiToken = clip.trim();
+                text.setValue(this.apiToken);
+                new Notice('✓ Ключ вставлен из буфера!');
+              }
+            } catch (e) {
+              new Notice('Вставьте ключ вручную в поле.');
+            }
+          });
+        });
+      });
     } else if (this.authType === 'oauth2') {
       new Setting(contentEl)
         .setName('Authorization URL')
         .setDesc('OAuth provider authorization endpoint.')
-        .addText((text) =>
+        .addText((text) => {
           text
             .setPlaceholder('https://provider.com/oauth/authorize')
             .setValue(this.oauthAuthUrl)
-            .onChange((v) => (this.oauthAuthUrl = v))
-        );
+            .onChange((v) => (this.oauthAuthUrl = v));
+          this.attachFocusScroll(text.inputEl);
+        });
 
       new Setting(contentEl)
         .setName('Token URL')
         .setDesc('OAuth provider token exchange endpoint.')
-        .addText((text) =>
+        .addText((text) => {
           text
             .setPlaceholder('https://provider.com/oauth/token')
             .setValue(this.oauthTokenUrl)
-            .onChange((v) => (this.oauthTokenUrl = v))
-        );
+            .onChange((v) => (this.oauthTokenUrl = v));
+          this.attachFocusScroll(text.inputEl);
+        });
 
       new Setting(contentEl)
-        .setName('Client ID (Optional)')
-        .setDesc('OAuth client identifier if required by the service.')
-        .addText((text) =>
+        .setName('Client ID')
+        .setDesc('OAuth client identifier registered with the service.')
+        .addText((text) => {
           text
             .setPlaceholder('client_id_123')
             .setValue(this.oauthClientId)
-            .onChange((v) => (this.oauthClientId = v))
-        );
+            .onChange((v) => (this.oauthClientId = v));
+          this.attachFocusScroll(text.inputEl);
+        });
 
       new Setting(contentEl)
         .setName('Scopes (Optional)')
         .setDesc('Space-separated list of OAuth scopes.')
-        .addText((text) =>
+        .addText((text) => {
           text
-            .setPlaceholder('read write data:all')
+            .setPlaceholder('data:read data:write')
             .setValue(this.oauthScopes)
-            .onChange((v) => (this.oauthScopes = v))
-        );
+            .onChange((v) => (this.oauthScopes = v));
+          this.attachFocusScroll(text.inputEl);
+        });
     }
+
+    // Description (Optional)
+    new Setting(contentEl)
+      .setName('Description (Optional)')
+      .setDesc('Brief summary of tools provided.')
+      .addText((text) => {
+        text
+          .setPlaceholder('e.g. Task management in Todoist')
+          .setValue(this.description)
+          .onChange((v) => (this.description = v));
+        this.attachFocusScroll(text.inputEl);
+      });
 
     // Action Buttons
     const footerEl = contentEl.createEl('div', { cls: 'harness-modal-footer' });
-    footerEl.style.marginTop = '20px';
+    footerEl.style.marginTop = '24px';
+    footerEl.style.marginBottom = '20px';
     footerEl.style.display = 'flex';
     footerEl.style.justifyContent = 'flex-end';
     footerEl.style.gap = '10px';

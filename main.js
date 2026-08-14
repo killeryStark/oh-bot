@@ -916,6 +916,7 @@ var McpServerEditModal = class extends import_obsidian7.Modal {
     this.authType = "bearer";
     this.customHeaderName = "X-API-Key";
     this.apiToken = "";
+    this.showPassword = false;
     // OAuth fields
     this.oauthAuthUrl = "";
     this.oauthTokenUrl = "";
@@ -944,32 +945,38 @@ var McpServerEditModal = class extends import_obsidian7.Modal {
   onOpen() {
     this.render();
   }
+  attachFocusScroll(inputEl) {
+    inputEl.addEventListener("focus", () => {
+      setTimeout(() => {
+        inputEl.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 300);
+    });
+  }
   render() {
     const { contentEl } = this;
     contentEl.empty();
     contentEl.addClass("harness-mcp-edit-modal");
     const isEdit = !!this.serverToEdit;
     contentEl.createEl("h2", { text: isEdit ? `Edit MCP Server: ${this.name}` : "Add Web MCP Server" });
-    new import_obsidian7.Setting(contentEl).setName("Server Name").setDesc("A friendly display name for this remote MCP service.").addText(
-      (text) => text.setPlaceholder("e.g. My Remote Tools").setValue(this.name).onChange((v) => this.name = v)
-    );
-    new import_obsidian7.Setting(contentEl).setName("Remote SSE / Streamable HTTP URL").setDesc("The remote URL endpoint (supports standard MCP SSE or Streamable HTTP POST).").addText(
-      (text) => text.setPlaceholder("https://example.com/mcp or https://example.com/sse").setValue(this.url).onChange((v) => this.url = v)
-    );
-    new import_obsidian7.Setting(contentEl).setName("Description (Optional)").setDesc("Brief summary of tools provided by this server.").addText(
-      (text) => text.setPlaceholder("e.g. Web search and article fetching").setValue(this.description).onChange((v) => this.description = v)
-    );
+    new import_obsidian7.Setting(contentEl).setName("Server Name").setDesc("Friendly display name for this remote MCP service.").addText((text) => {
+      text.setPlaceholder("e.g. Todoist (Remote MCP)").setValue(this.name).onChange((v) => this.name = v);
+      this.attachFocusScroll(text.inputEl);
+    });
+    new import_obsidian7.Setting(contentEl).setName("Remote URL").setDesc("Remote SSE or Streamable HTTP POST endpoint.").addText((text) => {
+      text.setPlaceholder("https://ai.todoist.net/mcp").setValue(this.url).onChange((v) => this.url = v);
+      this.attachFocusScroll(text.inputEl);
+    });
     if (this.url.includes("todoist") || this.name.toLowerCase().includes("todoist")) {
       const helperBox = contentEl.createEl("div", { cls: "harness-mcp-helper-box" });
       helperBox.style.padding = "10px 12px";
-      helperBox.style.margin = "10px 0 14px 0";
+      helperBox.style.margin = "8px 0 14px 0";
       helperBox.style.borderRadius = "6px";
       helperBox.style.backgroundColor = "var(--background-secondary-alt)";
       helperBox.style.border = "1px solid var(--interactive-accent)";
       const title = helperBox.createEl("div");
-      title.createEl("strong", { text: "\u{1F4A1} \u041A\u0430\u043A \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u044C Todoist:" });
+      title.createEl("strong", { text: "\u{1F4A1} \u041A\u0430\u043A \u043F\u043E\u043B\u0443\u0447\u0438\u0442\u044C API-\u0442\u043E\u043A\u0435\u043D Todoist:" });
       const desc = helperBox.createEl("p", {
-        text: '1. \u041D\u0430\u0436\u043C\u0438\u0442\u0435 \u043A\u043D\u043E\u043F\u043A\u0443 \u043D\u0438\u0436\u0435, \u0447\u0442\u043E\u0431\u044B \u043E\u0442\u043A\u0440\u044B\u0442\u044C \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443 \u0440\u0430\u0437\u0440\u0430\u0431\u043E\u0442\u0447\u0438\u043A\u0430 Todoist \u0432 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0435.\n2. \u0421\u043A\u043E\u043F\u0438\u0440\u0443\u0439\u0442\u0435 \u0432\u0430\u0448 \u043F\u0435\u0440\u0441\u043E\u043D\u0430\u043B\u044C\u043D\u044B\u0439 API-\u0442\u043E\u043A\u0435\u043D.\n3. \u0412\u0441\u0442\u0430\u0432\u044C\u0442\u0435 \u0435\u0433\u043E \u0432 \u043F\u043E\u043B\u0435 "API Token / Secret" \u043D\u0438\u0436\u0435.',
+        text: "1. \u041D\u0430\u0436\u043C\u0438\u0442\u0435 \u043A\u043D\u043E\u043F\u043A\u0443 \u043D\u0438\u0436\u0435 \u0434\u043B\u044F \u043E\u0442\u043A\u0440\u044B\u0442\u0438\u044F \u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043A Todoist \u0432 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0435.\n2. \u0421\u043A\u043E\u043F\u0438\u0440\u0443\u0439\u0442\u0435 \u043F\u0435\u0440\u0441\u043E\u043D\u0430\u043B\u044C\u043D\u044B\u0439 API-\u0442\u043E\u043A\u0435\u043D.\n3. \u041D\u0430\u0436\u043C\u0438\u0442\u0435 \u043A\u043D\u043E\u043F\u043A\u0443 \xAB\u{1F4CB} \u0412\u0441\u0442\u0430\u0432\u0438\u0442\u044C\xBB \u0432 \u043F\u043E\u043B\u0435 API Token \u043D\u0438\u0436\u0435.",
         cls: "harness-subtext"
       });
       desc.style.margin = "4px 0 8px 0";
@@ -982,41 +989,98 @@ var McpServerEditModal = class extends import_obsidian7.Modal {
         openExternalUrl("https://app.todoist.com/app/settings/integrations/developer");
       });
     }
-    new import_obsidian7.Setting(contentEl).setName("Authentication Method").setDesc("Select how the client should authenticate with this MCP endpoint.").addDropdown(
-      (dropdown) => dropdown.addOption("bearer", "Bearer Token (Authorization: Bearer ...)").addOption("custom_headers", "Custom Header (e.g. X-API-Key)").addOption("oauth2", "OAuth 2.1 (PKCE Web Redirect)").addOption("none", "No Authentication (Public Endpoint)").setValue(this.authType).onChange((v) => {
+    new import_obsidian7.Setting(contentEl).setName("Authentication Method").setDesc("Select how the client authenticates.").addDropdown(
+      (dropdown) => dropdown.addOption("bearer", "Bearer Token (API Key / Personal Token)").addOption("custom_headers", "Custom Header (e.g. X-API-Key)").addOption("oauth2", "OAuth 2.1 (PKCE Web Redirect)").addOption("none", "No Authentication (Public Endpoint)").setValue(this.authType).onChange((v) => {
         this.authType = v;
         this.render();
       })
     );
     if (this.authType === "bearer") {
-      new import_obsidian7.Setting(contentEl).setName("API Token / Secret").setDesc("Stored securely in Obsidian SecretManager. Will not appear in plain text.").addText((text) => {
-        text.inputEl.type = "password";
-        text.setPlaceholder("Enter API token or secret key...").setValue(this.apiToken).onChange((v) => this.apiToken = v);
+      const tokenSetting = new import_obsidian7.Setting(contentEl).setName("API Token / Secret").setDesc("Stored securely in Obsidian SecretManager.");
+      tokenSetting.addText((text) => {
+        text.inputEl.type = this.showPassword ? "text" : "password";
+        text.setPlaceholder("Paste your API token here...").setValue(this.apiToken).onChange((v) => this.apiToken = v);
+        this.attachFocusScroll(text.inputEl);
+        tokenSetting.addButton((pasteBtn) => {
+          pasteBtn.setButtonText("\u{1F4CB} \u0412\u0441\u0442\u0430\u0432\u0438\u0442\u044C");
+          pasteBtn.setTooltip("\u0412\u0441\u0442\u0430\u0432\u0438\u0442\u044C \u0442\u043E\u043A\u0435\u043D \u0438\u0437 \u0431\u0443\u0444\u0435\u0440\u0430 \u043E\u0431\u043C\u0435\u043D\u0430");
+          pasteBtn.onClick(async () => {
+            try {
+              const clip = await navigator.clipboard.readText();
+              if (clip && clip.trim()) {
+                this.apiToken = clip.trim();
+                text.setValue(this.apiToken);
+                new import_obsidian7.Notice("\u2713 \u0422\u043E\u043A\u0435\u043D \u0432\u0441\u0442\u0430\u0432\u043B\u0435\u043D \u0438\u0437 \u0431\u0443\u0444\u0435\u0440\u0430 \u043E\u0431\u043C\u0435\u043D\u0430!");
+              } else {
+                new import_obsidian7.Notice("\u0411\u0443\u0444\u0435\u0440 \u043E\u0431\u043C\u0435\u043D\u0430 \u043F\u0443\u0441\u0442.");
+              }
+            } catch (err) {
+              new import_obsidian7.Notice("\u041F\u043E\u0436\u0430\u043B\u0443\u0439\u0441\u0442\u0430, \u0432\u0441\u0442\u0430\u0432\u044C\u0442\u0435 \u0442\u043E\u043A\u0435\u043D \u0432\u0440\u0443\u0447\u043D\u0443\u044E \u0432 \u043F\u043E\u043B\u0435 \u0432\u0432\u043E\u0434\u0430.");
+            }
+          });
+        });
+        tokenSetting.addButton((showBtn) => {
+          (0, import_obsidian7.setIcon)(showBtn.buttonEl, this.showPassword ? "eye-off" : "eye");
+          showBtn.setTooltip(this.showPassword ? "\u0421\u043A\u0440\u044B\u0442\u044C \u0442\u043E\u043A\u0435\u043D" : "\u041F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u0442\u043E\u043A\u0435\u043D");
+          showBtn.onClick(() => {
+            this.showPassword = !this.showPassword;
+            text.inputEl.type = this.showPassword ? "text" : "password";
+            (0, import_obsidian7.setIcon)(showBtn.buttonEl, this.showPassword ? "eye-off" : "eye");
+            showBtn.setTooltip(this.showPassword ? "\u0421\u043A\u0440\u044B\u0442\u044C \u0442\u043E\u043A\u0435\u043D" : "\u041F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u0442\u043E\u043A\u0435\u043D");
+          });
+        });
       });
     } else if (this.authType === "custom_headers") {
-      new import_obsidian7.Setting(contentEl).setName("Custom Header Name").setDesc("HTTP header name to include.").addText(
-        (text) => text.setPlaceholder("X-API-Key").setValue(this.customHeaderName).onChange((v) => this.customHeaderName = v)
-      );
-      new import_obsidian7.Setting(contentEl).setName("Header Value / API Key").setDesc("Stored securely in Obsidian SecretManager.").addText((text) => {
-        text.inputEl.type = "password";
+      new import_obsidian7.Setting(contentEl).setName("Custom Header Name").setDesc("HTTP header name to send.").addText((text) => {
+        text.setPlaceholder("X-API-Key").setValue(this.customHeaderName).onChange((v) => this.customHeaderName = v);
+        this.attachFocusScroll(text.inputEl);
+      });
+      const headerValSetting = new import_obsidian7.Setting(contentEl).setName("Header Value / API Key").setDesc("Stored securely in Obsidian SecretManager.");
+      headerValSetting.addText((text) => {
+        text.inputEl.type = this.showPassword ? "text" : "password";
         text.setPlaceholder("Enter API key...").setValue(this.apiToken).onChange((v) => this.apiToken = v);
+        this.attachFocusScroll(text.inputEl);
+        headerValSetting.addButton((pasteBtn) => {
+          pasteBtn.setButtonText("\u{1F4CB} \u0412\u0441\u0442\u0430\u0432\u0438\u0442\u044C");
+          pasteBtn.onClick(async () => {
+            try {
+              const clip = await navigator.clipboard.readText();
+              if (clip && clip.trim()) {
+                this.apiToken = clip.trim();
+                text.setValue(this.apiToken);
+                new import_obsidian7.Notice("\u2713 \u041A\u043B\u044E\u0447 \u0432\u0441\u0442\u0430\u0432\u043B\u0435\u043D \u0438\u0437 \u0431\u0443\u0444\u0435\u0440\u0430!");
+              }
+            } catch (e) {
+              new import_obsidian7.Notice("\u0412\u0441\u0442\u0430\u0432\u044C\u0442\u0435 \u043A\u043B\u044E\u0447 \u0432\u0440\u0443\u0447\u043D\u0443\u044E \u0432 \u043F\u043E\u043B\u0435.");
+            }
+          });
+        });
       });
     } else if (this.authType === "oauth2") {
-      new import_obsidian7.Setting(contentEl).setName("Authorization URL").setDesc("OAuth provider authorization endpoint.").addText(
-        (text) => text.setPlaceholder("https://provider.com/oauth/authorize").setValue(this.oauthAuthUrl).onChange((v) => this.oauthAuthUrl = v)
-      );
-      new import_obsidian7.Setting(contentEl).setName("Token URL").setDesc("OAuth provider token exchange endpoint.").addText(
-        (text) => text.setPlaceholder("https://provider.com/oauth/token").setValue(this.oauthTokenUrl).onChange((v) => this.oauthTokenUrl = v)
-      );
-      new import_obsidian7.Setting(contentEl).setName("Client ID (Optional)").setDesc("OAuth client identifier if required by the service.").addText(
-        (text) => text.setPlaceholder("client_id_123").setValue(this.oauthClientId).onChange((v) => this.oauthClientId = v)
-      );
-      new import_obsidian7.Setting(contentEl).setName("Scopes (Optional)").setDesc("Space-separated list of OAuth scopes.").addText(
-        (text) => text.setPlaceholder("read write data:all").setValue(this.oauthScopes).onChange((v) => this.oauthScopes = v)
-      );
+      new import_obsidian7.Setting(contentEl).setName("Authorization URL").setDesc("OAuth provider authorization endpoint.").addText((text) => {
+        text.setPlaceholder("https://provider.com/oauth/authorize").setValue(this.oauthAuthUrl).onChange((v) => this.oauthAuthUrl = v);
+        this.attachFocusScroll(text.inputEl);
+      });
+      new import_obsidian7.Setting(contentEl).setName("Token URL").setDesc("OAuth provider token exchange endpoint.").addText((text) => {
+        text.setPlaceholder("https://provider.com/oauth/token").setValue(this.oauthTokenUrl).onChange((v) => this.oauthTokenUrl = v);
+        this.attachFocusScroll(text.inputEl);
+      });
+      new import_obsidian7.Setting(contentEl).setName("Client ID").setDesc("OAuth client identifier registered with the service.").addText((text) => {
+        text.setPlaceholder("client_id_123").setValue(this.oauthClientId).onChange((v) => this.oauthClientId = v);
+        this.attachFocusScroll(text.inputEl);
+      });
+      new import_obsidian7.Setting(contentEl).setName("Scopes (Optional)").setDesc("Space-separated list of OAuth scopes.").addText((text) => {
+        text.setPlaceholder("data:read data:write").setValue(this.oauthScopes).onChange((v) => this.oauthScopes = v);
+        this.attachFocusScroll(text.inputEl);
+      });
     }
+    new import_obsidian7.Setting(contentEl).setName("Description (Optional)").setDesc("Brief summary of tools provided.").addText((text) => {
+      text.setPlaceholder("e.g. Task management in Todoist").setValue(this.description).onChange((v) => this.description = v);
+      this.attachFocusScroll(text.inputEl);
+    });
     const footerEl = contentEl.createEl("div", { cls: "harness-modal-footer" });
-    footerEl.style.marginTop = "20px";
+    footerEl.style.marginTop = "24px";
+    footerEl.style.marginBottom = "20px";
     footerEl.style.display = "flex";
     footerEl.style.justifyContent = "flex-end";
     footerEl.style.gap = "10px";
