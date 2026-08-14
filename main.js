@@ -28,7 +28,7 @@ __export(main_exports, {
   default: () => HarnessPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian14 = require("obsidian");
+var import_obsidian16 = require("obsidian");
 
 // src/types.ts
 var DEFAULT_PROVIDERS = [
@@ -112,7 +112,9 @@ var DEFAULT_SETTINGS = {
   activeProviderId: "",
   activeModel: "",
   systemPrompt: "You are an autonomous AI Agent inside Obsidian. You have tools to read, create, patch, search, and inspect notes in the vault. Use these tools step-by-step to fulfill the user request.",
-  safetyMode: "strict"
+  safetyMode: "strict",
+  sessions: [],
+  currentSessionId: ""
 };
 
 // src/ui/settings-tab.ts
@@ -630,7 +632,7 @@ var HarnessSettingTab = class extends import_obsidian4.PluginSettingTab {
 };
 
 // src/ui/chat-view.ts
-var import_obsidian13 = require("obsidian");
+var import_obsidian15 = require("obsidian");
 
 // src/engine/providers/base.ts
 var LLMProvider = class {
@@ -1674,9 +1676,122 @@ ${msg.content}
   }
 };
 
-// src/ui/components/confirmation-modal.ts
+// src/utils/session-manager.ts
+var SessionManager = class {
+  /**
+   * Generates a clean human-readable session title from the user prompt.
+   */
+  static generateTitle(firstUserMessage) {
+    const clean = firstUserMessage.replace(/[\n\r]+/g, " ").trim();
+    if (clean.length === 0)
+      return "New Chat Session";
+    if (clean.length <= 40)
+      return clean;
+    const words = clean.split(" ");
+    let result = "";
+    for (const w of words) {
+      if ((result + " " + w).trim().length > 35)
+        break;
+      result = (result + " " + w).trim();
+    }
+    return result ? `${result}...` : clean.slice(0, 35) + "...";
+  }
+  /**
+   * Creates a new empty session object.
+   */
+  static createNewSession(providerId, model) {
+    const id = `session_${Date.now()}`;
+    return {
+      id,
+      title: "New Chat Session",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      messages: [],
+      providerId,
+      model
+    };
+  }
+};
+
+// src/utils/mention-helper.ts
 var import_obsidian12 = require("obsidian");
-var ConfirmationModal = class extends import_obsidian12.Modal {
+var MentionHelper = class {
+  /**
+   * Returns all searchable files and folders in the Vault for @ autocomplete suggestions.
+   */
+  static getVaultItems(app, query = "") {
+    const allFiles = app.vault.getAllLoadedFiles();
+    const queryLower = query.toLowerCase();
+    const items = [];
+    for (const item of allFiles) {
+      if (item.path === "/" || item.path === "")
+        continue;
+      const isFolder = item instanceof import_obsidian12.TFolder;
+      if (!queryLower || item.name.toLowerCase().includes(queryLower) || item.path.toLowerCase().includes(queryLower)) {
+        items.push({
+          name: item.name,
+          path: item.path,
+          isFolder
+        });
+      }
+    }
+    return items.sort((a, b) => {
+      if (a.isFolder && !b.isFolder)
+        return -1;
+      if (!a.isFolder && b.isFolder)
+        return 1;
+      return a.path.localeCompare(b.path);
+    }).slice(0, 15);
+  }
+  /**
+   * Scans a message for @references and attaches the real file/folder contents.
+   */
+  static async resolveMentions(app, userText) {
+    const mentionRegex = /@([a-zA-Z0-9_\-\.\/]+)/g;
+    const matches = Array.from(userText.matchAll(mentionRegex));
+    if (matches.length === 0)
+      return userText;
+    let enrichedText = userText;
+    const attachedBlocks = [];
+    for (const match of matches) {
+      const targetPath = match[1];
+      const item = app.vault.getAbstractFileByPath(targetPath);
+      if (item instanceof import_obsidian12.TFile) {
+        try {
+          const content = await app.vault.read(item);
+          attachedBlocks.push(
+            `[Attached Note: @${item.path}]
+\`\`\`markdown
+${content}
+\`\`\``
+          );
+        } catch (e) {
+        }
+      } else if (item instanceof import_obsidian12.TFolder) {
+        try {
+          const children = item.children.map((c) => `- ${c.name} (${c instanceof import_obsidian12.TFolder ? "folder" : "file"})`).join("\n");
+          attachedBlocks.push(
+            `[Attached Folder: @${item.path}]
+\`\`\`
+${children}
+\`\`\``
+          );
+        } catch (e) {
+        }
+      }
+    }
+    if (attachedBlocks.length > 0) {
+      enrichedText = `${enrichedText}
+
+${attachedBlocks.join("\n\n")}`;
+    }
+    return enrichedText;
+  }
+};
+
+// src/ui/components/confirmation-modal.ts
+var import_obsidian13 = require("obsidian");
+var ConfirmationModal = class extends import_obsidian13.Modal {
   constructor(app, toolCall, onResult) {
     super(app);
     this.toolCall = toolCall;
@@ -1692,7 +1807,7 @@ var ConfirmationModal = class extends import_obsidian12.Modal {
     });
     const codeBlock = contentEl.createEl("pre");
     codeBlock.createEl("code", { text: this.toolCall.function.arguments });
-    new import_obsidian12.Setting(contentEl).addButton(
+    new import_obsidian13.Setting(contentEl).addButton(
       (btn) => btn.setButtonText("Deny").onClick(() => {
         this.onResult(false);
         this.close();
@@ -1710,20 +1825,120 @@ var ConfirmationModal = class extends import_obsidian12.Modal {
   }
 };
 
+// src/ui/components/sessions-modal.ts
+var import_obsidian14 = require("obsidian");
+var SessionsModal = class extends import_obsidian14.Modal {
+  constructor(app, sessions, currentSessionId, onSelect, onDelete, onNewSession) {
+    super(app);
+    this.sessions = [...sessions];
+    this.currentSessionId = currentSessionId;
+    this.onSelect = onSelect;
+    this.onDelete = onDelete;
+    this.onNewSession = onNewSession;
+  }
+  onOpen() {
+    this.render();
+  }
+  render() {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.addClass("harness-modal-content");
+    contentEl.createEl("h2", { text: "Chat Sessions" });
+    const topSetting = new import_obsidian14.Setting(contentEl).setName("New Conversation").setDesc("Start a fresh agent harness session");
+    topSetting.addButton((btn) => {
+      btn.setButtonText("+ New Session");
+      btn.setCta();
+      btn.onClick(() => {
+        this.onNewSession();
+        this.close();
+      });
+    });
+    contentEl.createEl("h4", { text: "Previous Sessions" });
+    const listEl = contentEl.createEl("div", { cls: "harness-sessions-list" });
+    listEl.style.maxHeight = "320px";
+    listEl.style.overflowY = "auto";
+    listEl.style.display = "flex";
+    listEl.style.flexDirection = "column";
+    listEl.style.gap = "8px";
+    listEl.style.marginBottom = "12px";
+    if (this.sessions.length === 0) {
+      listEl.createEl("div", { text: "No previous chat sessions found.", cls: "setting-item-description" });
+      return;
+    }
+    const sorted = [...this.sessions].sort((a, b) => b.updatedAt - a.updatedAt);
+    for (const session of sorted) {
+      const isCurrent = session.id === this.currentSessionId;
+      const sessionRow = listEl.createEl("div");
+      sessionRow.style.display = "flex";
+      sessionRow.style.alignItems = "center";
+      sessionRow.style.justifyContent = "space-between";
+      sessionRow.style.padding = "8px 10px";
+      sessionRow.style.borderRadius = "6px";
+      sessionRow.style.backgroundColor = isCurrent ? "var(--background-modifier-active-hover)" : "var(--background-secondary)";
+      sessionRow.style.border = isCurrent ? "1px solid var(--interactive-accent)" : "1px solid var(--background-modifier-border)";
+      const infoEl = sessionRow.createEl("div");
+      infoEl.style.cursor = "pointer";
+      infoEl.style.flex = "1";
+      const titleEl = infoEl.createEl("div", { text: session.title, cls: "harness-session-title" });
+      titleEl.style.fontWeight = "bold";
+      titleEl.style.fontSize = "0.95em";
+      const dateStr = new Date(session.updatedAt).toLocaleDateString() + " " + new Date(session.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      const metaEl = infoEl.createEl("div", {
+        text: `${dateStr} \u2022 ${session.messages.length} messages \u2022 ${session.model || "model"}`,
+        cls: "setting-item-description"
+      });
+      metaEl.style.fontSize = "0.75em";
+      infoEl.addEventListener("click", () => {
+        this.onSelect(session.id);
+        this.close();
+      });
+      const actionsEl = sessionRow.createEl("div");
+      actionsEl.style.display = "flex";
+      actionsEl.style.gap = "4px";
+      const delBtn = actionsEl.createEl("button", { cls: "harness-btn-icon-round" });
+      (0, import_obsidian14.setIcon)(delBtn, "trash");
+      delBtn.setAttribute("aria-label", "Delete session");
+      delBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.onDelete(session.id);
+        this.sessions = this.sessions.filter((s) => s.id !== session.id);
+        this.render();
+      });
+    }
+  }
+  onClose() {
+    this.contentEl.empty();
+  }
+};
+
 // src/ui/chat-view.ts
 var HARNESS_VIEW_TYPE = "harness-chat-view";
-var HarnessChatView = class extends import_obsidian13.ItemView {
+var HarnessChatView = class extends import_obsidian15.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
-    this.conversationHistory = [];
-    this.currentProviderId = "";
-    this.currentModel = "";
+    this.activeSuggestType = "none";
+    this.suggestQuery = "";
     this.plugin = plugin;
     this.toolRegistry = new ToolRegistry();
     this.agentHarness = new AgentHarness(this.app, this.plugin.settings, this.toolRegistry);
     this.exporter = new MarkdownExporter(this.app);
-    this.currentProviderId = this.plugin.settings.activeProviderId || "";
-    this.currentModel = this.plugin.settings.activeModel || "";
+    this.initSession();
+  }
+  initSession() {
+    if (!this.plugin.settings.sessions) {
+      this.plugin.settings.sessions = [];
+    }
+    const currentId = this.plugin.settings.currentSessionId;
+    let existing = this.plugin.settings.sessions.find((s) => s.id === currentId);
+    if (!existing) {
+      existing = SessionManager.createNewSession(
+        this.plugin.settings.activeProviderId || "openrouter",
+        this.plugin.settings.activeModel || ""
+      );
+      this.plugin.settings.sessions.unshift(existing);
+      this.plugin.settings.currentSessionId = existing.id;
+    }
+    this.currentSession = existing;
   }
   getViewType() {
     return HARNESS_VIEW_TYPE;
@@ -1744,77 +1959,113 @@ var HarnessChatView = class extends import_obsidian13.ItemView {
     titleEl.style.alignItems = "center";
     titleEl.style.gap = "6px";
     const botIconEl = titleEl.createEl("span");
-    (0, import_obsidian13.setIcon)(botIconEl, "bot");
+    (0, import_obsidian15.setIcon)(botIconEl, "bot");
     titleEl.createEl("span", { text: "Harness Bot", cls: "harness-title" });
-    const selectorsEl = headerEl.createEl("div", { cls: "harness-chat-header-actions" });
-    this.providerSelectEl = selectorsEl.createEl("select");
-    this.refreshProviderDropdown();
-    this.providerSelectEl.addEventListener("change", () => {
-      this.currentProviderId = this.providerSelectEl.value;
-      this.refreshModelDropdown();
+    const headerActionsEl = headerEl.createEl("div", { cls: "harness-chat-header-actions" });
+    const newSessionBtn = headerActionsEl.createEl("button", { cls: "clickable-icon" });
+    newSessionBtn.setAttribute("aria-label", "New Session");
+    (0, import_obsidian15.setIcon)(newSessionBtn, "plus");
+    newSessionBtn.addEventListener("click", () => {
+      this.createNewSession();
     });
-    this.modelSelectEl = selectorsEl.createEl("select");
-    this.refreshModelDropdown();
-    this.modelSelectEl.addEventListener("change", () => {
-      this.currentModel = this.modelSelectEl.value;
+    const sessionsBtn = headerActionsEl.createEl("button", { cls: "clickable-icon" });
+    sessionsBtn.setAttribute("aria-label", "View Saved Sessions (/sessions)");
+    (0, import_obsidian15.setIcon)(sessionsBtn, "history");
+    sessionsBtn.addEventListener("click", () => {
+      this.openSessionsModal();
     });
-    const exportBtn = selectorsEl.createEl("button", { cls: "clickable-icon" });
+    const exportBtn = headerActionsEl.createEl("button", { cls: "clickable-icon" });
     exportBtn.setAttribute("aria-label", "Export Chat to Markdown");
-    (0, import_obsidian13.setIcon)(exportBtn, "upload");
+    (0, import_obsidian15.setIcon)(exportBtn, "upload");
     exportBtn.addEventListener("click", async () => {
-      if (this.conversationHistory.length === 0) {
-        new import_obsidian13.Notice("No chat history to export.");
+      if (this.currentSession.messages.length === 0) {
+        new import_obsidian15.Notice("No chat history to export.");
         return;
       }
       try {
         const exportedPath = await this.exporter.exportChatToMarkdown(
-          this.conversationHistory,
-          this.currentModel || "default"
+          this.currentSession.messages,
+          this.currentSession.model || this.plugin.settings.activeModel || "default"
         );
-        new import_obsidian13.Notice(`Chat exported to ${exportedPath}`);
+        new import_obsidian15.Notice(`Chat exported to ${exportedPath}`);
       } catch (e) {
-        new import_obsidian13.Notice(`Export failed: ${e.message}`);
+        new import_obsidian15.Notice(`Export failed: ${e.message}`);
       }
     });
-    const clearBtn = selectorsEl.createEl("button", { cls: "clickable-icon" });
-    clearBtn.setAttribute("aria-label", "Clear Conversation");
-    (0, import_obsidian13.setIcon)(clearBtn, "trash");
-    clearBtn.addEventListener("click", () => {
-      this.conversationHistory = [];
+    const clearBtn = headerActionsEl.createEl("button", { cls: "clickable-icon" });
+    clearBtn.setAttribute("aria-label", "Clear Messages in Session");
+    (0, import_obsidian15.setIcon)(clearBtn, "trash");
+    clearBtn.addEventListener("click", async () => {
+      this.currentSession.messages = [];
+      await this.saveSessionState();
       this.renderMessages();
     });
     this.messagesContainerEl = container.createEl("div", { cls: "harness-chat-messages" });
+    this.suggestPopupEl = container.createEl("div", { cls: "harness-suggest-popup" });
+    this.suggestPopupEl.style.display = "none";
     const inputAreaEl = container.createEl("div", { cls: "harness-chat-input-area" });
-    const inputContainerEl = inputAreaEl.createEl("div", { cls: "harness-chat-input-container" });
-    this.inputTextAreaEl = inputContainerEl.createEl("textarea", {
+    this.inputTextAreaEl = inputAreaEl.createEl("textarea", {
       cls: "harness-chat-textarea",
-      placeholder: "Ask Harness Bot to read, search, plan, or create notes..."
+      placeholder: "Type a message, '/' for sessions, or '@' to attach a file..."
     });
-    this.sendButtonEl = inputContainerEl.createEl("button", { text: "Send", cls: "mod-cta" });
+    const bottomRowEl = inputAreaEl.createEl("div", { cls: "harness-chat-bottom-row" });
+    bottomRowEl.style.display = "flex";
+    bottomRowEl.style.justifyContent = "space-between";
+    bottomRowEl.style.alignItems = "center";
+    bottomRowEl.style.gap = "8px";
+    const modelContainerEl = bottomRowEl.createEl("div");
+    modelContainerEl.style.display = "flex";
+    modelContainerEl.style.alignItems = "center";
+    modelContainerEl.style.gap = "6px";
+    this.modelSelectEl = modelContainerEl.createEl("select");
+    this.modelSelectEl.style.fontSize = "0.85em";
+    this.refreshModelDropdown();
+    this.modelSelectEl.addEventListener("change", async () => {
+      this.currentSession.model = this.modelSelectEl.value;
+      this.plugin.settings.activeModel = this.modelSelectEl.value;
+      await this.saveSessionState();
+    });
+    this.sendButtonEl = bottomRowEl.createEl("button", { text: "Send", cls: "mod-cta" });
     const handleSend = async () => {
       const text = this.inputTextAreaEl.value.trim();
       if (!text)
         return;
-      if (!this.currentProviderId) {
-        new import_obsidian13.Notice("Please configure and select an AI provider in Settings first.");
+      if (text === "/sessions" || text === "/history") {
+        this.inputTextAreaEl.value = "";
+        this.hideSuggest();
+        this.openSessionsModal();
+        return;
+      }
+      const activeProv = this.plugin.settings.providers.find(
+        (p) => p.id === this.plugin.settings.activeProviderId
+      );
+      if (!activeProv) {
+        new import_obsidian15.Notice("Please configure and select an AI provider in Settings first.");
         return;
       }
       this.inputTextAreaEl.value = "";
+      this.hideSuggest();
       this.sendButtonEl.disabled = true;
-      const userMsg = { role: "user", content: text };
-      this.conversationHistory.push(userMsg);
+      if (this.currentSession.messages.length === 0) {
+        this.currentSession.title = SessionManager.generateTitle(text);
+      }
+      const resolvedContent = await MentionHelper.resolveMentions(this.app, text);
+      const userMsg = { role: "user", content: resolvedContent };
+      this.currentSession.messages.push(userMsg);
+      this.currentSession.updatedAt = Date.now();
+      await this.saveSessionState();
       this.renderMessages();
       const streamingMsgEl = this.messagesContainerEl.createEl("div", {
         cls: "harness-message harness-message-assistant"
       });
       streamingMsgEl.createEl("div", {
-        text: `Harness Bot (${this.currentModel || this.currentProviderId})`,
+        text: `Harness Bot (${this.currentSession.model || this.plugin.settings.activeModel})`,
         cls: "harness-message-header"
       });
       const textContentEl = streamingMsgEl.createEl("div", { cls: "harness-message-body" });
       try {
         const updatedHistory = await this.agentHarness.runTurn(
-          this.conversationHistory,
+          this.currentSession.messages,
           (event) => {
             if (event.type === "chunk" && event.content) {
               textContentEl.setText(event.content);
@@ -1832,12 +2083,14 @@ var HarnessChatView = class extends import_obsidian13.ItemView {
               new ConfirmationModal(this.app, toolCall, resolve).open();
             });
           },
-          this.currentProviderId,
-          this.currentModel
+          this.plugin.settings.activeProviderId,
+          this.currentSession.model || this.plugin.settings.activeModel
         );
-        this.conversationHistory = updatedHistory;
+        this.currentSession.messages = updatedHistory;
+        this.currentSession.updatedAt = Date.now();
+        await this.saveSessionState();
       } catch (err) {
-        new import_obsidian13.Notice(`Agent error: ${err.message}`);
+        new import_obsidian15.Notice(`Agent error: ${err.message}`);
         textContentEl.setText(`Error: ${err.message}`);
       } finally {
         this.sendButtonEl.disabled = false;
@@ -1845,7 +2098,16 @@ var HarnessChatView = class extends import_obsidian13.ItemView {
       }
     };
     this.sendButtonEl.addEventListener("click", handleSend);
+    this.inputTextAreaEl.addEventListener("input", () => {
+      this.handleInputSuggest();
+    });
     this.inputTextAreaEl.addEventListener("keydown", (e) => {
+      if (this.activeSuggestType !== "none" && (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Enter" || e.key === "Escape")) {
+        if (e.key === "Escape") {
+          this.hideSuggest();
+          return;
+        }
+      }
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         handleSend();
@@ -1853,58 +2115,200 @@ var HarnessChatView = class extends import_obsidian13.ItemView {
     });
     this.renderMessages();
   }
-  refreshProviderDropdown() {
-    if (!this.providerSelectEl)
+  handleInputSuggest() {
+    const text = this.inputTextAreaEl.value;
+    const cursorPos = this.inputTextAreaEl.selectionStart || text.length;
+    const beforeCursor = text.slice(0, cursorPos);
+    if (beforeCursor.startsWith("/") && !beforeCursor.includes(" ")) {
+      this.activeSuggestType = "slash";
+      this.suggestQuery = beforeCursor.slice(1);
+      this.renderSlashSuggest();
       return;
-    this.providerSelectEl.empty();
-    if (!this.plugin.settings.providers || this.plugin.settings.providers.length === 0) {
-      this.providerSelectEl.createEl("option", { value: "", text: "(Not configured)" });
+    }
+    const lastAtIndex = beforeCursor.lastIndexOf("@");
+    if (lastAtIndex !== -1 && (lastAtIndex === 0 || /\s/.test(beforeCursor[lastAtIndex - 1]))) {
+      const mentionText = beforeCursor.slice(lastAtIndex + 1);
+      if (!/\s/.test(mentionText)) {
+        this.activeSuggestType = "mention";
+        this.suggestQuery = mentionText;
+        this.renderMentionSuggest(lastAtIndex);
+        return;
+      }
+    }
+    this.hideSuggest();
+  }
+  renderSlashSuggest() {
+    if (!this.suggestPopupEl)
+      return;
+    this.suggestPopupEl.empty();
+    this.suggestPopupEl.style.display = "block";
+    const itemEl = this.suggestPopupEl.createEl("div", { cls: "harness-suggest-item" });
+    itemEl.createEl("strong", { text: "/sessions" });
+    itemEl.createEl("span", { text: " - View and switch saved chat sessions" });
+    itemEl.addEventListener("click", () => {
+      this.inputTextAreaEl.value = "";
+      this.hideSuggest();
+      this.openSessionsModal();
+    });
+  }
+  renderMentionSuggest(lastAtIndex) {
+    if (!this.suggestPopupEl)
+      return;
+    this.suggestPopupEl.empty();
+    this.suggestPopupEl.style.display = "block";
+    const items = MentionHelper.getVaultItems(this.app, this.suggestQuery);
+    if (items.length === 0) {
+      const noItemEl = this.suggestPopupEl.createEl("div", { cls: "harness-suggest-item" });
+      noItemEl.setText("No matching files or folders found");
       return;
     }
-    if (!this.currentProviderId) {
-      this.currentProviderId = this.plugin.settings.activeProviderId || this.plugin.settings.providers[0].id;
+    for (const item of items) {
+      const itemEl = this.suggestPopupEl.createEl("div", { cls: "harness-suggest-item" });
+      const iconSpan = itemEl.createEl("span", { cls: "harness-suggest-icon" });
+      (0, import_obsidian15.setIcon)(iconSpan, item.isFolder ? "folder" : "file-text");
+      itemEl.createEl("span", { text: ` ${item.path}` });
+      itemEl.addEventListener("click", () => {
+        const text = this.inputTextAreaEl.value;
+        const before = text.slice(0, lastAtIndex);
+        const after = text.slice(lastAtIndex + 1 + this.suggestQuery.length);
+        this.inputTextAreaEl.value = `${before}@${item.path} ${after}`;
+        this.hideSuggest();
+        this.inputTextAreaEl.focus();
+      });
     }
-    for (const p of this.plugin.settings.providers) {
-      const opt = this.providerSelectEl.createEl("option", { value: p.id, text: p.name });
-      if (p.id === this.currentProviderId)
-        opt.selected = true;
+  }
+  hideSuggest() {
+    this.activeSuggestType = "none";
+    if (this.suggestPopupEl) {
+      this.suggestPopupEl.style.display = "none";
     }
+  }
+  createNewSession() {
+    const newSession = SessionManager.createNewSession(
+      this.plugin.settings.activeProviderId || "openrouter",
+      this.plugin.settings.activeModel || ""
+    );
+    this.plugin.settings.sessions.unshift(newSession);
+    this.plugin.settings.currentSessionId = newSession.id;
+    this.currentSession = newSession;
+    this.saveSessionState();
+    this.renderMessages();
+    this.refreshModelDropdown();
+    new import_obsidian15.Notice("Started new chat session");
+  }
+  openSessionsModal() {
+    new SessionsModal(
+      this.app,
+      this.plugin.settings.sessions,
+      this.currentSession.id,
+      (selectedId) => {
+        const found = this.plugin.settings.sessions.find((s) => s.id === selectedId);
+        if (found) {
+          this.currentSession = found;
+          this.plugin.settings.currentSessionId = found.id;
+          this.saveSessionState();
+          this.renderMessages();
+          this.refreshModelDropdown();
+        }
+      },
+      (deletedId) => {
+        this.plugin.settings.sessions = this.plugin.settings.sessions.filter((s) => s.id !== deletedId);
+        if (this.currentSession.id === deletedId) {
+          this.createNewSession();
+        } else {
+          this.saveSessionState();
+        }
+      },
+      () => {
+        this.createNewSession();
+      }
+    ).open();
+  }
+  async saveSessionState() {
+    await this.plugin.saveSettings();
   }
   refreshModelDropdown() {
     if (!this.modelSelectEl)
       return;
     this.modelSelectEl.empty();
-    const currentProv = this.plugin.settings.providers.find((p) => p.id === this.currentProviderId);
-    const models = currentProv?.models || [];
+    const activeProv = this.plugin.settings.providers.find(
+      (p) => p.id === this.plugin.settings.activeProviderId
+    );
+    const models = activeProv?.models || [];
     if (models.length === 0) {
       this.modelSelectEl.createEl("option", { value: "", text: "(No models)" });
-      this.currentModel = "";
       return;
     }
+    const currentModel = this.currentSession.model || this.plugin.settings.activeModel || models[0];
     for (const m of models) {
       const opt = this.modelSelectEl.createEl("option", { value: m, text: m });
-      if (m === this.currentModel)
+      if (m === currentModel)
         opt.selected = true;
     }
-    if (!models.includes(this.currentModel)) {
-      this.currentModel = models[0];
+    if (!models.includes(currentModel)) {
+      this.currentSession.model = models[0];
     }
   }
   renderMessages() {
     if (!this.messagesContainerEl)
       return;
     this.messagesContainerEl.empty();
-    if (this.conversationHistory.length === 0) {
-      const emptyEl = this.messagesContainerEl.createEl("div", {
-        cls: "harness-empty-state",
-        text: "No active conversation. Type a message below to start Obsidian Harness Bot."
+    if (this.currentSession.messages.length === 0) {
+      const emptyContainerEl = this.messagesContainerEl.createEl("div", {
+        cls: "harness-empty-state-container"
       });
-      emptyEl.style.opacity = "0.6";
-      emptyEl.style.textAlign = "center";
-      emptyEl.style.padding = "32px 16px";
+      emptyContainerEl.style.padding = "20px 12px";
+      emptyContainerEl.style.display = "flex";
+      emptyContainerEl.style.flexDirection = "column";
+      emptyContainerEl.style.gap = "16px";
+      const introEl = emptyContainerEl.createEl("div");
+      introEl.style.textAlign = "center";
+      introEl.style.opacity = "0.75";
+      introEl.createEl("h3", { text: "Obsidian Harness Bot" });
+      introEl.createEl("p", {
+        text: "Start a conversation, type '/' for sessions, or '@' to attach notes and folders from your Vault."
+      });
+      const previousSessions = this.plugin.settings.sessions.filter(
+        (s) => s.id !== this.currentSession.id && s.messages.length > 0
+      );
+      if (previousSessions.length > 0) {
+        const prevBoxEl = emptyContainerEl.createEl("div", { cls: "harness-prev-sessions-box" });
+        prevBoxEl.style.border = "1px solid var(--background-modifier-border)";
+        prevBoxEl.style.borderRadius = "8px";
+        prevBoxEl.style.padding = "12px";
+        prevBoxEl.style.backgroundColor = "var(--background-secondary)";
+        prevBoxEl.createEl("h4", { text: "Previous Sessions" });
+        const prevListEl = prevBoxEl.createEl("div");
+        prevListEl.style.display = "flex";
+        prevListEl.style.flexDirection = "column";
+        prevListEl.style.gap = "6px";
+        for (const prev of previousSessions.slice(0, 5)) {
+          const itemBtn = prevListEl.createEl("div", { cls: "harness-session-card" });
+          itemBtn.style.padding = "8px 10px";
+          itemBtn.style.borderRadius = "6px";
+          itemBtn.style.cursor = "pointer";
+          itemBtn.style.backgroundColor = "var(--background-primary)";
+          itemBtn.style.border = "1px solid var(--background-modifier-border)";
+          const titleRow = itemBtn.createEl("div", { text: prev.title });
+          titleRow.style.fontWeight = "bold";
+          titleRow.style.fontSize = "0.9em";
+          const dateStr = new Date(prev.updatedAt).toLocaleDateString();
+          itemBtn.createEl("div", {
+            text: `${dateStr} \u2022 ${prev.messages.length} messages`,
+            cls: "setting-item-description"
+          });
+          itemBtn.addEventListener("click", () => {
+            this.currentSession = prev;
+            this.plugin.settings.currentSessionId = prev.id;
+            this.saveSessionState();
+            this.renderMessages();
+            this.refreshModelDropdown();
+          });
+        }
+      }
       return;
     }
-    for (const msg of this.conversationHistory) {
+    for (const msg of this.currentSession.messages) {
       if (msg.role === "user") {
         const msgEl = this.messagesContainerEl.createEl("div", { cls: "harness-message harness-message-user" });
         msgEl.createEl("div", { text: "You", cls: "harness-message-header" });
@@ -1945,7 +2349,7 @@ var HarnessChatView = class extends import_obsidian13.ItemView {
 };
 
 // src/main.ts
-var HarnessPlugin = class extends import_obsidian14.Plugin {
+var HarnessPlugin = class extends import_obsidian16.Plugin {
   constructor() {
     super(...arguments);
     this.settings = DEFAULT_SETTINGS;

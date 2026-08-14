@@ -1,10 +1,13 @@
 import { ItemView, WorkspaceLeaf, Notice, setIcon } from 'obsidian';
 import type HarnessPlugin from '../main';
-import { LLMMessage, ToolCall } from '../types';
+import { ChatSession, LLMMessage, ToolCall } from '../types';
 import { AgentHarness } from '../engine/agent';
 import { ToolRegistry } from '../tools/registry';
 import { MarkdownExporter } from '../utils/markdown-exporter';
+import { SessionManager } from '../utils/session-manager';
+import { MentionHelper, MentionItem } from '../utils/mention-helper';
 import { ConfirmationModal } from './components/confirmation-modal';
+import { SessionsModal } from './components/sessions-modal';
 
 export const HARNESS_VIEW_TYPE = 'harness-chat-view';
 
@@ -14,15 +17,15 @@ export class HarnessChatView extends ItemView {
   private agentHarness: AgentHarness;
   private exporter: MarkdownExporter;
 
-  private conversationHistory: LLMMessage[] = [];
+  private currentSession!: ChatSession;
   private messagesContainerEl!: HTMLElement;
   private inputTextAreaEl!: HTMLTextAreaElement;
   private sendButtonEl!: HTMLButtonElement;
-  private providerSelectEl!: HTMLSelectElement;
   private modelSelectEl!: HTMLSelectElement;
+  private suggestPopupEl!: HTMLElement;
 
-  private currentProviderId = '';
-  private currentModel = '';
+  private activeSuggestType: 'none' | 'slash' | 'mention' = 'none';
+  private suggestQuery = '';
 
   constructor(leaf: WorkspaceLeaf, plugin: HarnessPlugin) {
     super(leaf);
@@ -30,8 +33,27 @@ export class HarnessChatView extends ItemView {
     this.toolRegistry = new ToolRegistry();
     this.agentHarness = new AgentHarness(this.app, this.plugin.settings, this.toolRegistry);
     this.exporter = new MarkdownExporter(this.app);
-    this.currentProviderId = this.plugin.settings.activeProviderId || '';
-    this.currentModel = this.plugin.settings.activeModel || '';
+    this.initSession();
+  }
+
+  private initSession() {
+    if (!this.plugin.settings.sessions) {
+      this.plugin.settings.sessions = [];
+    }
+
+    const currentId = this.plugin.settings.currentSessionId;
+    let existing = this.plugin.settings.sessions.find((s) => s.id === currentId);
+
+    if (!existing) {
+      existing = SessionManager.createNewSession(
+        this.plugin.settings.activeProviderId || 'openrouter',
+        this.plugin.settings.activeModel || ''
+      );
+      this.plugin.settings.sessions.unshift(existing);
+      this.plugin.settings.currentSessionId = existing.id;
+    }
+
+    this.currentSession = existing;
   }
 
   getViewType(): string {
@@ -61,38 +83,37 @@ export class HarnessChatView extends ItemView {
     setIcon(botIconEl, 'bot');
     titleEl.createEl('span', { text: 'Harness Bot', cls: 'harness-title' });
 
-    const selectorsEl = headerEl.createEl('div', { cls: 'harness-chat-header-actions' });
+    const headerActionsEl = headerEl.createEl('div', { cls: 'harness-chat-header-actions' });
 
-    // Provider Selector
-    this.providerSelectEl = selectorsEl.createEl('select');
-    this.refreshProviderDropdown();
-
-    this.providerSelectEl.addEventListener('change', () => {
-      this.currentProviderId = this.providerSelectEl.value;
-      this.refreshModelDropdown();
+    // New Session Button
+    const newSessionBtn = headerActionsEl.createEl('button', { cls: 'clickable-icon' });
+    newSessionBtn.setAttribute('aria-label', 'New Session');
+    setIcon(newSessionBtn, 'plus');
+    newSessionBtn.addEventListener('click', () => {
+      this.createNewSession();
     });
 
-    // Model Selector
-    this.modelSelectEl = selectorsEl.createEl('select');
-    this.refreshModelDropdown();
-
-    this.modelSelectEl.addEventListener('change', () => {
-      this.currentModel = this.modelSelectEl.value;
+    // Sessions List Button
+    const sessionsBtn = headerActionsEl.createEl('button', { cls: 'clickable-icon' });
+    sessionsBtn.setAttribute('aria-label', 'View Saved Sessions (/sessions)');
+    setIcon(sessionsBtn, 'history');
+    sessionsBtn.addEventListener('click', () => {
+      this.openSessionsModal();
     });
 
     // Export Button
-    const exportBtn = selectorsEl.createEl('button', { cls: 'clickable-icon' });
+    const exportBtn = headerActionsEl.createEl('button', { cls: 'clickable-icon' });
     exportBtn.setAttribute('aria-label', 'Export Chat to Markdown');
     setIcon(exportBtn, 'upload');
     exportBtn.addEventListener('click', async () => {
-      if (this.conversationHistory.length === 0) {
+      if (this.currentSession.messages.length === 0) {
         new Notice('No chat history to export.');
         return;
       }
       try {
         const exportedPath = await this.exporter.exportChatToMarkdown(
-          this.conversationHistory,
-          this.currentModel || 'default'
+          this.currentSession.messages,
+          this.currentSession.model || this.plugin.settings.activeModel || 'default'
         );
         new Notice(`Chat exported to ${exportedPath}`);
       } catch (e: any) {
@@ -101,43 +122,92 @@ export class HarnessChatView extends ItemView {
     });
 
     // Clear Button
-    const clearBtn = selectorsEl.createEl('button', { cls: 'clickable-icon' });
-    clearBtn.setAttribute('aria-label', 'Clear Conversation');
+    const clearBtn = headerActionsEl.createEl('button', { cls: 'clickable-icon' });
+    clearBtn.setAttribute('aria-label', 'Clear Messages in Session');
     setIcon(clearBtn, 'trash');
-    clearBtn.addEventListener('click', () => {
-      this.conversationHistory = [];
+    clearBtn.addEventListener('click', async () => {
+      this.currentSession.messages = [];
+      await this.saveSessionState();
       this.renderMessages();
     });
 
     // Messages Area
     this.messagesContainerEl = container.createEl('div', { cls: 'harness-chat-messages' });
 
+    // Suggestion Popup for / and @
+    this.suggestPopupEl = container.createEl('div', { cls: 'harness-suggest-popup' });
+    this.suggestPopupEl.style.display = 'none';
+
     // Input Area
     const inputAreaEl = container.createEl('div', { cls: 'harness-chat-input-area' });
-    const inputContainerEl = inputAreaEl.createEl('div', { cls: 'harness-chat-input-container' });
 
-    this.inputTextAreaEl = inputContainerEl.createEl('textarea', {
+    this.inputTextAreaEl = inputAreaEl.createEl('textarea', {
       cls: 'harness-chat-textarea',
-      placeholder: 'Ask Harness Bot to read, search, plan, or create notes...',
+      placeholder: "Type a message, '/' for sessions, or '@' to attach a file...",
     });
 
-    this.sendButtonEl = inputContainerEl.createEl('button', { text: 'Send', cls: 'mod-cta' });
+    const bottomRowEl = inputAreaEl.createEl('div', { cls: 'harness-chat-bottom-row' });
+    bottomRowEl.style.display = 'flex';
+    bottomRowEl.style.justifyContent = 'space-between';
+    bottomRowEl.style.alignItems = 'center';
+    bottomRowEl.style.gap = '8px';
+
+    // Model Selector at the bottom of the chat
+    const modelContainerEl = bottomRowEl.createEl('div');
+    modelContainerEl.style.display = 'flex';
+    modelContainerEl.style.alignItems = 'center';
+    modelContainerEl.style.gap = '6px';
+
+    this.modelSelectEl = modelContainerEl.createEl('select');
+    this.modelSelectEl.style.fontSize = '0.85em';
+    this.refreshModelDropdown();
+
+    this.modelSelectEl.addEventListener('change', async () => {
+      this.currentSession.model = this.modelSelectEl.value;
+      this.plugin.settings.activeModel = this.modelSelectEl.value;
+      await this.saveSessionState();
+    });
+
+    this.sendButtonEl = bottomRowEl.createEl('button', { text: 'Send', cls: 'mod-cta' });
 
     const handleSend = async () => {
       const text = this.inputTextAreaEl.value.trim();
       if (!text) return;
 
-      if (!this.currentProviderId) {
+      // Check slash commands
+      if (text === '/sessions' || text === '/history') {
+        this.inputTextAreaEl.value = '';
+        this.hideSuggest();
+        this.openSessionsModal();
+        return;
+      }
+
+      const activeProv = this.plugin.settings.providers.find(
+        (p) => p.id === this.plugin.settings.activeProviderId
+      );
+
+      if (!activeProv) {
         new Notice('Please configure and select an AI provider in Settings first.');
         return;
       }
 
       this.inputTextAreaEl.value = '';
+      this.hideSuggest();
       this.sendButtonEl.disabled = true;
 
+      // If new session, set auto-title
+      if (this.currentSession.messages.length === 0) {
+        this.currentSession.title = SessionManager.generateTitle(text);
+      }
+
+      // Enriched text with resolved @mentions (notes and folders)
+      const resolvedContent = await MentionHelper.resolveMentions(this.app, text);
+
       // Append clean user message to UI state (WITHOUT timestamp)
-      const userMsg: LLMMessage = { role: 'user', content: text };
-      this.conversationHistory.push(userMsg);
+      const userMsg: LLMMessage = { role: 'user', content: resolvedContent };
+      this.currentSession.messages.push(userMsg);
+      this.currentSession.updatedAt = Date.now();
+      await this.saveSessionState();
       this.renderMessages();
 
       // Streaming assistant placeholder container
@@ -145,14 +215,14 @@ export class HarnessChatView extends ItemView {
         cls: 'harness-message harness-message-assistant',
       });
       streamingMsgEl.createEl('div', {
-        text: `Harness Bot (${this.currentModel || this.currentProviderId})`,
+        text: `Harness Bot (${this.currentSession.model || this.plugin.settings.activeModel})`,
         cls: 'harness-message-header',
       });
       const textContentEl = streamingMsgEl.createEl('div', { cls: 'harness-message-body' });
 
       try {
         const updatedHistory = await this.agentHarness.runTurn(
-          this.conversationHistory,
+          this.currentSession.messages,
           (event) => {
             if (event.type === 'chunk' && event.content) {
               textContentEl.setText(event.content);
@@ -170,11 +240,13 @@ export class HarnessChatView extends ItemView {
               new ConfirmationModal(this.app, toolCall, resolve).open();
             });
           },
-          this.currentProviderId,
-          this.currentModel
+          this.plugin.settings.activeProviderId,
+          this.currentSession.model || this.plugin.settings.activeModel
         );
 
-        this.conversationHistory = updatedHistory;
+        this.currentSession.messages = updatedHistory;
+        this.currentSession.updatedAt = Date.now();
+        await this.saveSessionState();
       } catch (err: any) {
         new Notice(`Agent error: ${err.message}`);
         textContentEl.setText(`Error: ${err.message}`);
@@ -185,7 +257,20 @@ export class HarnessChatView extends ItemView {
     };
 
     this.sendButtonEl.addEventListener('click', handleSend);
+
+    this.inputTextAreaEl.addEventListener('input', () => {
+      this.handleInputSuggest();
+    });
+
     this.inputTextAreaEl.addEventListener('keydown', (e) => {
+      if (this.activeSuggestType !== 'none' && (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === 'Escape')) {
+        // Handled by suggest navigation
+        if (e.key === 'Escape') {
+          this.hideSuggest();
+          return;
+        }
+      }
+
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         handleSend();
@@ -195,45 +280,156 @@ export class HarnessChatView extends ItemView {
     this.renderMessages();
   }
 
-  private refreshProviderDropdown() {
-    if (!this.providerSelectEl) return;
-    this.providerSelectEl.empty();
+  private handleInputSuggest() {
+    const text = this.inputTextAreaEl.value;
+    const cursorPos = this.inputTextAreaEl.selectionStart || text.length;
+    const beforeCursor = text.slice(0, cursorPos);
 
-    if (!this.plugin.settings.providers || this.plugin.settings.providers.length === 0) {
-      this.providerSelectEl.createEl('option', { value: '', text: '(Not configured)' });
+    if (beforeCursor.startsWith('/') && !beforeCursor.includes(' ')) {
+      this.activeSuggestType = 'slash';
+      this.suggestQuery = beforeCursor.slice(1);
+      this.renderSlashSuggest();
       return;
     }
 
-    if (!this.currentProviderId) {
-      this.currentProviderId = this.plugin.settings.activeProviderId || this.plugin.settings.providers[0].id;
+    const lastAtIndex = beforeCursor.lastIndexOf('@');
+    if (lastAtIndex !== -1 && (lastAtIndex === 0 || /\s/.test(beforeCursor[lastAtIndex - 1]))) {
+      const mentionText = beforeCursor.slice(lastAtIndex + 1);
+      if (!/\s/.test(mentionText)) {
+        this.activeSuggestType = 'mention';
+        this.suggestQuery = mentionText;
+        this.renderMentionSuggest(lastAtIndex);
+        return;
+      }
     }
 
-    for (const p of this.plugin.settings.providers) {
-      const opt = this.providerSelectEl.createEl('option', { value: p.id, text: p.name });
-      if (p.id === this.currentProviderId) opt.selected = true;
+    this.hideSuggest();
+  }
+
+  private renderSlashSuggest() {
+    if (!this.suggestPopupEl) return;
+    this.suggestPopupEl.empty();
+    this.suggestPopupEl.style.display = 'block';
+
+    const itemEl = this.suggestPopupEl.createEl('div', { cls: 'harness-suggest-item' });
+    itemEl.createEl('strong', { text: '/sessions' });
+    itemEl.createEl('span', { text: ' - View and switch saved chat sessions' });
+
+    itemEl.addEventListener('click', () => {
+      this.inputTextAreaEl.value = '';
+      this.hideSuggest();
+      this.openSessionsModal();
+    });
+  }
+
+  private renderMentionSuggest(lastAtIndex: number) {
+    if (!this.suggestPopupEl) return;
+    this.suggestPopupEl.empty();
+    this.suggestPopupEl.style.display = 'block';
+
+    const items = MentionHelper.getVaultItems(this.app, this.suggestQuery);
+
+    if (items.length === 0) {
+      const noItemEl = this.suggestPopupEl.createEl('div', { cls: 'harness-suggest-item' });
+      noItemEl.setText('No matching files or folders found');
+      return;
     }
+
+    for (const item of items) {
+      const itemEl = this.suggestPopupEl.createEl('div', { cls: 'harness-suggest-item' });
+      const iconSpan = itemEl.createEl('span', { cls: 'harness-suggest-icon' });
+      setIcon(iconSpan, item.isFolder ? 'folder' : 'file-text');
+
+      itemEl.createEl('span', { text: ` ${item.path}` });
+
+      itemEl.addEventListener('click', () => {
+        const text = this.inputTextAreaEl.value;
+        const before = text.slice(0, lastAtIndex);
+        const after = text.slice(lastAtIndex + 1 + this.suggestQuery.length);
+        this.inputTextAreaEl.value = `${before}@${item.path} ${after}`;
+        this.hideSuggest();
+        this.inputTextAreaEl.focus();
+      });
+    }
+  }
+
+  private hideSuggest() {
+    this.activeSuggestType = 'none';
+    if (this.suggestPopupEl) {
+      this.suggestPopupEl.style.display = 'none';
+    }
+  }
+
+  private createNewSession() {
+    const newSession = SessionManager.createNewSession(
+      this.plugin.settings.activeProviderId || 'openrouter',
+      this.plugin.settings.activeModel || ''
+    );
+    this.plugin.settings.sessions.unshift(newSession);
+    this.plugin.settings.currentSessionId = newSession.id;
+    this.currentSession = newSession;
+    this.saveSessionState();
+    this.renderMessages();
+    this.refreshModelDropdown();
+    new Notice('Started new chat session');
+  }
+
+  private openSessionsModal() {
+    new SessionsModal(
+      this.app,
+      this.plugin.settings.sessions,
+      this.currentSession.id,
+      (selectedId) => {
+        const found = this.plugin.settings.sessions.find((s) => s.id === selectedId);
+        if (found) {
+          this.currentSession = found;
+          this.plugin.settings.currentSessionId = found.id;
+          this.saveSessionState();
+          this.renderMessages();
+          this.refreshModelDropdown();
+        }
+      },
+      (deletedId) => {
+        this.plugin.settings.sessions = this.plugin.settings.sessions.filter((s) => s.id !== deletedId);
+        if (this.currentSession.id === deletedId) {
+          this.createNewSession();
+        } else {
+          this.saveSessionState();
+        }
+      },
+      () => {
+        this.createNewSession();
+      }
+    ).open();
+  }
+
+  private async saveSessionState() {
+    await this.plugin.saveSettings();
   }
 
   private refreshModelDropdown() {
     if (!this.modelSelectEl) return;
     this.modelSelectEl.empty();
 
-    const currentProv = this.plugin.settings.providers.find((p) => p.id === this.currentProviderId);
-    const models = currentProv?.models || [];
+    const activeProv = this.plugin.settings.providers.find(
+      (p) => p.id === this.plugin.settings.activeProviderId
+    );
+    const models = activeProv?.models || [];
 
     if (models.length === 0) {
       this.modelSelectEl.createEl('option', { value: '', text: '(No models)' });
-      this.currentModel = '';
       return;
     }
 
+    const currentModel = this.currentSession.model || this.plugin.settings.activeModel || models[0];
+
     for (const m of models) {
       const opt = this.modelSelectEl.createEl('option', { value: m, text: m });
-      if (m === this.currentModel) opt.selected = true;
+      if (m === currentModel) opt.selected = true;
     }
 
-    if (!models.includes(this.currentModel)) {
-      this.currentModel = models[0];
+    if (!models.includes(currentModel)) {
+      this.currentSession.model = models[0];
     }
   }
 
@@ -241,18 +437,74 @@ export class HarnessChatView extends ItemView {
     if (!this.messagesContainerEl) return;
     this.messagesContainerEl.empty();
 
-    if (this.conversationHistory.length === 0) {
-      const emptyEl = this.messagesContainerEl.createEl('div', {
-        cls: 'harness-empty-state',
-        text: 'No active conversation. Type a message below to start Obsidian Harness Bot.',
+    if (this.currentSession.messages.length === 0) {
+      const emptyContainerEl = this.messagesContainerEl.createEl('div', {
+        cls: 'harness-empty-state-container',
       });
-      emptyEl.style.opacity = '0.6';
-      emptyEl.style.textAlign = 'center';
-      emptyEl.style.padding = '32px 16px';
+      emptyContainerEl.style.padding = '20px 12px';
+      emptyContainerEl.style.display = 'flex';
+      emptyContainerEl.style.flexDirection = 'column';
+      emptyContainerEl.style.gap = '16px';
+
+      const introEl = emptyContainerEl.createEl('div');
+      introEl.style.textAlign = 'center';
+      introEl.style.opacity = '0.75';
+      introEl.createEl('h3', { text: 'Obsidian Harness Bot' });
+      introEl.createEl('p', {
+        text: "Start a conversation, type '/' for sessions, or '@' to attach notes and folders from your Vault.",
+      });
+
+      // Previous Sessions quick switcher
+      const previousSessions = this.plugin.settings.sessions.filter(
+        (s) => s.id !== this.currentSession.id && s.messages.length > 0
+      );
+
+      if (previousSessions.length > 0) {
+        const prevBoxEl = emptyContainerEl.createEl('div', { cls: 'harness-prev-sessions-box' });
+        prevBoxEl.style.border = '1px solid var(--background-modifier-border)';
+        prevBoxEl.style.borderRadius = '8px';
+        prevBoxEl.style.padding = '12px';
+        prevBoxEl.style.backgroundColor = 'var(--background-secondary)';
+
+        prevBoxEl.createEl('h4', { text: 'Previous Sessions' });
+
+        const prevListEl = prevBoxEl.createEl('div');
+        prevListEl.style.display = 'flex';
+        prevListEl.style.flexDirection = 'column';
+        prevListEl.style.gap = '6px';
+
+        for (const prev of previousSessions.slice(0, 5)) {
+          const itemBtn = prevListEl.createEl('div', { cls: 'harness-session-card' });
+          itemBtn.style.padding = '8px 10px';
+          itemBtn.style.borderRadius = '6px';
+          itemBtn.style.cursor = 'pointer';
+          itemBtn.style.backgroundColor = 'var(--background-primary)';
+          itemBtn.style.border = '1px solid var(--background-modifier-border)';
+
+          const titleRow = itemBtn.createEl('div', { text: prev.title });
+          titleRow.style.fontWeight = 'bold';
+          titleRow.style.fontSize = '0.9em';
+
+          const dateStr = new Date(prev.updatedAt).toLocaleDateString();
+          itemBtn.createEl('div', {
+            text: `${dateStr} • ${prev.messages.length} messages`,
+            cls: 'setting-item-description',
+          });
+
+          itemBtn.addEventListener('click', () => {
+            this.currentSession = prev;
+            this.plugin.settings.currentSessionId = prev.id;
+            this.saveSessionState();
+            this.renderMessages();
+            this.refreshModelDropdown();
+          });
+        }
+      }
+
       return;
     }
 
-    for (const msg of this.conversationHistory) {
+    for (const msg of this.currentSession.messages) {
       if (msg.role === 'user') {
         const msgEl = this.messagesContainerEl.createEl('div', { cls: 'harness-message harness-message-user' });
         msgEl.createEl('div', { text: 'You', cls: 'harness-message-header' });

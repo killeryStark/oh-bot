@@ -90,12 +90,24 @@ export const DEFAULT_PROVIDERS: ProviderConfig[] = [
   },
 ];
 
+export interface ChatSession {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  messages: LLMMessage[];
+  providerId: string;
+  model: string;
+}
+
 export interface HarnessSettings {
   providers: ProviderConfig[];
   activeProviderId: string;
   activeModel: string;
   systemPrompt: string;
   safetyMode: SafetyMode;
+  sessions: ChatSession[];
+  currentSessionId?: string;
 }
 
 export const DEFAULT_SETTINGS: HarnessSettings = {
@@ -104,6 +116,8 @@ export const DEFAULT_SETTINGS: HarnessSettings = {
   activeModel: '',
   systemPrompt: 'You are an autonomous AI Agent inside Obsidian. You have tools to read, create, patch, search, and inspect notes in the vault. Use these tools step-by-step to fulfill the user request.',
   safetyMode: 'strict',
+  sessions: [],
+  currentSessionId: '',
 };
 
 export interface LLMMessage {
