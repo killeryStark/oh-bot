@@ -6,6 +6,7 @@ import { ToolRegistry } from '../tools/registry';
 import { MarkdownExporter } from '../utils/markdown-exporter';
 import { SessionManager } from '../utils/session-manager';
 import { MentionHelper } from '../utils/mention-helper';
+import { parseThoughts } from '../utils/thought-helper';
 import { ConfirmationModal } from './components/confirmation-modal';
 import { SessionsModal } from './components/sessions-modal';
 
@@ -276,14 +277,21 @@ export class HarnessChatView extends ItemView {
           this.currentSession.messages,
           (event) => {
             if (event.type === 'chunk' && event.content) {
-              textContentEl.setText(event.content);
+              const parsed = parseThoughts(event.content);
+              if (parsed.thoughts.length > 0) {
+                textContentEl.empty();
+                for (const thought of parsed.thoughts) {
+                  this.renderThinkingCard(textContentEl, thought, false);
+                }
+                if (parsed.finalAnswer) {
+                  textContentEl.createEl('div', { text: parsed.finalAnswer, cls: 'harness-answer-text' });
+                }
+              } else {
+                textContentEl.setText(event.content);
+              }
               this.messagesContainerEl.scrollTop = this.messagesContainerEl.scrollHeight;
             } else if (event.type === 'tool_call' && event.toolCall) {
-              const card = this.messagesContainerEl.createEl('div', { cls: 'harness-tool-card' });
-              card.createEl('div', {
-                text: `Tool requested: ${event.toolCall.function.name}`,
-                cls: 'harness-tool-title',
-              });
+              this.renderToolCallCard(this.messagesContainerEl, event.toolCall.function.name, event.toolCall.function.arguments);
             }
           },
           (toolCall: ToolCall) => {
@@ -359,6 +367,56 @@ export class HarnessChatView extends ItemView {
     });
 
     this.renderMessages();
+  }
+
+  private renderThinkingCard(parentEl: HTMLElement, thoughtText: string, open = false) {
+    const detailsEl = parentEl.createEl('details', { cls: 'harness-collapsible-card harness-thinking-card' });
+    if (open) detailsEl.open = true;
+
+    const summaryEl = detailsEl.createEl('summary', { cls: 'harness-collapsible-summary' });
+    const leftEl = summaryEl.createEl('div', { cls: 'harness-collapsible-summary-left' });
+    const iconSpan = leftEl.createEl('span');
+    setIcon(iconSpan, 'sparkles');
+    leftEl.createEl('span', { text: 'Reasoning / Рассуждения' });
+
+    summaryEl.createEl('span', { text: 'View', cls: 'harness-collapsible-badge' });
+
+    const bodyEl = detailsEl.createEl('div', { cls: 'harness-collapsible-body harness-thinking-text' });
+    bodyEl.setText(thoughtText);
+  }
+
+  private renderToolCallCard(parentEl: HTMLElement, toolName: string, argsStr: string, open = false) {
+    const detailsEl = parentEl.createEl('details', { cls: 'harness-collapsible-card harness-tool-card' });
+    if (open) detailsEl.open = true;
+
+    const summaryEl = detailsEl.createEl('summary', { cls: 'harness-collapsible-summary' });
+    const leftEl = summaryEl.createEl('div', { cls: 'harness-collapsible-summary-left' });
+    const iconSpan = leftEl.createEl('span');
+    setIcon(iconSpan, 'wrench');
+    leftEl.createEl('span', { text: `Tool: ${toolName}` });
+
+    summaryEl.createEl('span', { text: 'Args', cls: 'harness-collapsible-badge' });
+
+    const bodyEl = detailsEl.createEl('div', { cls: 'harness-collapsible-body' });
+    const pre = bodyEl.createEl('pre');
+    pre.createEl('code', { text: argsStr });
+  }
+
+  private renderToolOutputCard(parentEl: HTMLElement, toolName: string, outputText: string, open = false) {
+    const detailsEl = parentEl.createEl('details', { cls: 'harness-collapsible-card harness-tool-card' });
+    if (open) detailsEl.open = true;
+
+    const summaryEl = detailsEl.createEl('summary', { cls: 'harness-collapsible-summary' });
+    const leftEl = summaryEl.createEl('div', { cls: 'harness-collapsible-summary-left' });
+    const iconSpan = leftEl.createEl('span');
+    setIcon(iconSpan, 'file-text');
+    leftEl.createEl('span', { text: `Output: ${toolName}` });
+
+    summaryEl.createEl('span', { text: 'Result', cls: 'harness-collapsible-badge' });
+
+    const bodyEl = detailsEl.createEl('div', { cls: 'harness-collapsible-body' });
+    const pre = bodyEl.createEl('pre');
+    pre.createEl('code', { text: outputText });
   }
 
   private autoResizeTextarea() {
@@ -666,7 +724,6 @@ export class HarnessChatView extends ItemView {
     this.messagesContainerEl.empty();
 
     if (this.currentSession.messages.length === 0) {
-      // Previous Sessions quick switcher (if available)
       const previousSessions = this.plugin.settings.sessions.filter(
         (s) => s.id !== this.currentSession.id && s.messages.length > 0
       );
@@ -731,29 +788,34 @@ export class HarnessChatView extends ItemView {
           cls: 'harness-message-body',
         });
       } else if (msg.role === 'assistant') {
-        if (msg.content) {
-          const msgEl = this.messagesContainerEl.createEl('div', { cls: 'harness-message harness-message-assistant' });
-          msgEl.createEl('div', { text: 'Harness Bot', cls: 'harness-message-header' });
-          msgEl.createEl('div', {
-            text: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content || ''),
-            cls: 'harness-message-body',
-          });
-        }
-        if (msg.tool_calls) {
-          for (const tc of msg.tool_calls) {
-            const card = this.messagesContainerEl.createEl('div', { cls: 'harness-tool-card' });
-            card.createEl('div', { text: `Tool: ${tc.function.name}`, cls: 'harness-tool-title' });
-            const argsPre = card.createEl('pre');
-            argsPre.createEl('code', { text: tc.function.arguments });
+        const msgEl = this.messagesContainerEl.createEl('div', { cls: 'harness-message harness-message-assistant' });
+        msgEl.createEl('div', { text: 'Harness Bot', cls: 'harness-message-header' });
+        const bodyEl = msgEl.createEl('div', { cls: 'harness-message-body' });
+
+        const rawContent = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content || '');
+        const parsed = parseThoughts(rawContent);
+
+        // Render Reasoning / Thoughts collapsible card
+        if (parsed.thoughts.length > 0) {
+          for (const thought of parsed.thoughts) {
+            this.renderThinkingCard(bodyEl, thought, false);
           }
         }
+
+        // Render Tool Calls
+        if (msg.tool_calls) {
+          for (const tc of msg.tool_calls) {
+            this.renderToolCallCard(bodyEl, tc.function.name, tc.function.arguments, false);
+          }
+        }
+
+        // Render Final Answer
+        if (parsed.finalAnswer) {
+          bodyEl.createEl('div', { text: parsed.finalAnswer, cls: 'harness-answer-text' });
+        }
       } else if (msg.role === 'tool') {
-        const card = this.messagesContainerEl.createEl('div', { cls: 'harness-tool-card' });
-        card.createEl('div', { text: `Tool Output (${msg.name})`, cls: 'harness-tool-title' });
-        const outPre = card.createEl('pre');
-        outPre.createEl('code', {
-          text: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content || ''),
-        });
+        const rawContent = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content || '');
+        this.renderToolOutputCard(this.messagesContainerEl, msg.name || 'tool', rawContent, false);
       }
     }
 

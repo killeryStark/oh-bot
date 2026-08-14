@@ -41,8 +41,11 @@
   flex-direction: column;
   padding: 10px 12px;
   border-radius: 8px;
-  max-width: 90%;
+  max-width: 92%;
+  width: auto;
+  box-sizing: border-box;
   word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .harness-message-user {
@@ -56,34 +59,111 @@
   background-color: var(--background-secondary);
   color: var(--text-normal);
   border: 1px solid var(--background-modifier-border);
+  width: 100%;
+  max-width: 100%;
 }
 
 .harness-message-header {
   font-size: 0.75em;
   opacity: 0.7;
-  margin-bottom: 4px;
-}
-
-.harness-tool-card {
-  align-self: flex-start;
-  width: 95%;
-  background-color: var(--background-secondary-alt);
-  border: 1px dashed var(--interactive-accent);
-  border-radius: 6px;
-  padding: 8px;
-  font-size: 0.85em;
-}
-
-.harness-tool-title {
-  font-weight: bold;
+  margin-bottom: 6px;
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-.harness-tool-status {
-  font-size: 0.8em;
-  opacity: 0.8;
+.harness-message-body {
+  line-height: 1.5;
+  font-size: 0.92em;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+/* Collapsible Cards (Tools, Reasoning, Logs) */
+.harness-collapsible-card {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  border-radius: 6px;
+  margin: 6px 0;
+  background-color: var(--background-secondary-alt);
+  border: 1px solid var(--background-modifier-border);
+  overflow: hidden;
+}
+
+.harness-collapsible-card.harness-thinking-card {
+  border-left: 3px solid var(--interactive-accent);
+}
+
+.harness-collapsible-card.harness-tool-card {
+  border-left: 3px solid var(--text-accent);
+}
+
+.harness-collapsible-summary {
+  padding: 6px 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.82em;
+  font-weight: 500;
+  user-select: none;
+  background-color: var(--background-secondary-alt);
+  list-style: none;
+}
+
+.harness-collapsible-summary::-webkit-details-marker {
+  display: none;
+}
+
+.harness-collapsible-summary-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.harness-collapsible-badge {
+  font-size: 0.75em;
+  opacity: 0.7;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background-color: var(--background-primary);
+}
+
+.harness-collapsible-body {
+  padding: 8px 10px;
+  border-top: 1px solid var(--background-modifier-border);
+  font-size: 0.82em;
+  background-color: var(--background-primary);
+  max-width: 100%;
+  box-sizing: border-box;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.harness-collapsible-body pre {
+  margin: 0;
+  padding: 6px 8px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow-x: auto;
+  max-width: 100%;
+  box-sizing: border-box;
+  border-radius: 4px;
+  background-color: var(--background-secondary-alt);
+  font-family: var(--font-monospace);
+  font-size: 0.9em;
+}
+
+.harness-thinking-text {
+  font-style: italic;
+  opacity: 0.9;
+  line-height: 1.4;
+  white-space: pre-wrap;
 }
 
 /* Chat Input Area & Clean Layout */

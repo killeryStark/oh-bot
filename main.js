@@ -1827,6 +1827,33 @@ ${attachedBlocks.join("\n\n")}`;
   }
 };
 
+// src/utils/thought-helper.ts
+function parseThoughts(raw) {
+  if (!raw) {
+    return { thoughts: [], finalAnswer: "" };
+  }
+  const thoughts = [];
+  let clean = raw.replace(/<(?:thought|think)>([\s\S]*?)<\/(?:thought|think)>/gi, (_, thoughtContent) => {
+    const trimmed = thoughtContent.trim();
+    if (trimmed) {
+      thoughts.push(trimmed);
+    }
+    return "";
+  });
+  const openMatch = clean.match(/<(?:thought|think)>([\s\S]*)$/i);
+  if (openMatch) {
+    const trimmed = openMatch[1].trim();
+    if (trimmed) {
+      thoughts.push(trimmed);
+    }
+    clean = clean.slice(0, openMatch.index);
+  }
+  return {
+    thoughts,
+    finalAnswer: clean.trim()
+  };
+}
+
 // src/ui/components/confirmation-modal.ts
 var import_obsidian13 = require("obsidian");
 var ConfirmationModal = class extends import_obsidian13.Modal {
@@ -2142,14 +2169,21 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
           this.currentSession.messages,
           (event) => {
             if (event.type === "chunk" && event.content) {
-              textContentEl.setText(event.content);
+              const parsed = parseThoughts(event.content);
+              if (parsed.thoughts.length > 0) {
+                textContentEl.empty();
+                for (const thought of parsed.thoughts) {
+                  this.renderThinkingCard(textContentEl, thought, false);
+                }
+                if (parsed.finalAnswer) {
+                  textContentEl.createEl("div", { text: parsed.finalAnswer, cls: "harness-answer-text" });
+                }
+              } else {
+                textContentEl.setText(event.content);
+              }
               this.messagesContainerEl.scrollTop = this.messagesContainerEl.scrollHeight;
             } else if (event.type === "tool_call" && event.toolCall) {
-              const card = this.messagesContainerEl.createEl("div", { cls: "harness-tool-card" });
-              card.createEl("div", {
-                text: `Tool requested: ${event.toolCall.function.name}`,
-                cls: "harness-tool-title"
-              });
+              this.renderToolCallCard(this.messagesContainerEl, event.toolCall.function.name, event.toolCall.function.arguments);
             }
           },
           (toolCall) => {
@@ -2218,6 +2252,47 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
       }
     });
     this.renderMessages();
+  }
+  renderThinkingCard(parentEl, thoughtText, open = false) {
+    const detailsEl = parentEl.createEl("details", { cls: "harness-collapsible-card harness-thinking-card" });
+    if (open)
+      detailsEl.open = true;
+    const summaryEl = detailsEl.createEl("summary", { cls: "harness-collapsible-summary" });
+    const leftEl = summaryEl.createEl("div", { cls: "harness-collapsible-summary-left" });
+    const iconSpan = leftEl.createEl("span");
+    (0, import_obsidian15.setIcon)(iconSpan, "sparkles");
+    leftEl.createEl("span", { text: "Reasoning / \u0420\u0430\u0441\u0441\u0443\u0436\u0434\u0435\u043D\u0438\u044F" });
+    summaryEl.createEl("span", { text: "View", cls: "harness-collapsible-badge" });
+    const bodyEl = detailsEl.createEl("div", { cls: "harness-collapsible-body harness-thinking-text" });
+    bodyEl.setText(thoughtText);
+  }
+  renderToolCallCard(parentEl, toolName, argsStr, open = false) {
+    const detailsEl = parentEl.createEl("details", { cls: "harness-collapsible-card harness-tool-card" });
+    if (open)
+      detailsEl.open = true;
+    const summaryEl = detailsEl.createEl("summary", { cls: "harness-collapsible-summary" });
+    const leftEl = summaryEl.createEl("div", { cls: "harness-collapsible-summary-left" });
+    const iconSpan = leftEl.createEl("span");
+    (0, import_obsidian15.setIcon)(iconSpan, "wrench");
+    leftEl.createEl("span", { text: `Tool: ${toolName}` });
+    summaryEl.createEl("span", { text: "Args", cls: "harness-collapsible-badge" });
+    const bodyEl = detailsEl.createEl("div", { cls: "harness-collapsible-body" });
+    const pre = bodyEl.createEl("pre");
+    pre.createEl("code", { text: argsStr });
+  }
+  renderToolOutputCard(parentEl, toolName, outputText, open = false) {
+    const detailsEl = parentEl.createEl("details", { cls: "harness-collapsible-card harness-tool-card" });
+    if (open)
+      detailsEl.open = true;
+    const summaryEl = detailsEl.createEl("summary", { cls: "harness-collapsible-summary" });
+    const leftEl = summaryEl.createEl("div", { cls: "harness-collapsible-summary-left" });
+    const iconSpan = leftEl.createEl("span");
+    (0, import_obsidian15.setIcon)(iconSpan, "file-text");
+    leftEl.createEl("span", { text: `Output: ${toolName}` });
+    summaryEl.createEl("span", { text: "Result", cls: "harness-collapsible-badge" });
+    const bodyEl = detailsEl.createEl("div", { cls: "harness-collapsible-body" });
+    const pre = bodyEl.createEl("pre");
+    pre.createEl("code", { text: outputText });
   }
   autoResizeTextarea() {
     if (this.isInputExpanded)
@@ -2546,29 +2621,27 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
           cls: "harness-message-body"
         });
       } else if (msg.role === "assistant") {
-        if (msg.content) {
-          const msgEl = this.messagesContainerEl.createEl("div", { cls: "harness-message harness-message-assistant" });
-          msgEl.createEl("div", { text: "Harness Bot", cls: "harness-message-header" });
-          msgEl.createEl("div", {
-            text: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content || ""),
-            cls: "harness-message-body"
-          });
+        const msgEl = this.messagesContainerEl.createEl("div", { cls: "harness-message harness-message-assistant" });
+        msgEl.createEl("div", { text: "Harness Bot", cls: "harness-message-header" });
+        const bodyEl = msgEl.createEl("div", { cls: "harness-message-body" });
+        const rawContent = typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content || "");
+        const parsed = parseThoughts(rawContent);
+        if (parsed.thoughts.length > 0) {
+          for (const thought of parsed.thoughts) {
+            this.renderThinkingCard(bodyEl, thought, false);
+          }
         }
         if (msg.tool_calls) {
           for (const tc of msg.tool_calls) {
-            const card = this.messagesContainerEl.createEl("div", { cls: "harness-tool-card" });
-            card.createEl("div", { text: `Tool: ${tc.function.name}`, cls: "harness-tool-title" });
-            const argsPre = card.createEl("pre");
-            argsPre.createEl("code", { text: tc.function.arguments });
+            this.renderToolCallCard(bodyEl, tc.function.name, tc.function.arguments, false);
           }
         }
+        if (parsed.finalAnswer) {
+          bodyEl.createEl("div", { text: parsed.finalAnswer, cls: "harness-answer-text" });
+        }
       } else if (msg.role === "tool") {
-        const card = this.messagesContainerEl.createEl("div", { cls: "harness-tool-card" });
-        card.createEl("div", { text: `Tool Output (${msg.name})`, cls: "harness-tool-title" });
-        const outPre = card.createEl("pre");
-        outPre.createEl("code", {
-          text: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content || "")
-        });
+        const rawContent = typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content || "");
+        this.renderToolOutputCard(this.messagesContainerEl, msg.name || "tool", rawContent, false);
       }
     }
     this.messagesContainerEl.scrollTop = this.messagesContainerEl.scrollHeight;
