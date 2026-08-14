@@ -3,6 +3,7 @@ import type HarnessPlugin from '../main';
 import { McpServerConfig, McpCatalogItem } from '../mcp/types';
 import { McpToolsViewModal } from './components/mcp-tools-view-modal';
 import { McpServerEditModal } from './components/mcp-server-edit-modal';
+import { openExternalUrl } from '../utils/browser';
 
 export class McpModal extends Modal {
   private plugin: HarnessPlugin;
@@ -336,8 +337,18 @@ export class McpModal extends Modal {
           new McpServerEditModal(this.app, this.plugin.mcpManager, () => this.render(), serverConfig).open();
         });
 
-        // Quick Add with OAuth (if supported)
-        if (item.oauthDefaults) {
+        if (item.docUrl) {
+          const docBtn = actionsEl.createEl('button', {
+            text: '🔗 Get API Token in Browser',
+            cls: 'harness-btn-sm',
+          });
+          docBtn.addEventListener('click', () => {
+            openExternalUrl(item.docUrl!);
+          });
+        }
+
+        // Quick Add with OAuth (if supported and configured)
+        if (item.oauthDefaults && item.oauthDefaults.clientId) {
           const addOAuthBtn = actionsEl.createEl('button', {
             text: 'Connect with OAuth',
             cls: 'harness-btn-sm',

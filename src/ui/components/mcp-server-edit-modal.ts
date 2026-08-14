@@ -2,6 +2,7 @@ import { App, Modal, Notice, Setting } from 'obsidian';
 import { McpAuthType, McpServerConfig } from '../../mcp/types';
 import { McpManager } from '../../mcp/mcp-manager';
 import { SecretManager } from '../../utils/secrets';
+import { openExternalUrl } from '../../utils/browser';
 
 export class McpServerEditModal extends Modal {
   private mcpManager: McpManager;
@@ -98,6 +99,34 @@ export class McpServerEditModal extends Modal {
           .setValue(this.description)
           .onChange((v) => (this.description = v))
       );
+
+    // Todoist Helper
+    if (this.url.includes('todoist') || this.name.toLowerCase().includes('todoist')) {
+      const helperBox = contentEl.createEl('div', { cls: 'harness-mcp-helper-box' });
+      helperBox.style.padding = '10px 12px';
+      helperBox.style.margin = '10px 0 14px 0';
+      helperBox.style.borderRadius = '6px';
+      helperBox.style.backgroundColor = 'var(--background-secondary-alt)';
+      helperBox.style.border = '1px solid var(--interactive-accent)';
+
+      const title = helperBox.createEl('div');
+      title.createEl('strong', { text: '💡 Как подключить Todoist:' });
+
+      const desc = helperBox.createEl('p', {
+        text: '1. Нажмите кнопку ниже, чтобы открыть страницу разработчика Todoist в браузере.\n2. Скопируйте ваш персональный API-токен.\n3. Вставьте его в поле "API Token / Secret" ниже.',
+        cls: 'harness-subtext',
+      });
+      desc.style.margin = '4px 0 8px 0';
+      desc.style.whiteSpace = 'pre-line';
+
+      const openBtn = helperBox.createEl('button', {
+        text: '🔗 Открыть настройки токена Todoist',
+        cls: 'harness-btn-sm mod-cta',
+      });
+      openBtn.addEventListener('click', () => {
+        openExternalUrl('https://app.todoist.com/app/settings/integrations/developer');
+      });
+    }
 
     // Auth Type Dropdown
     new Setting(contentEl)

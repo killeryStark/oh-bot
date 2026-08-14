@@ -1,6 +1,7 @@
 import { App, Notice } from 'obsidian';
 import { HarnessSettings, ToolResult, ToolSchema } from '../types';
 import { SecretManager } from '../utils/secrets';
+import { openExternalUrl } from '../utils/browser';
 import { McpClient } from './client';
 import { McpOAuthHelper } from './oauth';
 import { McpCatalogItem, McpCatalogManifest, McpServerConfig } from './types';
@@ -13,13 +14,9 @@ const DEFAULT_CATALOG: McpCatalogItem[] = [
     description: 'Официальный облачный MCP сервер Todoist для управления задачами, проектами, секциями, комментариями и напоминаниями в реальном времени.',
     url: 'https://ai.todoist.net/mcp',
     authType: 'bearer',
-    authDescription: 'Поддерживает персональный API токен (Developer Token) или браузерный вход через OAuth.',
-    docUrl: 'https://developer.todoist.com/guides/#authorization',
+    authDescription: 'Требуется персональный API токен из настроек Todoist (Интеграции -> Для разработчиков -> API-токен).',
+    docUrl: 'https://app.todoist.com/app/settings/integrations/developer',
     tags: ['tasks', 'productivity', 'todoist', 'remote-sse'],
-    oauthDefaults: {
-      authorizationUrl: 'https://todoist.com/oauth/authorize',
-      tokenUrl: 'https://todoist.com/oauth/access_token',
-    },
   },
 ];
 
@@ -210,7 +207,7 @@ export class McpManager {
     }
 
     const authUrl = await McpOAuthHelper.startOAuthFlow(server);
-    window.open(authUrl, '_blank');
+    openExternalUrl(authUrl);
     new Notice(`Opening browser for ${server.name} authorization...`);
   }
 

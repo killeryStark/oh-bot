@@ -878,6 +878,35 @@ var McpToolsViewModal = class extends import_obsidian6.Modal {
 
 // src/ui/components/mcp-server-edit-modal.ts
 var import_obsidian7 = require("obsidian");
+
+// src/utils/browser.ts
+function openExternalUrl(url) {
+  if (!url)
+    return;
+  try {
+    const a = document.createElement("a");
+    a.href = url;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.className = "external-link";
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      if (a.parentNode) {
+        a.parentNode.removeChild(a);
+      }
+    }, 200);
+  } catch (err) {
+    try {
+      window.open(url, "_blank");
+    } catch (e) {
+      console.warn("Failed to open external url:", url, e);
+    }
+  }
+}
+
+// src/ui/components/mcp-server-edit-modal.ts
 var McpServerEditModal = class extends import_obsidian7.Modal {
   constructor(app, mcpManager, onSaved, serverToEdit) {
     super(app);
@@ -930,6 +959,29 @@ var McpServerEditModal = class extends import_obsidian7.Modal {
     new import_obsidian7.Setting(contentEl).setName("Description (Optional)").setDesc("Brief summary of tools provided by this server.").addText(
       (text) => text.setPlaceholder("e.g. Web search and article fetching").setValue(this.description).onChange((v) => this.description = v)
     );
+    if (this.url.includes("todoist") || this.name.toLowerCase().includes("todoist")) {
+      const helperBox = contentEl.createEl("div", { cls: "harness-mcp-helper-box" });
+      helperBox.style.padding = "10px 12px";
+      helperBox.style.margin = "10px 0 14px 0";
+      helperBox.style.borderRadius = "6px";
+      helperBox.style.backgroundColor = "var(--background-secondary-alt)";
+      helperBox.style.border = "1px solid var(--interactive-accent)";
+      const title = helperBox.createEl("div");
+      title.createEl("strong", { text: "\u{1F4A1} \u041A\u0430\u043A \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u044C Todoist:" });
+      const desc = helperBox.createEl("p", {
+        text: '1. \u041D\u0430\u0436\u043C\u0438\u0442\u0435 \u043A\u043D\u043E\u043F\u043A\u0443 \u043D\u0438\u0436\u0435, \u0447\u0442\u043E\u0431\u044B \u043E\u0442\u043A\u0440\u044B\u0442\u044C \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443 \u0440\u0430\u0437\u0440\u0430\u0431\u043E\u0442\u0447\u0438\u043A\u0430 Todoist \u0432 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0435.\n2. \u0421\u043A\u043E\u043F\u0438\u0440\u0443\u0439\u0442\u0435 \u0432\u0430\u0448 \u043F\u0435\u0440\u0441\u043E\u043D\u0430\u043B\u044C\u043D\u044B\u0439 API-\u0442\u043E\u043A\u0435\u043D.\n3. \u0412\u0441\u0442\u0430\u0432\u044C\u0442\u0435 \u0435\u0433\u043E \u0432 \u043F\u043E\u043B\u0435 "API Token / Secret" \u043D\u0438\u0436\u0435.',
+        cls: "harness-subtext"
+      });
+      desc.style.margin = "4px 0 8px 0";
+      desc.style.whiteSpace = "pre-line";
+      const openBtn = helperBox.createEl("button", {
+        text: "\u{1F517} \u041E\u0442\u043A\u0440\u044B\u0442\u044C \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438 \u0442\u043E\u043A\u0435\u043D\u0430 Todoist",
+        cls: "harness-btn-sm mod-cta"
+      });
+      openBtn.addEventListener("click", () => {
+        openExternalUrl("https://app.todoist.com/app/settings/integrations/developer");
+      });
+    }
     new import_obsidian7.Setting(contentEl).setName("Authentication Method").setDesc("Select how the client should authenticate with this MCP endpoint.").addDropdown(
       (dropdown) => dropdown.addOption("bearer", "Bearer Token (Authorization: Bearer ...)").addOption("custom_headers", "Custom Header (e.g. X-API-Key)").addOption("oauth2", "OAuth 2.1 (PKCE Web Redirect)").addOption("none", "No Authentication (Public Endpoint)").setValue(this.authType).onChange((v) => {
         this.authType = v;
@@ -1292,7 +1344,16 @@ var McpModal = class extends import_obsidian8.Modal {
           const serverConfig = await this.plugin.mcpManager.installFromCatalog(item);
           new McpServerEditModal(this.app, this.plugin.mcpManager, () => this.render(), serverConfig).open();
         });
-        if (item.oauthDefaults) {
+        if (item.docUrl) {
+          const docBtn = actionsEl.createEl("button", {
+            text: "\u{1F517} Get API Token in Browser",
+            cls: "harness-btn-sm"
+          });
+          docBtn.addEventListener("click", () => {
+            openExternalUrl(item.docUrl);
+          });
+        }
+        if (item.oauthDefaults && item.oauthDefaults.clientId) {
           const addOAuthBtn = actionsEl.createEl("button", {
             text: "Connect with OAuth",
             cls: "harness-btn-sm"
@@ -4808,6 +4869,9 @@ var McpOAuthHelper = class {
     if (!oauth || !oauth.authorizationUrl || !oauth.tokenUrl) {
       throw new Error(`Server "${server.name}" has incomplete OAuth configuration.`);
     }
+    if (!oauth.clientId) {
+      throw new Error(`OAuth login requires a registered Client ID. For ${server.name}, please use your Personal API Token (Bearer Auth) instead.`);
+    }
     const state = this.generateRandomString(32);
     const codeVerifier = this.generateRandomString(64);
     const codeChallenge = await this.generateCodeChallenge(codeVerifier);
@@ -4920,13 +4984,9 @@ var DEFAULT_CATALOG = [
     description: "\u041E\u0444\u0438\u0446\u0438\u0430\u043B\u044C\u043D\u044B\u0439 \u043E\u0431\u043B\u0430\u0447\u043D\u044B\u0439 MCP \u0441\u0435\u0440\u0432\u0435\u0440 Todoist \u0434\u043B\u044F \u0443\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u044F \u0437\u0430\u0434\u0430\u0447\u0430\u043C\u0438, \u043F\u0440\u043E\u0435\u043A\u0442\u0430\u043C\u0438, \u0441\u0435\u043A\u0446\u0438\u044F\u043C\u0438, \u043A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u044F\u043C\u0438 \u0438 \u043D\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u044F\u043C\u0438 \u0432 \u0440\u0435\u0430\u043B\u044C\u043D\u043E\u043C \u0432\u0440\u0435\u043C\u0435\u043D\u0438.",
     url: "https://ai.todoist.net/mcp",
     authType: "bearer",
-    authDescription: "\u041F\u043E\u0434\u0434\u0435\u0440\u0436\u0438\u0432\u0430\u0435\u0442 \u043F\u0435\u0440\u0441\u043E\u043D\u0430\u043B\u044C\u043D\u044B\u0439 API \u0442\u043E\u043A\u0435\u043D (Developer Token) \u0438\u043B\u0438 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u043D\u044B\u0439 \u0432\u0445\u043E\u0434 \u0447\u0435\u0440\u0435\u0437 OAuth.",
-    docUrl: "https://developer.todoist.com/guides/#authorization",
-    tags: ["tasks", "productivity", "todoist", "remote-sse"],
-    oauthDefaults: {
-      authorizationUrl: "https://todoist.com/oauth/authorize",
-      tokenUrl: "https://todoist.com/oauth/access_token"
-    }
+    authDescription: "\u0422\u0440\u0435\u0431\u0443\u0435\u0442\u0441\u044F \u043F\u0435\u0440\u0441\u043E\u043D\u0430\u043B\u044C\u043D\u044B\u0439 API \u0442\u043E\u043A\u0435\u043D \u0438\u0437 \u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043A Todoist (\u0418\u043D\u0442\u0435\u0433\u0440\u0430\u0446\u0438\u0438 -> \u0414\u043B\u044F \u0440\u0430\u0437\u0440\u0430\u0431\u043E\u0442\u0447\u0438\u043A\u043E\u0432 -> API-\u0442\u043E\u043A\u0435\u043D).",
+    docUrl: "https://app.todoist.com/app/settings/integrations/developer",
+    tags: ["tasks", "productivity", "todoist", "remote-sse"]
   }
 ];
 var McpManager = class {
@@ -5089,7 +5149,7 @@ var McpManager = class {
       throw new Error(`Server "${serverId}" not found.`);
     }
     const authUrl = await McpOAuthHelper.startOAuthFlow(server);
-    window.open(authUrl, "_blank");
+    openExternalUrl(authUrl);
     new import_obsidian26.Notice(`Opening browser for ${server.name} authorization...`);
   }
   /**

@@ -56,6 +56,10 @@ export class McpOAuthHelper {
       throw new Error(`Server "${server.name}" has incomplete OAuth configuration.`);
     }
 
+    if (!oauth.clientId) {
+      throw new Error(`OAuth login requires a registered Client ID. For ${server.name}, please use your Personal API Token (Bearer Auth) instead.`);
+    }
+
     const state = this.generateRandomString(32);
     const codeVerifier = this.generateRandomString(64);
     const codeChallenge = await this.generateCodeChallenge(codeVerifier);
