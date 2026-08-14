@@ -14,7 +14,8 @@ export class AnthropicProvider extends LLMProvider {
     systemPrompt: string,
     messages: LLMMessage[],
     tools: ToolSchema[],
-    onChunk?: (chunk: string) => void
+    onChunk?: (chunk: string) => void,
+    signal?: AbortSignal
   ): Promise<ProviderResponse> {
     const endpoint = (baseUrl || 'https://api.anthropic.com/v1').replace(/\/$/, '') + '/messages';
     const sortedTools = sortToolSchemasDeterministically(tools);
@@ -60,6 +61,7 @@ export class AnthropicProvider extends LLMProvider {
           'anthropic-beta': 'prompt-caching-2024-07-31',
         },
         body: JSON.stringify(payload),
+        signal,
       });
 
       if (!response.ok) {
@@ -77,6 +79,11 @@ export class AnthropicProvider extends LLMProvider {
 
       if (reader) {
         while (true) {
+          if (signal?.aborted) {
+            reader.cancel();
+            break;
+          }
+
           const { done, value } = await reader.read();
           if (done) break;
 
@@ -129,7 +136,11 @@ export class AnthropicProvider extends LLMProvider {
         content: fullContent,
         toolCalls: toolCallList.length > 0 ? toolCallList : undefined,
       };
-    } catch (err) {
+    } catch (err: any) {
+      if (signal?.aborted || err.name === 'AbortError') {
+        throw new Error('Generation stopped by user.');
+      }
+
       const reqRes = await requestUrl({
         url: endpoint,
         method: 'POST',

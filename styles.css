@@ -7,6 +7,7 @@
   padding: 8px;
   box-sizing: border-box;
   position: relative;
+  overflow: hidden;
 }
 
 .harness-chat-header {
@@ -87,49 +88,76 @@
 .harness-chat-input-area {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   padding-top: 8px;
   border-top: 1px solid var(--background-modifier-border);
   position: relative;
+  background-color: var(--background-primary);
 }
 
 .harness-chat-textarea {
   width: 100%;
   resize: vertical;
-  min-height: 52px;
+  min-height: 54px;
   max-height: 160px;
   border-radius: 6px;
-  padding: 8px;
+  padding: 8px 10px;
   box-sizing: border-box;
+  font-size: 0.9em;
+}
+
+.harness-chat-bottom-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.harness-model-select {
+  max-width: 150px;
+  font-size: 0.8em;
+  height: 28px;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .harness-suggest-popup {
   position: absolute;
-  bottom: 95px;
-  left: 8px;
-  right: 8px;
+  bottom: calc(100% + 4px);
+  left: 0;
+  right: 0;
   background-color: var(--background-secondary);
   border: 1px solid var(--background-modifier-border);
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  max-height: 200px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  max-height: 220px;
   overflow-y: auto;
-  z-index: 100;
-  padding: 4px;
+  z-index: 1000;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .harness-suggest-item {
   padding: 8px 10px;
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 0.9em;
+  gap: 8px;
+  font-size: 0.85em;
+  color: var(--text-normal);
 }
 
+.harness-suggest-item.is-selected,
 .harness-suggest-item:hover {
   background-color: var(--background-modifier-hover);
+}
+
+.harness-suggest-item strong {
+  color: var(--interactive-accent);
 }
 
 .harness-modal-content {

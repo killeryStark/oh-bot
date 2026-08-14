@@ -13,7 +13,8 @@ export class OllamaProvider extends LLMProvider {
     systemPrompt: string,
     messages: LLMMessage[],
     tools: ToolSchema[],
-    onChunk?: (chunk: string) => void
+    onChunk?: (chunk: string) => void,
+    signal?: AbortSignal
   ): Promise<ProviderResponse> {
     const endpoint = (baseUrl || 'http://localhost:11434/v1').replace(/\/$/, '') + '/chat/completions';
     const sortedTools = sortToolSchemasDeterministically(tools);
@@ -49,6 +50,10 @@ export class OllamaProvider extends LLMProvider {
 
     if (apiKey) {
       headers['Authorization'] = `Bearer ${apiKey}`;
+    }
+
+    if (signal?.aborted) {
+      throw new Error('Generation stopped by user.');
     }
 
     const reqRes = await requestUrl({

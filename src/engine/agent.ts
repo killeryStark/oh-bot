@@ -59,14 +59,15 @@ export class AgentHarness {
   }
 
   /**
-   * Runs the multi-step agent turn loop.
+   * Runs the multi-step agent turn loop with AbortSignal support.
    */
   async runTurn(
     history: LLMMessage[],
     onEvent: (event: AgentStepEvent) => void,
     onConfirm?: ConfirmationCallback,
     overrideProviderId?: string,
-    overrideModel?: string
+    overrideModel?: string,
+    signal?: AbortSignal
   ): Promise<LLMMessage[]> {
     const { provider, config, apiKey } = this.getActiveProviderConfig(overrideProviderId);
     const model = overrideModel || this.settings.activeModel || config.models[0] || 'anthropic/claude-3.7-sonnet';
@@ -78,6 +79,10 @@ export class AgentHarness {
     let keepRunning = true;
 
     while (keepRunning && step < maxSteps) {
+      if (signal?.aborted) {
+        throw new Error('Generation stopped by user.');
+      }
+
       step++;
 
       let streamContent = '';
@@ -89,14 +94,20 @@ export class AgentHarness {
         messages,
         tools,
         (chunk) => {
+          if (signal?.aborted) return;
           streamContent += chunk;
           onEvent({
             type: 'chunk',
             step,
             content: streamContent,
           });
-        }
+        },
+        signal
       );
+
+      if (signal?.aborted) {
+        throw new Error('Generation stopped by user.');
+      }
 
       // Add assistant response to conversation history
       const assistantMessage: LLMMessage = {
@@ -109,6 +120,8 @@ export class AgentHarness {
       // If model requested tool calls
       if (response.toolCalls && response.toolCalls.length > 0) {
         for (const toolCall of response.toolCalls) {
+          if (signal?.aborted) break;
+
           onEvent({
             type: 'tool_call',
             step,

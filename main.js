@@ -718,7 +718,7 @@ var OpenRouterProvider = class extends LLMProvider {
     super(...arguments);
     this.name = "openrouter";
   }
-  async chatCompletion(apiKey, baseUrl, model, systemPrompt, messages, tools, onChunk) {
+  async chatCompletion(apiKey, baseUrl, model, systemPrompt, messages, tools, onChunk, signal) {
     const endpoint = (baseUrl || "https://openrouter.ai/api/v1").replace(/\/$/, "") + "/chat/completions";
     const sortedTools = sortToolSchemasDeterministically(tools);
     const networkMessages = prepareNetworkPayloadMessages(messages);
@@ -748,10 +748,11 @@ var OpenRouterProvider = class extends LLMProvider {
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${apiKey}`,
-          "HTTP-Referer": "https://github.com/killery/obsidian-harness-bot",
-          "X-Title": "Obsidian Agent Harness"
+          "HTTP-Referer": "https://github.com/killeryStark/oh-bot",
+          "X-Title": "Obsidian Harness Bot"
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        signal
       });
       if (!response.ok) {
         const errorText = await response.text();
@@ -764,6 +765,10 @@ var OpenRouterProvider = class extends LLMProvider {
       const toolCallMap = {};
       if (reader) {
         while (true) {
+          if (signal?.aborted) {
+            reader.cancel();
+            break;
+          }
           const { done, value } = await reader.read();
           if (done)
             break;
@@ -812,6 +817,9 @@ var OpenRouterProvider = class extends LLMProvider {
         toolCalls: finalToolCalls.length > 0 ? finalToolCalls : void 0
       };
     } catch (err) {
+      if (signal?.aborted || err.name === "AbortError") {
+        throw new Error("Generation stopped by user.");
+      }
       const reqRes = await (0, import_obsidian5.requestUrl)({
         url: endpoint,
         method: "POST",
@@ -838,7 +846,7 @@ var OpenAIProvider = class extends LLMProvider {
     super(...arguments);
     this.name = "openai";
   }
-  async chatCompletion(apiKey, baseUrl, model, systemPrompt, messages, tools, onChunk) {
+  async chatCompletion(apiKey, baseUrl, model, systemPrompt, messages, tools, onChunk, signal) {
     const endpoint = (baseUrl || "https://api.openai.com/v1").replace(/\/$/, "") + "/chat/completions";
     const sortedTools = sortToolSchemasDeterministically(tools);
     const networkMessages = prepareNetworkPayloadMessages(messages);
@@ -869,7 +877,8 @@ var OpenAIProvider = class extends LLMProvider {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${apiKey}`
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        signal
       });
       if (!response.ok) {
         const errorText = await response.text();
@@ -882,6 +891,10 @@ var OpenAIProvider = class extends LLMProvider {
       const toolCallMap = {};
       if (reader) {
         while (true) {
+          if (signal?.aborted) {
+            reader.cancel();
+            break;
+          }
           const { done, value } = await reader.read();
           if (done)
             break;
@@ -930,6 +943,9 @@ var OpenAIProvider = class extends LLMProvider {
         toolCalls: finalToolCalls.length > 0 ? finalToolCalls : void 0
       };
     } catch (err) {
+      if (signal?.aborted || err.name === "AbortError") {
+        throw new Error("Generation stopped by user.");
+      }
       const reqRes = await (0, import_obsidian6.requestUrl)({
         url: endpoint,
         method: "POST",
@@ -956,7 +972,7 @@ var AnthropicProvider = class extends LLMProvider {
     super(...arguments);
     this.name = "anthropic";
   }
-  async chatCompletion(apiKey, baseUrl, model, systemPrompt, messages, tools, onChunk) {
+  async chatCompletion(apiKey, baseUrl, model, systemPrompt, messages, tools, onChunk, signal) {
     const endpoint = (baseUrl || "https://api.anthropic.com/v1").replace(/\/$/, "") + "/messages";
     const sortedTools = sortToolSchemasDeterministically(tools);
     const networkMessages = prepareNetworkPayloadMessages(messages);
@@ -994,7 +1010,8 @@ var AnthropicProvider = class extends LLMProvider {
           "anthropic-version": "2023-06-01",
           "anthropic-beta": "prompt-caching-2024-07-31"
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        signal
       });
       if (!response.ok) {
         const errorText = await response.text();
@@ -1008,6 +1025,10 @@ var AnthropicProvider = class extends LLMProvider {
       let currentToolCall = null;
       if (reader) {
         while (true) {
+          if (signal?.aborted) {
+            reader.cancel();
+            break;
+          }
           const { done, value } = await reader.read();
           if (done)
             break;
@@ -1058,6 +1079,9 @@ var AnthropicProvider = class extends LLMProvider {
         toolCalls: toolCallList.length > 0 ? toolCallList : void 0
       };
     } catch (err) {
+      if (signal?.aborted || err.name === "AbortError") {
+        throw new Error("Generation stopped by user.");
+      }
       const reqRes = await (0, import_obsidian7.requestUrl)({
         url: endpoint,
         method: "POST",
@@ -1100,7 +1124,7 @@ var OllamaProvider = class extends LLMProvider {
     super(...arguments);
     this.name = "ollama";
   }
-  async chatCompletion(apiKey, baseUrl, model, systemPrompt, messages, tools, onChunk) {
+  async chatCompletion(apiKey, baseUrl, model, systemPrompt, messages, tools, onChunk, signal) {
     const endpoint = (baseUrl || "http://localhost:11434/v1").replace(/\/$/, "") + "/chat/completions";
     const sortedTools = sortToolSchemasDeterministically(tools);
     const networkMessages = prepareNetworkPayloadMessages(messages);
@@ -1129,6 +1153,9 @@ var OllamaProvider = class extends LLMProvider {
     };
     if (apiKey) {
       headers["Authorization"] = `Bearer ${apiKey}`;
+    }
+    if (signal?.aborted) {
+      throw new Error("Generation stopped by user.");
     }
     const reqRes = await (0, import_obsidian8.requestUrl)({
       url: endpoint,
@@ -1191,9 +1218,9 @@ var AgentHarness = class {
     return { provider, config, apiKey };
   }
   /**
-   * Runs the multi-step agent turn loop.
+   * Runs the multi-step agent turn loop with AbortSignal support.
    */
-  async runTurn(history, onEvent, onConfirm, overrideProviderId, overrideModel) {
+  async runTurn(history, onEvent, onConfirm, overrideProviderId, overrideModel, signal) {
     const { provider, config, apiKey } = this.getActiveProviderConfig(overrideProviderId);
     const model = overrideModel || this.settings.activeModel || config.models[0] || "anthropic/claude-3.7-sonnet";
     const messages = [...history];
@@ -1202,6 +1229,9 @@ var AgentHarness = class {
     let step = 0;
     let keepRunning = true;
     while (keepRunning && step < maxSteps) {
+      if (signal?.aborted) {
+        throw new Error("Generation stopped by user.");
+      }
       step++;
       let streamContent = "";
       const response = await provider.chatCompletion(
@@ -1212,14 +1242,20 @@ var AgentHarness = class {
         messages,
         tools,
         (chunk) => {
+          if (signal?.aborted)
+            return;
           streamContent += chunk;
           onEvent({
             type: "chunk",
             step,
             content: streamContent
           });
-        }
+        },
+        signal
       );
+      if (signal?.aborted) {
+        throw new Error("Generation stopped by user.");
+      }
       const assistantMessage = {
         role: "assistant",
         content: response.content || "",
@@ -1228,6 +1264,8 @@ var AgentHarness = class {
       messages.push(assistantMessage);
       if (response.toolCalls && response.toolCalls.length > 0) {
         for (const toolCall of response.toolCalls) {
+          if (signal?.aborted)
+            break;
           onEvent({
             type: "tool_call",
             step,
@@ -1917,7 +1955,9 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.activeSuggestType = "none";
-    this.suggestQuery = "";
+    this.selectedSuggestIndex = 0;
+    this.currentSuggestItems = [];
+    this.currentAbortController = null;
     this.plugin = plugin;
     this.toolRegistry = new ToolRegistry();
     this.agentHarness = new AgentHarness(this.app, this.plugin.settings, this.toolRegistry);
@@ -2001,24 +2041,19 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
       this.renderMessages();
     });
     this.messagesContainerEl = container.createEl("div", { cls: "harness-chat-messages" });
-    this.suggestPopupEl = container.createEl("div", { cls: "harness-suggest-popup" });
-    this.suggestPopupEl.style.display = "none";
     const inputAreaEl = container.createEl("div", { cls: "harness-chat-input-area" });
+    this.suggestPopupEl = inputAreaEl.createEl("div", { cls: "harness-suggest-popup" });
+    this.suggestPopupEl.style.display = "none";
     this.inputTextAreaEl = inputAreaEl.createEl("textarea", {
       cls: "harness-chat-textarea",
-      placeholder: "Type a message, '/' for sessions, or '@' to attach a file..."
+      placeholder: "Type a message, '/' for commands, '@' to attach notes..."
     });
     const bottomRowEl = inputAreaEl.createEl("div", { cls: "harness-chat-bottom-row" });
-    bottomRowEl.style.display = "flex";
-    bottomRowEl.style.justifyContent = "space-between";
-    bottomRowEl.style.alignItems = "center";
-    bottomRowEl.style.gap = "8px";
     const modelContainerEl = bottomRowEl.createEl("div");
     modelContainerEl.style.display = "flex";
     modelContainerEl.style.alignItems = "center";
     modelContainerEl.style.gap = "6px";
-    this.modelSelectEl = modelContainerEl.createEl("select");
-    this.modelSelectEl.style.fontSize = "0.85em";
+    this.modelSelectEl = modelContainerEl.createEl("select", { cls: "harness-model-select" });
     this.refreshModelDropdown();
     this.modelSelectEl.addEventListener("change", async () => {
       this.currentSession.model = this.modelSelectEl.value;
@@ -2026,7 +2061,14 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
       await this.saveSessionState();
     });
     this.sendButtonEl = bottomRowEl.createEl("button", { text: "Send", cls: "mod-cta" });
-    const handleSend = async () => {
+    const handleSendOrStop = async () => {
+      if (this.currentAbortController) {
+        this.currentAbortController.abort();
+        this.currentAbortController = null;
+        this.setSendButtonState(false);
+        new import_obsidian15.Notice("Generation stopped.");
+        return;
+      }
       const text = this.inputTextAreaEl.value.trim();
       if (!text)
         return;
@@ -2034,6 +2076,23 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
         this.inputTextAreaEl.value = "";
         this.hideSuggest();
         this.openSessionsModal();
+        return;
+      } else if (text === "/new") {
+        this.inputTextAreaEl.value = "";
+        this.hideSuggest();
+        this.createNewSession();
+        return;
+      } else if (text === "/clear") {
+        this.inputTextAreaEl.value = "";
+        this.hideSuggest();
+        this.currentSession.messages = [];
+        await this.saveSessionState();
+        this.renderMessages();
+        return;
+      } else if (text === "/export") {
+        this.inputTextAreaEl.value = "";
+        this.hideSuggest();
+        exportBtn.click();
         return;
       }
       const activeProv = this.plugin.settings.providers.find(
@@ -2045,7 +2104,8 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
       }
       this.inputTextAreaEl.value = "";
       this.hideSuggest();
-      this.sendButtonEl.disabled = true;
+      this.currentAbortController = new AbortController();
+      this.setSendButtonState(true);
       if (this.currentSession.messages.length === 0) {
         this.currentSession.title = SessionManager.generateTitle(text);
       }
@@ -2084,103 +2144,208 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
             });
           },
           this.plugin.settings.activeProviderId,
-          this.currentSession.model || this.plugin.settings.activeModel
+          this.currentSession.model || this.plugin.settings.activeModel,
+          this.currentAbortController.signal
         );
         this.currentSession.messages = updatedHistory;
         this.currentSession.updatedAt = Date.now();
         await this.saveSessionState();
       } catch (err) {
-        new import_obsidian15.Notice(`Agent error: ${err.message}`);
-        textContentEl.setText(`Error: ${err.message}`);
+        if (err.message && err.message.includes("stopped")) {
+          textContentEl.setText(textContentEl.innerText + " [Stopped]");
+        } else {
+          new import_obsidian15.Notice(`Agent error: ${err.message}`);
+          textContentEl.setText(`Error: ${err.message}`);
+        }
       } finally {
-        this.sendButtonEl.disabled = false;
+        this.currentAbortController = null;
+        this.setSendButtonState(false);
         this.renderMessages();
       }
     };
-    this.sendButtonEl.addEventListener("click", handleSend);
+    this.sendButtonEl.addEventListener("click", handleSendOrStop);
     this.inputTextAreaEl.addEventListener("input", () => {
       this.handleInputSuggest();
     });
     this.inputTextAreaEl.addEventListener("keydown", (e) => {
-      if (this.activeSuggestType !== "none" && (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Enter" || e.key === "Escape")) {
-        if (e.key === "Escape") {
+      if (this.activeSuggestType !== "none") {
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          this.selectedSuggestIndex = (this.selectedSuggestIndex + 1) % Math.max(1, this.currentSuggestItems.length);
+          this.highlightSuggestItem();
+          return;
+        } else if (e.key === "ArrowUp") {
+          e.preventDefault();
+          this.selectedSuggestIndex = (this.selectedSuggestIndex - 1 + this.currentSuggestItems.length) % Math.max(1, this.currentSuggestItems.length);
+          this.highlightSuggestItem();
+          return;
+        } else if (e.key === "Enter" || e.key === "Tab") {
+          if (this.currentSuggestItems[this.selectedSuggestIndex]) {
+            e.preventDefault();
+            this.currentSuggestItems[this.selectedSuggestIndex].onSelect();
+            return;
+          }
+        } else if (e.key === "Escape") {
           this.hideSuggest();
           return;
         }
       }
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
-        handleSend();
+        handleSendOrStop();
       }
     });
     this.renderMessages();
+  }
+  setSendButtonState(isGenerating) {
+    if (!this.sendButtonEl)
+      return;
+    if (isGenerating) {
+      this.sendButtonEl.setText("Stop");
+      this.sendButtonEl.addClass("mod-warning");
+      this.sendButtonEl.removeClass("mod-cta");
+    } else {
+      this.sendButtonEl.setText("Send");
+      this.sendButtonEl.addClass("mod-cta");
+      this.sendButtonEl.removeClass("mod-warning");
+    }
   }
   handleInputSuggest() {
     const text = this.inputTextAreaEl.value;
     const cursorPos = this.inputTextAreaEl.selectionStart || text.length;
     const beforeCursor = text.slice(0, cursorPos);
-    if (beforeCursor.startsWith("/") && !beforeCursor.includes(" ")) {
+    const slashMatch = beforeCursor.match(/\/([a-zA-Z0-9_-]*)$/);
+    if (slashMatch) {
       this.activeSuggestType = "slash";
-      this.suggestQuery = beforeCursor.slice(1);
-      this.renderSlashSuggest();
+      const query = slashMatch[1].toLowerCase();
+      this.renderSlashSuggest(query, slashMatch.index || 0);
       return;
     }
-    const lastAtIndex = beforeCursor.lastIndexOf("@");
-    if (lastAtIndex !== -1 && (lastAtIndex === 0 || /\s/.test(beforeCursor[lastAtIndex - 1]))) {
-      const mentionText = beforeCursor.slice(lastAtIndex + 1);
-      if (!/\s/.test(mentionText)) {
-        this.activeSuggestType = "mention";
-        this.suggestQuery = mentionText;
-        this.renderMentionSuggest(lastAtIndex);
-        return;
-      }
+    const atMatch = beforeCursor.match(/@([a-zA-Z0-9_\-\.\/]*)$/);
+    if (atMatch) {
+      this.activeSuggestType = "mention";
+      const query = atMatch[1];
+      this.renderMentionSuggest(query, atMatch.index || 0);
+      return;
     }
     this.hideSuggest();
   }
-  renderSlashSuggest() {
+  renderSlashSuggest(query, matchIndex) {
     if (!this.suggestPopupEl)
       return;
     this.suggestPopupEl.empty();
-    this.suggestPopupEl.style.display = "block";
-    const itemEl = this.suggestPopupEl.createEl("div", { cls: "harness-suggest-item" });
-    itemEl.createEl("strong", { text: "/sessions" });
-    itemEl.createEl("span", { text: " - View and switch saved chat sessions" });
-    itemEl.addEventListener("click", () => {
-      this.inputTextAreaEl.value = "";
+    this.currentSuggestItems = [];
+    this.selectedSuggestIndex = 0;
+    const commands = [
+      {
+        cmd: "/sessions",
+        desc: "View & switch saved chat sessions",
+        action: () => {
+          this.inputTextAreaEl.value = "";
+          this.hideSuggest();
+          this.openSessionsModal();
+        }
+      },
+      {
+        cmd: "/new",
+        desc: "Start a new conversation session",
+        action: () => {
+          this.inputTextAreaEl.value = "";
+          this.hideSuggest();
+          this.createNewSession();
+        }
+      },
+      {
+        cmd: "/clear",
+        desc: "Clear messages in current session",
+        action: () => {
+          this.inputTextAreaEl.value = "";
+          this.hideSuggest();
+          this.currentSession.messages = [];
+          this.saveSessionState();
+          this.renderMessages();
+        }
+      },
+      {
+        cmd: "/export",
+        desc: "Export chat to Markdown note",
+        action: () => {
+          this.inputTextAreaEl.value = "";
+          this.hideSuggest();
+          this.exporter.exportChatToMarkdown(
+            this.currentSession.messages,
+            this.currentSession.model || this.plugin.settings.activeModel || "default"
+          );
+        }
+      }
+    ];
+    const filtered = commands.filter((c) => c.cmd.toLowerCase().includes(query) || c.desc.toLowerCase().includes(query));
+    if (filtered.length === 0) {
       this.hideSuggest();
-      this.openSessionsModal();
-    });
-  }
-  renderMentionSuggest(lastAtIndex) {
-    if (!this.suggestPopupEl)
-      return;
-    this.suggestPopupEl.empty();
-    this.suggestPopupEl.style.display = "block";
-    const items = MentionHelper.getVaultItems(this.app, this.suggestQuery);
-    if (items.length === 0) {
-      const noItemEl = this.suggestPopupEl.createEl("div", { cls: "harness-suggest-item" });
-      noItemEl.setText("No matching files or folders found");
       return;
     }
-    for (const item of items) {
+    this.suggestPopupEl.style.display = "flex";
+    filtered.forEach((item, index) => {
+      const onSelect = () => item.action();
+      this.currentSuggestItems.push({ label: item.cmd, onSelect });
       const itemEl = this.suggestPopupEl.createEl("div", { cls: "harness-suggest-item" });
-      const iconSpan = itemEl.createEl("span", { cls: "harness-suggest-icon" });
-      (0, import_obsidian15.setIcon)(iconSpan, item.isFolder ? "folder" : "file-text");
-      itemEl.createEl("span", { text: ` ${item.path}` });
-      itemEl.addEventListener("click", () => {
+      if (index === 0)
+        itemEl.addClass("is-selected");
+      itemEl.createEl("strong", { text: item.cmd });
+      itemEl.createEl("span", { text: ` - ${item.desc}` });
+      itemEl.addEventListener("click", onSelect);
+    });
+  }
+  renderMentionSuggest(query, matchIndex) {
+    if (!this.suggestPopupEl)
+      return;
+    this.suggestPopupEl.empty();
+    this.currentSuggestItems = [];
+    this.selectedSuggestIndex = 0;
+    const items = MentionHelper.getVaultItems(this.app, query);
+    if (items.length === 0) {
+      this.hideSuggest();
+      return;
+    }
+    this.suggestPopupEl.style.display = "flex";
+    items.forEach((item, index) => {
+      const onSelect = () => {
         const text = this.inputTextAreaEl.value;
-        const before = text.slice(0, lastAtIndex);
-        const after = text.slice(lastAtIndex + 1 + this.suggestQuery.length);
+        const before = text.slice(0, matchIndex);
+        const after = text.slice(matchIndex + 1 + query.length);
         this.inputTextAreaEl.value = `${before}@${item.path} ${after}`;
         this.hideSuggest();
         this.inputTextAreaEl.focus();
-      });
-    }
+      };
+      this.currentSuggestItems.push({ label: item.path, onSelect });
+      const itemEl = this.suggestPopupEl.createEl("div", { cls: "harness-suggest-item" });
+      if (index === 0)
+        itemEl.addClass("is-selected");
+      const iconSpan = itemEl.createEl("span", { cls: "harness-suggest-icon" });
+      (0, import_obsidian15.setIcon)(iconSpan, item.isFolder ? "folder" : "file-text");
+      itemEl.createEl("span", { text: ` ${item.path}` });
+      itemEl.addEventListener("click", onSelect);
+    });
+  }
+  highlightSuggestItem() {
+    if (!this.suggestPopupEl)
+      return;
+    const itemEls = this.suggestPopupEl.querySelectorAll(".harness-suggest-item");
+    itemEls.forEach((el, idx) => {
+      if (idx === this.selectedSuggestIndex) {
+        el.addClass("is-selected");
+        el.scrollIntoView({ block: "nearest" });
+      } else {
+        el.removeClass("is-selected");
+      }
+    });
   }
   hideSuggest() {
     this.activeSuggestType = "none";
+    this.currentSuggestItems = [];
     if (this.suggestPopupEl) {
       this.suggestPopupEl.style.display = "none";
+      this.suggestPopupEl.empty();
     }
   }
   createNewSession() {
@@ -2225,6 +2390,13 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
     ).open();
   }
   async saveSessionState() {
+    const idx = this.plugin.settings.sessions.findIndex((s) => s.id === this.currentSession.id);
+    if (idx !== -1) {
+      this.plugin.settings.sessions[idx] = this.currentSession;
+    } else {
+      this.plugin.settings.sessions.unshift(this.currentSession);
+    }
+    this.plugin.settings.currentSessionId = this.currentSession.id;
     await this.plugin.saveSettings();
   }
   refreshModelDropdown() {
@@ -2239,14 +2411,18 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
       this.modelSelectEl.createEl("option", { value: "", text: "(No models)" });
       return;
     }
-    const currentModel = this.currentSession.model || this.plugin.settings.activeModel || models[0];
+    const selectedModel = this.currentSession.model || this.plugin.settings.activeModel || models[0];
     for (const m of models) {
       const opt = this.modelSelectEl.createEl("option", { value: m, text: m });
-      if (m === currentModel)
+      if (m === selectedModel)
         opt.selected = true;
     }
-    if (!models.includes(currentModel)) {
+    if (!models.includes(selectedModel)) {
       this.currentSession.model = models[0];
+      this.plugin.settings.activeModel = models[0];
+    } else {
+      this.currentSession.model = selectedModel;
+      this.plugin.settings.activeModel = selectedModel;
     }
   }
   renderMessages() {
@@ -2257,22 +2433,25 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
       const emptyContainerEl = this.messagesContainerEl.createEl("div", {
         cls: "harness-empty-state-container"
       });
-      emptyContainerEl.style.padding = "20px 12px";
+      emptyContainerEl.style.padding = "24px 12px";
       emptyContainerEl.style.display = "flex";
       emptyContainerEl.style.flexDirection = "column";
+      emptyContainerEl.style.alignItems = "center";
       emptyContainerEl.style.gap = "16px";
       const introEl = emptyContainerEl.createEl("div");
       introEl.style.textAlign = "center";
-      introEl.style.opacity = "0.75";
+      introEl.style.opacity = "0.8";
       introEl.createEl("h3", { text: "Obsidian Harness Bot" });
       introEl.createEl("p", {
-        text: "Start a conversation, type '/' for sessions, or '@' to attach notes and folders from your Vault."
+        text: "Type a message to start, '/' for commands, or '@' to attach notes from your Vault."
       });
       const previousSessions = this.plugin.settings.sessions.filter(
         (s) => s.id !== this.currentSession.id && s.messages.length > 0
       );
       if (previousSessions.length > 0) {
         const prevBoxEl = emptyContainerEl.createEl("div", { cls: "harness-prev-sessions-box" });
+        prevBoxEl.style.width = "100%";
+        prevBoxEl.style.maxWidth = "360px";
         prevBoxEl.style.border = "1px solid var(--background-modifier-border)";
         prevBoxEl.style.borderRadius = "8px";
         prevBoxEl.style.padding = "12px";
@@ -2345,6 +2524,9 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
     this.messagesContainerEl.scrollTop = this.messagesContainerEl.scrollHeight;
   }
   async onClose() {
+    if (this.currentAbortController) {
+      this.currentAbortController.abort();
+    }
   }
 };
 

@@ -11,6 +11,12 @@ import { SessionsModal } from './components/sessions-modal';
 
 export const HARNESS_VIEW_TYPE = 'harness-chat-view';
 
+interface SlashCommandItem {
+  cmd: string;
+  desc: string;
+  action: () => void;
+}
+
 export class HarnessChatView extends ItemView {
   private plugin: HarnessPlugin;
   private toolRegistry: ToolRegistry;
@@ -25,7 +31,9 @@ export class HarnessChatView extends ItemView {
   private suggestPopupEl!: HTMLElement;
 
   private activeSuggestType: 'none' | 'slash' | 'mention' = 'none';
-  private suggestQuery = '';
+  private selectedSuggestIndex = 0;
+  private currentSuggestItems: Array<{ label: string; onSelect: () => void }> = [];
+  private currentAbortController: AbortController | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: HarnessPlugin) {
     super(leaf);
@@ -134,23 +142,19 @@ export class HarnessChatView extends ItemView {
     // Messages Area
     this.messagesContainerEl = container.createEl('div', { cls: 'harness-chat-messages' });
 
-    // Suggestion Popup for / and @
-    this.suggestPopupEl = container.createEl('div', { cls: 'harness-suggest-popup' });
-    this.suggestPopupEl.style.display = 'none';
-
     // Input Area
     const inputAreaEl = container.createEl('div', { cls: 'harness-chat-input-area' });
 
+    // Suggestion Popup for / and @ (placed inside inputAreaEl so it pops up directly above input)
+    this.suggestPopupEl = inputAreaEl.createEl('div', { cls: 'harness-suggest-popup' });
+    this.suggestPopupEl.style.display = 'none';
+
     this.inputTextAreaEl = inputAreaEl.createEl('textarea', {
       cls: 'harness-chat-textarea',
-      placeholder: "Type a message, '/' for sessions, or '@' to attach a file...",
+      placeholder: "Type a message, '/' for commands, '@' to attach notes...",
     });
 
     const bottomRowEl = inputAreaEl.createEl('div', { cls: 'harness-chat-bottom-row' });
-    bottomRowEl.style.display = 'flex';
-    bottomRowEl.style.justifyContent = 'space-between';
-    bottomRowEl.style.alignItems = 'center';
-    bottomRowEl.style.gap = '8px';
 
     // Model Selector at the bottom of the chat
     const modelContainerEl = bottomRowEl.createEl('div');
@@ -158,8 +162,7 @@ export class HarnessChatView extends ItemView {
     modelContainerEl.style.alignItems = 'center';
     modelContainerEl.style.gap = '6px';
 
-    this.modelSelectEl = modelContainerEl.createEl('select');
-    this.modelSelectEl.style.fontSize = '0.85em';
+    this.modelSelectEl = modelContainerEl.createEl('select', { cls: 'harness-model-select' });
     this.refreshModelDropdown();
 
     this.modelSelectEl.addEventListener('change', async () => {
@@ -170,15 +173,41 @@ export class HarnessChatView extends ItemView {
 
     this.sendButtonEl = bottomRowEl.createEl('button', { text: 'Send', cls: 'mod-cta' });
 
-    const handleSend = async () => {
+    const handleSendOrStop = async () => {
+      // If currently generating, abort turn
+      if (this.currentAbortController) {
+        this.currentAbortController.abort();
+        this.currentAbortController = null;
+        this.setSendButtonState(false);
+        new Notice('Generation stopped.');
+        return;
+      }
+
       const text = this.inputTextAreaEl.value.trim();
       if (!text) return;
 
-      // Check slash commands
+      // Handle direct slash command invocation
       if (text === '/sessions' || text === '/history') {
         this.inputTextAreaEl.value = '';
         this.hideSuggest();
         this.openSessionsModal();
+        return;
+      } else if (text === '/new') {
+        this.inputTextAreaEl.value = '';
+        this.hideSuggest();
+        this.createNewSession();
+        return;
+      } else if (text === '/clear') {
+        this.inputTextAreaEl.value = '';
+        this.hideSuggest();
+        this.currentSession.messages = [];
+        await this.saveSessionState();
+        this.renderMessages();
+        return;
+      } else if (text === '/export') {
+        this.inputTextAreaEl.value = '';
+        this.hideSuggest();
+        exportBtn.click();
         return;
       }
 
@@ -193,7 +222,10 @@ export class HarnessChatView extends ItemView {
 
       this.inputTextAreaEl.value = '';
       this.hideSuggest();
-      this.sendButtonEl.disabled = true;
+
+      // Set generating state (Stop button)
+      this.currentAbortController = new AbortController();
+      this.setSendButtonState(true);
 
       // If new session, set auto-title
       if (this.currentSession.messages.length === 0) {
@@ -241,31 +273,52 @@ export class HarnessChatView extends ItemView {
             });
           },
           this.plugin.settings.activeProviderId,
-          this.currentSession.model || this.plugin.settings.activeModel
+          this.currentSession.model || this.plugin.settings.activeModel,
+          this.currentAbortController.signal
         );
 
         this.currentSession.messages = updatedHistory;
         this.currentSession.updatedAt = Date.now();
         await this.saveSessionState();
       } catch (err: any) {
-        new Notice(`Agent error: ${err.message}`);
-        textContentEl.setText(`Error: ${err.message}`);
+        if (err.message && err.message.includes('stopped')) {
+          textContentEl.setText(textContentEl.innerText + ' [Stopped]');
+        } else {
+          new Notice(`Agent error: ${err.message}`);
+          textContentEl.setText(`Error: ${err.message}`);
+        }
       } finally {
-        this.sendButtonEl.disabled = false;
+        this.currentAbortController = null;
+        this.setSendButtonState(false);
         this.renderMessages();
       }
     };
 
-    this.sendButtonEl.addEventListener('click', handleSend);
+    this.sendButtonEl.addEventListener('click', handleSendOrStop);
 
     this.inputTextAreaEl.addEventListener('input', () => {
       this.handleInputSuggest();
     });
 
     this.inputTextAreaEl.addEventListener('keydown', (e) => {
-      if (this.activeSuggestType !== 'none' && (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === 'Escape')) {
-        // Handled by suggest navigation
-        if (e.key === 'Escape') {
+      if (this.activeSuggestType !== 'none') {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          this.selectedSuggestIndex = (this.selectedSuggestIndex + 1) % Math.max(1, this.currentSuggestItems.length);
+          this.highlightSuggestItem();
+          return;
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          this.selectedSuggestIndex = (this.selectedSuggestIndex - 1 + this.currentSuggestItems.length) % Math.max(1, this.currentSuggestItems.length);
+          this.highlightSuggestItem();
+          return;
+        } else if (e.key === 'Enter' || e.key === 'Tab') {
+          if (this.currentSuggestItems[this.selectedSuggestIndex]) {
+            e.preventDefault();
+            this.currentSuggestItems[this.selectedSuggestIndex].onSelect();
+            return;
+          }
+        } else if (e.key === 'Escape') {
           this.hideSuggest();
           return;
         }
@@ -273,11 +326,24 @@ export class HarnessChatView extends ItemView {
 
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
-        handleSend();
+        handleSendOrStop();
       }
     });
 
     this.renderMessages();
+  }
+
+  private setSendButtonState(isGenerating: boolean) {
+    if (!this.sendButtonEl) return;
+    if (isGenerating) {
+      this.sendButtonEl.setText('Stop');
+      this.sendButtonEl.addClass('mod-warning');
+      this.sendButtonEl.removeClass('mod-cta');
+    } else {
+      this.sendButtonEl.setText('Send');
+      this.sendButtonEl.addClass('mod-cta');
+      this.sendButtonEl.removeClass('mod-warning');
+    }
   }
 
   private handleInputSuggest() {
@@ -285,78 +351,158 @@ export class HarnessChatView extends ItemView {
     const cursorPos = this.inputTextAreaEl.selectionStart || text.length;
     const beforeCursor = text.slice(0, cursorPos);
 
-    if (beforeCursor.startsWith('/') && !beforeCursor.includes(' ')) {
+    // Check Slash Command
+    const slashMatch = beforeCursor.match(/\/([a-zA-Z0-9_-]*)$/);
+    if (slashMatch) {
       this.activeSuggestType = 'slash';
-      this.suggestQuery = beforeCursor.slice(1);
-      this.renderSlashSuggest();
+      const query = slashMatch[1].toLowerCase();
+      this.renderSlashSuggest(query, slashMatch.index || 0);
       return;
     }
 
-    const lastAtIndex = beforeCursor.lastIndexOf('@');
-    if (lastAtIndex !== -1 && (lastAtIndex === 0 || /\s/.test(beforeCursor[lastAtIndex - 1]))) {
-      const mentionText = beforeCursor.slice(lastAtIndex + 1);
-      if (!/\s/.test(mentionText)) {
-        this.activeSuggestType = 'mention';
-        this.suggestQuery = mentionText;
-        this.renderMentionSuggest(lastAtIndex);
-        return;
-      }
+    // Check @ Mention
+    const atMatch = beforeCursor.match(/@([a-zA-Z0-9_\-\.\/]*)$/);
+    if (atMatch) {
+      this.activeSuggestType = 'mention';
+      const query = atMatch[1];
+      this.renderMentionSuggest(query, atMatch.index || 0);
+      return;
     }
 
     this.hideSuggest();
   }
 
-  private renderSlashSuggest() {
+  private renderSlashSuggest(query: string, matchIndex: number) {
     if (!this.suggestPopupEl) return;
     this.suggestPopupEl.empty();
-    this.suggestPopupEl.style.display = 'block';
+    this.currentSuggestItems = [];
+    this.selectedSuggestIndex = 0;
 
-    const itemEl = this.suggestPopupEl.createEl('div', { cls: 'harness-suggest-item' });
-    itemEl.createEl('strong', { text: '/sessions' });
-    itemEl.createEl('span', { text: ' - View and switch saved chat sessions' });
+    const commands: SlashCommandItem[] = [
+      {
+        cmd: '/sessions',
+        desc: 'View & switch saved chat sessions',
+        action: () => {
+          this.inputTextAreaEl.value = '';
+          this.hideSuggest();
+          this.openSessionsModal();
+        },
+      },
+      {
+        cmd: '/new',
+        desc: 'Start a new conversation session',
+        action: () => {
+          this.inputTextAreaEl.value = '';
+          this.hideSuggest();
+          this.createNewSession();
+        },
+      },
+      {
+        cmd: '/clear',
+        desc: 'Clear messages in current session',
+        action: () => {
+          this.inputTextAreaEl.value = '';
+          this.hideSuggest();
+          this.currentSession.messages = [];
+          this.saveSessionState();
+          this.renderMessages();
+        },
+      },
+      {
+        cmd: '/export',
+        desc: 'Export chat to Markdown note',
+        action: () => {
+          this.inputTextAreaEl.value = '';
+          this.hideSuggest();
+          this.exporter.exportChatToMarkdown(
+            this.currentSession.messages,
+            this.currentSession.model || this.plugin.settings.activeModel || 'default'
+          );
+        },
+      },
+    ];
 
-    itemEl.addEventListener('click', () => {
-      this.inputTextAreaEl.value = '';
+    const filtered = commands.filter((c) => c.cmd.toLowerCase().includes(query) || c.desc.toLowerCase().includes(query));
+
+    if (filtered.length === 0) {
       this.hideSuggest();
-      this.openSessionsModal();
-    });
-  }
-
-  private renderMentionSuggest(lastAtIndex: number) {
-    if (!this.suggestPopupEl) return;
-    this.suggestPopupEl.empty();
-    this.suggestPopupEl.style.display = 'block';
-
-    const items = MentionHelper.getVaultItems(this.app, this.suggestQuery);
-
-    if (items.length === 0) {
-      const noItemEl = this.suggestPopupEl.createEl('div', { cls: 'harness-suggest-item' });
-      noItemEl.setText('No matching files or folders found');
       return;
     }
 
-    for (const item of items) {
+    this.suggestPopupEl.style.display = 'flex';
+
+    filtered.forEach((item, index) => {
+      const onSelect = () => item.action();
+      this.currentSuggestItems.push({ label: item.cmd, onSelect });
+
       const itemEl = this.suggestPopupEl.createEl('div', { cls: 'harness-suggest-item' });
+      if (index === 0) itemEl.addClass('is-selected');
+
+      itemEl.createEl('strong', { text: item.cmd });
+      itemEl.createEl('span', { text: ` - ${item.desc}` });
+
+      itemEl.addEventListener('click', onSelect);
+    });
+  }
+
+  private renderMentionSuggest(query: string, matchIndex: number) {
+    if (!this.suggestPopupEl) return;
+    this.suggestPopupEl.empty();
+    this.currentSuggestItems = [];
+    this.selectedSuggestIndex = 0;
+
+    const items = MentionHelper.getVaultItems(this.app, query);
+
+    if (items.length === 0) {
+      this.hideSuggest();
+      return;
+    }
+
+    this.suggestPopupEl.style.display = 'flex';
+
+    items.forEach((item, index) => {
+      const onSelect = () => {
+        const text = this.inputTextAreaEl.value;
+        const before = text.slice(0, matchIndex);
+        const after = text.slice(matchIndex + 1 + query.length);
+        this.inputTextAreaEl.value = `${before}@${item.path} ${after}`;
+        this.hideSuggest();
+        this.inputTextAreaEl.focus();
+      };
+
+      this.currentSuggestItems.push({ label: item.path, onSelect });
+
+      const itemEl = this.suggestPopupEl.createEl('div', { cls: 'harness-suggest-item' });
+      if (index === 0) itemEl.addClass('is-selected');
+
       const iconSpan = itemEl.createEl('span', { cls: 'harness-suggest-icon' });
       setIcon(iconSpan, item.isFolder ? 'folder' : 'file-text');
 
       itemEl.createEl('span', { text: ` ${item.path}` });
 
-      itemEl.addEventListener('click', () => {
-        const text = this.inputTextAreaEl.value;
-        const before = text.slice(0, lastAtIndex);
-        const after = text.slice(lastAtIndex + 1 + this.suggestQuery.length);
-        this.inputTextAreaEl.value = `${before}@${item.path} ${after}`;
-        this.hideSuggest();
-        this.inputTextAreaEl.focus();
-      });
-    }
+      itemEl.addEventListener('click', onSelect);
+    });
+  }
+
+  private highlightSuggestItem() {
+    if (!this.suggestPopupEl) return;
+    const itemEls = this.suggestPopupEl.querySelectorAll('.harness-suggest-item');
+    itemEls.forEach((el, idx) => {
+      if (idx === this.selectedSuggestIndex) {
+        el.addClass('is-selected');
+        (el as HTMLElement).scrollIntoView({ block: 'nearest' });
+      } else {
+        el.removeClass('is-selected');
+      }
+    });
   }
 
   private hideSuggest() {
     this.activeSuggestType = 'none';
+    this.currentSuggestItems = [];
     if (this.suggestPopupEl) {
       this.suggestPopupEl.style.display = 'none';
+      this.suggestPopupEl.empty();
     }
   }
 
@@ -404,6 +550,14 @@ export class HarnessChatView extends ItemView {
   }
 
   private async saveSessionState() {
+    // Ensure active session is synced in sessions array
+    const idx = this.plugin.settings.sessions.findIndex((s) => s.id === this.currentSession.id);
+    if (idx !== -1) {
+      this.plugin.settings.sessions[idx] = this.currentSession;
+    } else {
+      this.plugin.settings.sessions.unshift(this.currentSession);
+    }
+    this.plugin.settings.currentSessionId = this.currentSession.id;
     await this.plugin.saveSettings();
   }
 
@@ -421,15 +575,19 @@ export class HarnessChatView extends ItemView {
       return;
     }
 
-    const currentModel = this.currentSession.model || this.plugin.settings.activeModel || models[0];
+    const selectedModel = this.currentSession.model || this.plugin.settings.activeModel || models[0];
 
     for (const m of models) {
       const opt = this.modelSelectEl.createEl('option', { value: m, text: m });
-      if (m === currentModel) opt.selected = true;
+      if (m === selectedModel) opt.selected = true;
     }
 
-    if (!models.includes(currentModel)) {
+    if (!models.includes(selectedModel)) {
       this.currentSession.model = models[0];
+      this.plugin.settings.activeModel = models[0];
+    } else {
+      this.currentSession.model = selectedModel;
+      this.plugin.settings.activeModel = selectedModel;
     }
   }
 
@@ -441,17 +599,18 @@ export class HarnessChatView extends ItemView {
       const emptyContainerEl = this.messagesContainerEl.createEl('div', {
         cls: 'harness-empty-state-container',
       });
-      emptyContainerEl.style.padding = '20px 12px';
+      emptyContainerEl.style.padding = '24px 12px';
       emptyContainerEl.style.display = 'flex';
       emptyContainerEl.style.flexDirection = 'column';
+      emptyContainerEl.style.alignItems = 'center';
       emptyContainerEl.style.gap = '16px';
 
       const introEl = emptyContainerEl.createEl('div');
       introEl.style.textAlign = 'center';
-      introEl.style.opacity = '0.75';
+      introEl.style.opacity = '0.8';
       introEl.createEl('h3', { text: 'Obsidian Harness Bot' });
       introEl.createEl('p', {
-        text: "Start a conversation, type '/' for sessions, or '@' to attach notes and folders from your Vault.",
+        text: "Type a message to start, '/' for commands, or '@' to attach notes from your Vault.",
       });
 
       // Previous Sessions quick switcher
@@ -461,6 +620,8 @@ export class HarnessChatView extends ItemView {
 
       if (previousSessions.length > 0) {
         const prevBoxEl = emptyContainerEl.createEl('div', { cls: 'harness-prev-sessions-box' });
+        prevBoxEl.style.width = '100%';
+        prevBoxEl.style.maxWidth = '360px';
         prevBoxEl.style.border = '1px solid var(--background-modifier-border)';
         prevBoxEl.style.borderRadius = '8px';
         prevBoxEl.style.padding = '12px';
@@ -543,6 +704,8 @@ export class HarnessChatView extends ItemView {
   }
 
   async onClose(): Promise<void> {
-    // Clean up
+    if (this.currentAbortController) {
+      this.currentAbortController.abort();
+    }
   }
 }

@@ -14,7 +14,8 @@ export class OpenRouterProvider extends LLMProvider {
     systemPrompt: string,
     messages: LLMMessage[],
     tools: ToolSchema[],
-    onChunk?: (chunk: string) => void
+    onChunk?: (chunk: string) => void,
+    signal?: AbortSignal
   ): Promise<ProviderResponse> {
     const endpoint = (baseUrl || 'https://openrouter.ai/api/v1').replace(/\/$/, '') + '/chat/completions';
     const sortedTools = sortToolSchemasDeterministically(tools);
@@ -50,10 +51,11 @@ export class OpenRouterProvider extends LLMProvider {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${apiKey}`,
-          'HTTP-Referer': 'https://github.com/killery/obsidian-harness-bot',
-          'X-Title': 'Obsidian Agent Harness',
+          'HTTP-Referer': 'https://github.com/killeryStark/oh-bot',
+          'X-Title': 'Obsidian Harness Bot',
         },
         body: JSON.stringify(payload),
+        signal,
       });
 
       if (!response.ok) {
@@ -70,6 +72,11 @@ export class OpenRouterProvider extends LLMProvider {
 
       if (reader) {
         while (true) {
+          if (signal?.aborted) {
+            reader.cancel();
+            break;
+          }
+
           const { done, value } = await reader.read();
           if (done) break;
 
@@ -119,7 +126,10 @@ export class OpenRouterProvider extends LLMProvider {
         toolCalls: finalToolCalls.length > 0 ? finalToolCalls : undefined,
       };
     } catch (err: any) {
-      // Fallback via Obsidian requestUrl if fetch streaming fails or CORS restriction occurs
+      if (signal?.aborted || err.name === 'AbortError') {
+        throw new Error('Generation stopped by user.');
+      }
+
       const reqRes = await requestUrl({
         url: endpoint,
         method: 'POST',

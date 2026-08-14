@@ -14,7 +14,8 @@ export class OpenAIProvider extends LLMProvider {
     systemPrompt: string,
     messages: LLMMessage[],
     tools: ToolSchema[],
-    onChunk?: (chunk: string) => void
+    onChunk?: (chunk: string) => void,
+    signal?: AbortSignal
   ): Promise<ProviderResponse> {
     const endpoint = (baseUrl || 'https://api.openai.com/v1').replace(/\/$/, '') + '/chat/completions';
     const sortedTools = sortToolSchemasDeterministically(tools);
@@ -52,6 +53,7 @@ export class OpenAIProvider extends LLMProvider {
           'Authorization': `Bearer ${apiKey}`,
         },
         body: JSON.stringify(payload),
+        signal,
       });
 
       if (!response.ok) {
@@ -68,6 +70,11 @@ export class OpenAIProvider extends LLMProvider {
 
       if (reader) {
         while (true) {
+          if (signal?.aborted) {
+            reader.cancel();
+            break;
+          }
+
           const { done, value } = await reader.read();
           if (done) break;
 
@@ -116,7 +123,11 @@ export class OpenAIProvider extends LLMProvider {
         content: fullContent,
         toolCalls: finalToolCalls.length > 0 ? finalToolCalls : undefined,
       };
-    } catch (err) {
+    } catch (err: any) {
+      if (signal?.aborted || err.name === 'AbortError') {
+        throw new Error('Generation stopped by user.');
+      }
+
       const reqRes = await requestUrl({
         url: endpoint,
         method: 'POST',
