@@ -20,6 +20,7 @@ export class HarnessSettingTab extends PluginSettingTab {
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
+    containerEl.addClass('harness-settings-container');
 
     containerEl.createEl('h2', { text: 'Obsidian Harness Bot Settings' });
 
@@ -98,8 +99,7 @@ export class HarnessSettingTab extends PluginSettingTab {
       });
 
     providerSelectSetting.addButton((btn) => {
-      btn.setButtonText('Add Custom Provider');
-      setIcon(btn.buttonEl, 'plus');
+      btn.setButtonText('+ Custom Provider');
       btn.setCta();
       btn.onClick(() => {
         new AddProviderModal(this.app, async (newProvider) => {
@@ -175,25 +175,27 @@ export class HarnessSettingTab extends PluginSettingTab {
         });
       }
 
-      // Available Models
+      // Available Models Dropdown + Compact Round Refresh Button
       const modelsSetting = new Setting(providerCardEl)
         .setName('Available Models')
-        .setDesc('Models for this provider')
-        .addTextArea((text) => {
-          text
-            .setValue(configProvider.models.join(', '))
-            .setPlaceholder('model-1, model-2')
-            .onChange(async (val) => {
-              configProvider.models = val
-                .split(',')
-                .map((m) => m.trim())
-                .filter((m) => m.length > 0);
-              await this.plugin.saveSettings();
-            });
+        .setDesc(`${configProvider.models.length} model(s) loaded`);
+
+      if (configProvider.models.length > 0) {
+        modelsSetting.addDropdown((dropdown) => {
+          for (const m of configProvider.models) {
+            dropdown.addOption(m, m);
+          }
+          dropdown.setValue(configProvider.models[0]);
         });
+      } else {
+        modelsSetting.addDropdown((dropdown) => {
+          dropdown.addOption('', '(No models loaded)');
+        });
+      }
 
       modelsSetting.addButton((btn) => {
-        btn.setTooltip('Fetch models from endpoint');
+        btn.setClass('harness-btn-icon-round');
+        btn.setTooltip('Fetch Models from Endpoint');
         setIcon(btn.buttonEl, 'refresh-cw');
         btn.onClick(async () => {
           const apiKey = this.secretManager.getSecret(configProvider.apiKeySecretName) || '';
@@ -212,6 +214,23 @@ export class HarnessSettingTab extends PluginSettingTab {
           }
         });
       });
+
+      // Edit Models Raw List Setting
+      new Setting(providerCardEl)
+        .setName('Edit Models List')
+        .setDesc('Comma-separated list of model identifiers')
+        .addTextArea((text) => {
+          text
+            .setValue(configProvider.models.join(', '))
+            .setPlaceholder('model-1, model-2')
+            .onChange(async (val) => {
+              configProvider.models = val
+                .split(',')
+                .map((m) => m.trim())
+                .filter((m) => m.length > 0);
+              await this.plugin.saveSettings();
+            });
+        });
 
       // Delete custom provider button
       if (configProvider.isCustom) {
@@ -257,17 +276,30 @@ export class HarnessSettingTab extends PluginSettingTab {
           })
       );
 
-    // System Prompt
-    new Setting(containerEl)
+    // System Prompt Setting with Fullwidth and Auto-Expansion
+    const promptSetting = new Setting(containerEl)
       .setName('System Prompt')
-      .setDesc('Base instructions for the Agent Harness')
-      .addTextArea((text) =>
-        text
-          .setValue(this.plugin.settings.systemPrompt)
-          .onChange(async (value) => {
-            this.plugin.settings.systemPrompt = value;
-            await this.plugin.saveSettings();
-          })
-      );
+      .setDesc('Base instructions for the Agent Harness');
+
+    promptSetting.setClass('harness-fullwidth-setting');
+
+    promptSetting.addTextArea((text) => {
+      text.inputEl.addClass('harness-fullwidth-textarea');
+      text.setValue(this.plugin.settings.systemPrompt);
+
+      const autoResize = () => {
+        text.inputEl.style.height = 'auto';
+        text.inputEl.style.height = Math.max(140, text.inputEl.scrollHeight + 8) + 'px';
+      };
+
+      setTimeout(autoResize, 20);
+      text.inputEl.addEventListener('input', autoResize);
+
+      text.onChange(async (value) => {
+        this.plugin.settings.systemPrompt = value;
+        await this.plugin.saveSettings();
+        autoResize();
+      });
+    });
   }
 }
