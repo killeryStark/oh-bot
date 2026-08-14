@@ -114,14 +114,6 @@ export class HarnessChatView extends ItemView {
       this.openSessionsModal();
     });
 
-    // Skills & Marketplace Button
-    const skillsBtn = headerActionsEl.createEl('button', { cls: 'clickable-icon harness-header-skills-btn' });
-    skillsBtn.setAttribute('aria-label', 'Skills & Marketplace (/skills)');
-    setIcon(skillsBtn, 'sparkles');
-    skillsBtn.addEventListener('click', () => {
-      new SkillsModal(this.app, this.plugin).open();
-    });
-
     // Export Button
     const exportBtn = headerActionsEl.createEl('button', { cls: 'clickable-icon' });
     exportBtn.setAttribute('aria-label', 'Export Chat to Markdown');

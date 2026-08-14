@@ -2677,12 +2677,6 @@ var HarnessChatView = class extends import_obsidian18.ItemView {
     sessionsBtn.addEventListener("click", () => {
       this.openSessionsModal();
     });
-    const skillsBtn = headerActionsEl.createEl("button", { cls: "clickable-icon harness-header-skills-btn" });
-    skillsBtn.setAttribute("aria-label", "Skills & Marketplace (/skills)");
-    (0, import_obsidian18.setIcon)(skillsBtn, "sparkles");
-    skillsBtn.addEventListener("click", () => {
-      new SkillsModal(this.app, this.plugin).open();
-    });
     const exportBtn = headerActionsEl.createEl("button", { cls: "clickable-icon" });
     exportBtn.setAttribute("aria-label", "Export Chat to Markdown");
     (0, import_obsidian18.setIcon)(exportBtn, "upload");

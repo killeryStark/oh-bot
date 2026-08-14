@@ -23,31 +23,8 @@
 
 .harness-chat-header-actions {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
-}
-
-.harness-header-skills-btn {
-  background-color: var(--background-modifier-border-focus) !important;
-  color: var(--text-accent) !important;
-  border-radius: 6px !important;
-  padding: 4px 8px !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  gap: 4px !important;
-  transition: all 0.2s ease !important;
-  border: 1px solid var(--interactive-accent) !important;
-}
-
-.harness-header-skills-btn:hover {
-  background-color: var(--interactive-accent) !important;
-  color: var(--text-on-accent) !important;
-  transform: scale(1.06);
-}
-
-.harness-header-skills-btn svg {
-  width: 18px !important;
-  height: 18px !important;
 }
 
 .harness-chat-messages {
