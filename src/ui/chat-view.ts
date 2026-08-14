@@ -386,7 +386,7 @@ export class HarnessChatView extends ItemView {
   }
 
   private formatContentForCard(rawStr: string): string {
-    if (!rawStr) return '';
+    if (!rawStr || rawStr.trim() === '') return '(empty)';
     try {
       const parsed = JSON.parse(rawStr);
       return JSON.stringify(parsed, null, 2);

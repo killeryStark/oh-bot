@@ -2267,8 +2267,8 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
     bodyEl.setText(thoughtText);
   }
   formatContentForCard(rawStr) {
-    if (!rawStr)
-      return "";
+    if (!rawStr || rawStr.trim() === "")
+      return "(empty)";
     try {
       const parsed = JSON.parse(rawStr);
       return JSON.stringify(parsed, null, 2);
