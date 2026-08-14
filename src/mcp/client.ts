@@ -158,10 +158,23 @@ export class McpClient {
     }
 
     let json: McpJsonRpcResponse | null = null;
+
+    // 1. Try Obsidian's built-in res.json getter first.
+    //    This getter internally calls JSON.parse(res.text) and THROWS
+    //    if the body is not pure JSON (e.g. SSE "event: message\ndata: {...}").
+    //    We must catch that silently and fall through to manual parsing.
     try {
-      if (typeof res.json === 'object' && res.json !== null) {
-        json = res.json;
-      } else {
+      const candidate = res.json;
+      if (typeof candidate === 'object' && candidate !== null) {
+        json = candidate;
+      }
+    } catch (_jsonGetterError) {
+      // Expected for SSE responses — fall through to text parsing below
+    }
+
+    // 2. If res.json didn't work, parse from res.text manually.
+    if (!json) {
+      try {
         const text = (res.text || '').trim();
         const startIdx = text.indexOf('{');
         const endIdx = text.lastIndexOf('}');
@@ -171,9 +184,9 @@ export class McpClient {
         } else {
           json = parseJsonSafely(text);
         }
+      } catch (e: any) {
+        throw new Error(`Failed to parse JSON-RPC response: ${(res.text || '').slice(0, 200)}`);
       }
-    } catch (e: any) {
-      throw new Error(`Failed to parse JSON-RPC response: ${res.text}`);
     }
 
     if (json && json.error) {

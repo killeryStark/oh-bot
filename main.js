@@ -4814,9 +4814,14 @@ var McpClient = class {
     }
     let json = null;
     try {
-      if (typeof res.json === "object" && res.json !== null) {
-        json = res.json;
-      } else {
+      const candidate = res.json;
+      if (typeof candidate === "object" && candidate !== null) {
+        json = candidate;
+      }
+    } catch (_jsonGetterError) {
+    }
+    if (!json) {
+      try {
         const text = (res.text || "").trim();
         const startIdx = text.indexOf("{");
         const endIdx = text.lastIndexOf("}");
@@ -4826,9 +4831,9 @@ var McpClient = class {
         } else {
           json = parseJsonSafely(text);
         }
+      } catch (e) {
+        throw new Error(`Failed to parse JSON-RPC response: ${(res.text || "").slice(0, 200)}`);
       }
-    } catch (e) {
-      throw new Error(`Failed to parse JSON-RPC response: ${res.text}`);
     }
     if (json && json.error) {
       throw new Error(`MCP Error [${json.error.code}]: ${json.error.message}`);
