@@ -79,6 +79,17 @@ export class HarnessChatView extends ItemView {
     return 'bot';
   }
 
+  private handleVisualViewportResize = () => {
+    if (this.isInputExpanded && window.visualViewport) {
+      const vh = window.visualViewport.height;
+      const containerRect = this.containerEl.getBoundingClientRect();
+      const availableHeight = vh - containerRect.top;
+      if (availableHeight > 120) {
+        this.inputAreaEl.style.height = `${availableHeight}px`;
+      }
+    }
+  };
+
   async onOpen(): Promise<void> {
     const container = this.containerEl.children[1] as HTMLElement;
     container.empty();
@@ -350,6 +361,12 @@ export class HarnessChatView extends ItemView {
       }
     });
 
+    // Mobile Viewport Keyboard handling
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', this.handleVisualViewportResize);
+      window.visualViewport.addEventListener('scroll', this.handleVisualViewportResize);
+    }
+
     this.renderMessages();
   }
 
@@ -378,9 +395,11 @@ export class HarnessChatView extends ItemView {
       setIcon(this.expandBtnEl, 'minimize-2');
       this.expandBtnEl.setAttribute('aria-label', 'Collapse view');
       this.expandBtnEl.style.display = 'flex';
+      this.handleVisualViewportResize();
       this.inputTextAreaEl.focus();
     } else {
       this.inputAreaEl.removeClass('is-expanded');
+      this.inputAreaEl.style.height = '';
       setIcon(this.expandBtnEl, 'maximize-2');
       this.expandBtnEl.setAttribute('aria-label', 'Expand to full view');
       this.autoResizeTextarea();
@@ -759,6 +778,10 @@ export class HarnessChatView extends ItemView {
   async onClose(): Promise<void> {
     if (this.currentAbortController) {
       this.currentAbortController.abort();
+    }
+    if (window.visualViewport) {
+      window.visualViewport.removeEventListener('resize', this.handleVisualViewportResize);
+      window.visualViewport.removeEventListener('scroll', this.handleVisualViewportResize);
     }
   }
 }
