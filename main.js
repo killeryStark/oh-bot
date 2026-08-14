@@ -28,7 +28,7 @@ __export(main_exports, {
   default: () => HarnessPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian20 = require("obsidian");
+var import_obsidian21 = require("obsidian");
 
 // src/types.ts
 var DEFAULT_PROVIDERS = [
@@ -409,6 +409,16 @@ var import_obsidian5 = require("obsidian");
 var import_obsidian4 = require("obsidian");
 var OFFICIAL_MARKETPLACE_URL = "https://raw.githubusercontent.com/killeryStark/oh-bot/main/marketplace/skills.json";
 var BUILTIN_MARKETPLACE_SKILLS = [
+  {
+    id: "skill-creator",
+    name: "Skill Creator",
+    description: "\u0421\u043E\u0437\u0434\u0430\u043D\u0438\u0435, \u043F\u0440\u043E\u0435\u043A\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u0438 \u0434\u043E\u0440\u0430\u0431\u043E\u0442\u043A\u0430 \u043D\u043E\u0432\u044B\u0445 \u0441\u043A\u0438\u043B\u043B\u043E\u0432 \u0438 \u0441\u043B\u044D\u0448-\u043A\u043E\u043C\u0430\u043D\u0434 \u0434\u043B\u044F Obsidian Harness Bot",
+    author: "Anthropic / Adapted",
+    homepage: "https://github.com/anthropics/skills/tree/main/skills/skill-creator",
+    downloadUrl: "https://raw.githubusercontent.com/killeryStark/oh-bot/main/marketplace/skills/skill-creator/SKILL.md",
+    version: "1.0.0",
+    tags: ["skills", "meta", "workflow", "creation"]
+  },
   {
     id: "brainstorming",
     name: "Brainstorming & Design",
@@ -1027,7 +1037,7 @@ var HarnessSettingTab = class extends import_obsidian6.PluginSettingTab {
 };
 
 // src/ui/chat-view.ts
-var import_obsidian17 = require("obsidian");
+var import_obsidian18 = require("obsidian");
 
 // src/engine/providers/base.ts
 var LLMProvider = class {
@@ -2009,15 +2019,224 @@ var VaultSearchNotesTool = class extends AgentTool {
   }
 };
 
+// src/tools/skills/create-skill.ts
+var import_obsidian14 = require("obsidian");
+var CreateSkillTool = class extends AgentTool {
+  constructor(skillManager) {
+    super();
+    this.name = "create_skill";
+    this.description = "Creates or updates an internal agent skill in Obsidian Harness Bot. Registers the skill into the plugin's internal workflow so it becomes immediately available in slash commands (/[id]) and the Skills Manager GUI without needing manual vault file operations.";
+    this.isMutation = true;
+    this.parameters = {
+      type: "object",
+      properties: {
+        id: {
+          type: "string",
+          description: "Unique kebab-case identifier for the skill (e.g. 'youtube-summarizer', 'paper-analyzer')."
+        },
+        name: {
+          type: "string",
+          description: "Human-readable display name (e.g. 'YouTube Summarizer', 'Paper Analyzer')."
+        },
+        description: {
+          type: "string",
+          description: "Clear, pushy description describing what the skill does and specific triggers/contexts for when to use it."
+        },
+        content: {
+          type: "string",
+          description: "Complete Markdown body containing step-by-step instructions and methodology for the agent."
+        },
+        tags: {
+          type: "array",
+          items: { type: "string" },
+          description: 'Optional category tags for filtering (e.g. ["video", "summary", "notes"]).'
+        },
+        author: {
+          type: "string",
+          description: 'Optional author name (default: "User / Agent").'
+        },
+        version: {
+          type: "string",
+          description: 'Optional SemVer version string (default: "1.0.0").'
+        }
+      },
+      required: ["id", "name", "description", "content"]
+    };
+    this.skillManager = skillManager;
+  }
+  setSkillManager(skillManager) {
+    this.skillManager = skillManager;
+  }
+  async execute(args, app) {
+    const { id, name, description, content, tags, author, version } = args;
+    if (!id || typeof id !== "string") {
+      return { success: false, output: "", error: 'Missing or invalid "id" parameter.' };
+    }
+    if (!name || typeof name !== "string") {
+      return { success: false, output: "", error: 'Missing or invalid "name" parameter.' };
+    }
+    if (!description || typeof description !== "string") {
+      return { success: false, output: "", error: 'Missing or invalid "description" parameter.' };
+    }
+    if (!content || typeof content !== "string") {
+      return { success: false, output: "", error: 'Missing or invalid "content" parameter.' };
+    }
+    if (!this.skillManager) {
+      return {
+        success: false,
+        output: "",
+        error: "SkillManager is not attached to CreateSkillTool."
+      };
+    }
+    try {
+      const saved = await this.skillManager.saveCustomSkill({
+        id,
+        name,
+        description,
+        content,
+        tags: Array.isArray(tags) ? tags : void 0,
+        author: typeof author === "string" ? author : void 0,
+        version: typeof version === "string" ? version : void 0
+      });
+      new import_obsidian14.Notice(`Skill "${saved.name}" (/${saved.id}) created!`);
+      return {
+        success: true,
+        output: `Successfully created and registered skill "${saved.name}" (ID: ${saved.id}, version: ${saved.version || "1.0.0"}).
+It is now active and immediately accessible in slash commands as /${saved.id} and in the Skills Manager GUI.`
+      };
+    } catch (err) {
+      return {
+        success: false,
+        output: "",
+        error: `Failed to save skill: ${err.message}`
+      };
+    }
+  }
+};
+
+// src/tools/skills/read-skill.ts
+var ReadSkillTool = class extends AgentTool {
+  constructor(skillManager) {
+    super();
+    this.name = "read_skill";
+    this.description = "Reads and inspects the complete markdown instructions, methodology, and metadata of an existing skill by ID.";
+    this.isMutation = false;
+    this.parameters = {
+      type: "object",
+      properties: {
+        id: {
+          type: "string",
+          description: "The identifier of the skill to read (e.g. 'skill-creator', 'brainstorming')."
+        }
+      },
+      required: ["id"]
+    };
+    this.skillManager = skillManager;
+  }
+  setSkillManager(skillManager) {
+    this.skillManager = skillManager;
+  }
+  async execute(args, app) {
+    const { id } = args;
+    if (!id || typeof id !== "string") {
+      return { success: false, output: "", error: 'Missing or invalid "id" parameter.' };
+    }
+    if (!this.skillManager) {
+      return {
+        success: false,
+        output: "",
+        error: "SkillManager is not attached to ReadSkillTool."
+      };
+    }
+    const skill = this.skillManager.getSkill(id);
+    if (!skill) {
+      return {
+        success: false,
+        output: "",
+        error: `Skill with ID "${id}" was not found. Use list_skills to see available skills.`
+      };
+    }
+    const details = {
+      id: skill.id,
+      name: skill.name,
+      description: skill.description,
+      author: skill.author,
+      version: skill.version,
+      sourceType: skill.sourceType,
+      tags: skill.tags,
+      content: skill.content
+    };
+    return {
+      success: true,
+      output: JSON.stringify(details, null, 2)
+    };
+  }
+};
+
+// src/tools/skills/list-skills.ts
+var ListSkillsTool = class extends AgentTool {
+  constructor(skillManager) {
+    super();
+    this.name = "list_skills";
+    this.description = "Lists all registered agent skills currently available in Obsidian Harness Bot (both installed and local vault skills).";
+    this.isMutation = false;
+    this.parameters = {
+      type: "object",
+      properties: {}
+    };
+    this.skillManager = skillManager;
+  }
+  setSkillManager(skillManager) {
+    this.skillManager = skillManager;
+  }
+  async execute(args, app) {
+    if (!this.skillManager) {
+      return {
+        success: false,
+        output: "",
+        error: "SkillManager is not attached to ListSkillsTool."
+      };
+    }
+    const skills = this.skillManager.getAllSkills().map((s) => ({
+      id: s.id,
+      name: s.name,
+      description: s.description,
+      author: s.author,
+      version: s.version,
+      sourceType: s.sourceType,
+      enabled: s.enabled,
+      tags: s.tags
+    }));
+    return {
+      success: true,
+      output: JSON.stringify(skills, null, 2)
+    };
+  }
+};
+
 // src/tools/registry.ts
 var ToolRegistry = class {
-  constructor() {
+  constructor(skillManager) {
     this.tools = /* @__PURE__ */ new Map();
+    this.createSkillTool = new CreateSkillTool();
+    this.readSkillTool = new ReadSkillTool();
+    this.listSkillsTool = new ListSkillsTool();
     this.registerTool(new VaultReadFileTool());
     this.registerTool(new VaultCreateFileTool());
     this.registerTool(new VaultPatchFileTool());
     this.registerTool(new VaultListDirTool());
     this.registerTool(new VaultSearchNotesTool());
+    this.registerTool(this.createSkillTool);
+    this.registerTool(this.readSkillTool);
+    this.registerTool(this.listSkillsTool);
+    if (skillManager) {
+      this.setSkillManager(skillManager);
+    }
+  }
+  setSkillManager(skillManager) {
+    this.createSkillTool.setSkillManager(skillManager);
+    this.readSkillTool.setSkillManager(skillManager);
+    this.listSkillsTool.setSkillManager(skillManager);
   }
   registerTool(tool) {
     this.tools.set(tool.name, tool);
@@ -2150,7 +2369,7 @@ var SessionManager = class {
 };
 
 // src/utils/mention-helper.ts
-var import_obsidian14 = require("obsidian");
+var import_obsidian15 = require("obsidian");
 var MentionHelper = class {
   /**
    * Returns all searchable files and folders in the Vault for @ autocomplete suggestions.
@@ -2162,7 +2381,7 @@ var MentionHelper = class {
     for (const item of allFiles) {
       if (item.path === "/" || item.path === "")
         continue;
-      const isFolder = item instanceof import_obsidian14.TFolder;
+      const isFolder = item instanceof import_obsidian15.TFolder;
       if (!queryLower || item.name.toLowerCase().includes(queryLower) || item.path.toLowerCase().includes(queryLower)) {
         items.push({
           name: item.name,
@@ -2192,7 +2411,7 @@ var MentionHelper = class {
     for (const match of matches) {
       const targetPath = match[1];
       const item = app.vault.getAbstractFileByPath(targetPath);
-      if (item instanceof import_obsidian14.TFile) {
+      if (item instanceof import_obsidian15.TFile) {
         try {
           const content = await app.vault.read(item);
           attachedBlocks.push(
@@ -2203,9 +2422,9 @@ ${content}
           );
         } catch (e) {
         }
-      } else if (item instanceof import_obsidian14.TFolder) {
+      } else if (item instanceof import_obsidian15.TFolder) {
         try {
-          const children = item.children.map((c) => `- ${c.name} (${c instanceof import_obsidian14.TFolder ? "folder" : "file"})`).join("\n");
+          const children = item.children.map((c) => `- ${c.name} (${c instanceof import_obsidian15.TFolder ? "folder" : "file"})`).join("\n");
           attachedBlocks.push(
             `[Attached Folder: @${item.path}]
 \`\`\`
@@ -2253,8 +2472,8 @@ function parseThoughts(raw) {
 }
 
 // src/ui/components/confirmation-modal.ts
-var import_obsidian15 = require("obsidian");
-var ConfirmationModal = class extends import_obsidian15.Modal {
+var import_obsidian16 = require("obsidian");
+var ConfirmationModal = class extends import_obsidian16.Modal {
   constructor(app, toolCall, onResult) {
     super(app);
     this.toolCall = toolCall;
@@ -2270,7 +2489,7 @@ var ConfirmationModal = class extends import_obsidian15.Modal {
     });
     const codeBlock = contentEl.createEl("pre");
     codeBlock.createEl("code", { text: this.toolCall.function.arguments });
-    new import_obsidian15.Setting(contentEl).addButton(
+    new import_obsidian16.Setting(contentEl).addButton(
       (btn) => btn.setButtonText("Deny").onClick(() => {
         this.onResult(false);
         this.close();
@@ -2289,8 +2508,8 @@ var ConfirmationModal = class extends import_obsidian15.Modal {
 };
 
 // src/ui/components/sessions-modal.ts
-var import_obsidian16 = require("obsidian");
-var SessionsModal = class extends import_obsidian16.Modal {
+var import_obsidian17 = require("obsidian");
+var SessionsModal = class extends import_obsidian17.Modal {
   constructor(app, sessions, currentSessionId, onSelect, onDelete, onNewSession) {
     super(app);
     this.sessions = [...sessions];
@@ -2307,7 +2526,7 @@ var SessionsModal = class extends import_obsidian16.Modal {
     contentEl.empty();
     contentEl.addClass("harness-modal-content");
     contentEl.createEl("h2", { text: "Chat Sessions" });
-    const topSetting = new import_obsidian16.Setting(contentEl).setName("New Conversation").setDesc("Start a fresh agent harness session");
+    const topSetting = new import_obsidian17.Setting(contentEl).setName("New Conversation").setDesc("Start a fresh agent harness session");
     topSetting.addButton((btn) => {
       btn.setButtonText("+ New Session");
       btn.setCta();
@@ -2359,7 +2578,7 @@ var SessionsModal = class extends import_obsidian16.Modal {
       actionsEl.style.display = "flex";
       actionsEl.style.gap = "4px";
       const delBtn = actionsEl.createEl("button", { cls: "harness-btn-icon-round" });
-      (0, import_obsidian16.setIcon)(delBtn, "trash");
+      (0, import_obsidian17.setIcon)(delBtn, "trash");
       delBtn.setAttribute("aria-label", "Delete session");
       delBtn.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -2376,7 +2595,7 @@ var SessionsModal = class extends import_obsidian16.Modal {
 
 // src/ui/chat-view.ts
 var HARNESS_VIEW_TYPE = "harness-chat-view";
-var HarnessChatView = class extends import_obsidian17.ItemView {
+var HarnessChatView = class extends import_obsidian18.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.isInputExpanded = false;
@@ -2385,7 +2604,7 @@ var HarnessChatView = class extends import_obsidian17.ItemView {
     this.currentSuggestItems = [];
     this.currentAbortController = null;
     this.plugin = plugin;
-    this.toolRegistry = new ToolRegistry();
+    this.toolRegistry = new ToolRegistry(this.plugin.skillManager);
     this.agentHarness = new AgentHarness(this.app, this.plugin.settings, this.toolRegistry);
     this.exporter = new MarkdownExporter(this.app);
     this.initSession();
@@ -2425,33 +2644,33 @@ var HarnessChatView = class extends import_obsidian17.ItemView {
     titleEl.style.alignItems = "center";
     titleEl.style.gap = "6px";
     const botIconEl = titleEl.createEl("span");
-    (0, import_obsidian17.setIcon)(botIconEl, "bot");
+    (0, import_obsidian18.setIcon)(botIconEl, "bot");
     titleEl.createEl("span", { text: "Harness Bot", cls: "harness-title" });
     const headerActionsEl = headerEl.createEl("div", { cls: "harness-chat-header-actions" });
     const newSessionBtn = headerActionsEl.createEl("button", { cls: "clickable-icon" });
     newSessionBtn.setAttribute("aria-label", "New Session");
-    (0, import_obsidian17.setIcon)(newSessionBtn, "plus");
+    (0, import_obsidian18.setIcon)(newSessionBtn, "plus");
     newSessionBtn.addEventListener("click", () => {
       this.createNewSession();
     });
     const sessionsBtn = headerActionsEl.createEl("button", { cls: "clickable-icon" });
     sessionsBtn.setAttribute("aria-label", "View Saved Sessions (/sessions)");
-    (0, import_obsidian17.setIcon)(sessionsBtn, "history");
+    (0, import_obsidian18.setIcon)(sessionsBtn, "history");
     sessionsBtn.addEventListener("click", () => {
       this.openSessionsModal();
     });
     const skillsBtn = headerActionsEl.createEl("button", { cls: "clickable-icon" });
     skillsBtn.setAttribute("aria-label", "Skills & Marketplace (/skills)");
-    (0, import_obsidian17.setIcon)(skillsBtn, "sparkles");
+    (0, import_obsidian18.setIcon)(skillsBtn, "sparkles");
     skillsBtn.addEventListener("click", () => {
       new SkillsModal(this.app, this.plugin).open();
     });
     const exportBtn = headerActionsEl.createEl("button", { cls: "clickable-icon" });
     exportBtn.setAttribute("aria-label", "Export Chat to Markdown");
-    (0, import_obsidian17.setIcon)(exportBtn, "upload");
+    (0, import_obsidian18.setIcon)(exportBtn, "upload");
     exportBtn.addEventListener("click", async () => {
       if (this.currentSession.messages.length === 0) {
-        new import_obsidian17.Notice("No chat history to export.");
+        new import_obsidian18.Notice("No chat history to export.");
         return;
       }
       try {
@@ -2459,14 +2678,14 @@ var HarnessChatView = class extends import_obsidian17.ItemView {
           this.currentSession.messages,
           this.currentSession.model || this.plugin.settings.activeModel || "default"
         );
-        new import_obsidian17.Notice(`Chat exported to ${exportedPath}`);
+        new import_obsidian18.Notice(`Chat exported to ${exportedPath}`);
       } catch (e) {
-        new import_obsidian17.Notice(`Export failed: ${e.message}`);
+        new import_obsidian18.Notice(`Export failed: ${e.message}`);
       }
     });
     const clearBtn = headerActionsEl.createEl("button", { cls: "clickable-icon" });
     clearBtn.setAttribute("aria-label", "Clear Messages in Session");
-    (0, import_obsidian17.setIcon)(clearBtn, "trash");
+    (0, import_obsidian18.setIcon)(clearBtn, "trash");
     clearBtn.addEventListener("click", async () => {
       this.currentSession.messages = [];
       await this.saveSessionState();
@@ -2484,7 +2703,7 @@ var HarnessChatView = class extends import_obsidian17.ItemView {
     this.expandBtnEl = textareaWrapperEl.createEl("button", { cls: "harness-expand-btn clickable-icon" });
     this.expandBtnEl.setAttribute("aria-label", "Expand to full view");
     this.expandBtnEl.style.display = "none";
-    (0, import_obsidian17.setIcon)(this.expandBtnEl, "maximize-2");
+    (0, import_obsidian18.setIcon)(this.expandBtnEl, "maximize-2");
     this.expandBtnEl.addEventListener("click", () => {
       this.toggleInputExpand();
     });
@@ -2503,7 +2722,7 @@ var HarnessChatView = class extends import_obsidian17.ItemView {
         this.currentAbortController.abort();
         this.currentAbortController = null;
         this.setSendButtonState(false);
-        new import_obsidian17.Notice("Generation stopped.");
+        new import_obsidian18.Notice("Generation stopped.");
         return;
       }
       const text = this.inputTextAreaEl.value.trim();
@@ -2546,7 +2765,7 @@ var HarnessChatView = class extends import_obsidian17.ItemView {
         (p) => p.id === this.plugin.settings.activeProviderId
       );
       if (!activeProv) {
-        new import_obsidian17.Notice("Please configure and select an AI provider in Settings first.");
+        new import_obsidian18.Notice("Please configure and select an AI provider in Settings first.");
         return;
       }
       this.inputTextAreaEl.value = "";
@@ -2628,7 +2847,7 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
         if (err.message && err.message.includes("stopped")) {
           textContentEl.setText(textContentEl.innerText + " [Stopped]");
         } else {
-          new import_obsidian17.Notice(`Agent error: ${err.message}`);
+          new import_obsidian18.Notice(`Agent error: ${err.message}`);
           textContentEl.setText(`Error: ${err.message}`);
         }
       } finally {
@@ -2686,7 +2905,7 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
     const summaryEl = detailsEl.createEl("summary", { cls: "harness-collapsible-summary" });
     const leftEl = summaryEl.createEl("div", { cls: "harness-collapsible-summary-left" });
     const iconSpan = leftEl.createEl("span");
-    (0, import_obsidian17.setIcon)(iconSpan, "sparkles");
+    (0, import_obsidian18.setIcon)(iconSpan, "sparkles");
     leftEl.createEl("span", { text: "Reasoning / \u0420\u0430\u0441\u0441\u0443\u0436\u0434\u0435\u043D\u0438\u044F" });
     summaryEl.createEl("span", { text: "View", cls: "harness-collapsible-badge" });
     const bodyEl = detailsEl.createEl("div", { cls: "harness-collapsible-body harness-thinking-text" });
@@ -2709,7 +2928,7 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
     const summaryEl = detailsEl.createEl("summary", { cls: "harness-collapsible-summary" });
     const leftEl = summaryEl.createEl("div", { cls: "harness-collapsible-summary-left" });
     const iconSpan = leftEl.createEl("span");
-    (0, import_obsidian17.setIcon)(iconSpan, "wrench");
+    (0, import_obsidian18.setIcon)(iconSpan, "wrench");
     leftEl.createEl("span", { text: `Tool: ${toolName}` });
     summaryEl.createEl("span", { text: "Args", cls: "harness-collapsible-badge" });
     const bodyEl = detailsEl.createEl("div", { cls: "harness-collapsible-body" });
@@ -2723,7 +2942,7 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
     const summaryEl = detailsEl.createEl("summary", { cls: "harness-collapsible-summary" });
     const leftEl = summaryEl.createEl("div", { cls: "harness-collapsible-summary-left" });
     const iconSpan = leftEl.createEl("span");
-    (0, import_obsidian17.setIcon)(iconSpan, "file-text");
+    (0, import_obsidian18.setIcon)(iconSpan, "file-text");
     leftEl.createEl("span", { text: `Output: ${toolName}` });
     summaryEl.createEl("span", { text: "Result", cls: "harness-collapsible-badge" });
     const bodyEl = detailsEl.createEl("div", { cls: "harness-collapsible-body" });
@@ -2750,13 +2969,13 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
     this.isInputExpanded = !this.isInputExpanded;
     if (this.isInputExpanded) {
       this.inputAreaEl.addClass("is-expanded");
-      (0, import_obsidian17.setIcon)(this.expandBtnEl, "minimize-2");
+      (0, import_obsidian18.setIcon)(this.expandBtnEl, "minimize-2");
       this.expandBtnEl.setAttribute("aria-label", "Collapse view");
       this.expandBtnEl.style.display = "flex";
       this.inputTextAreaEl.focus();
     } else {
       this.inputAreaEl.removeClass("is-expanded");
-      (0, import_obsidian17.setIcon)(this.expandBtnEl, "maximize-2");
+      (0, import_obsidian18.setIcon)(this.expandBtnEl, "maximize-2");
       this.expandBtnEl.setAttribute("aria-label", "Expand to full view");
       this.autoResizeTextarea();
       this.inputTextAreaEl.focus();
@@ -2767,12 +2986,12 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
       return;
     this.sendButtonEl.empty();
     if (isGenerating) {
-      (0, import_obsidian17.setIcon)(this.sendButtonEl, "square");
+      (0, import_obsidian18.setIcon)(this.sendButtonEl, "square");
       this.sendButtonEl.addClass("mod-warning");
       this.sendButtonEl.removeClass("mod-cta");
       this.sendButtonEl.setAttribute("aria-label", "Stop generation");
     } else {
-      (0, import_obsidian17.setIcon)(this.sendButtonEl, "send");
+      (0, import_obsidian18.setIcon)(this.sendButtonEl, "send");
       this.sendButtonEl.addClass("mod-cta");
       this.sendButtonEl.removeClass("mod-warning");
       this.sendButtonEl.setAttribute("aria-label", "Send message");
@@ -2918,7 +3137,7 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
       if (index === 0)
         itemEl.addClass("is-selected");
       const iconSpan = itemEl.createEl("span", { cls: "harness-suggest-icon" });
-      (0, import_obsidian17.setIcon)(iconSpan, item.isFolder ? "folder" : "file-text");
+      (0, import_obsidian18.setIcon)(iconSpan, item.isFolder ? "folder" : "file-text");
       itemEl.createEl("span", { text: ` ${item.path}` });
       itemEl.addEventListener("click", onSelect);
     });
@@ -2955,7 +3174,7 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
     this.saveSessionState();
     this.renderMessages();
     this.refreshModelDropdown();
-    new import_obsidian17.Notice("Started new chat session");
+    new import_obsidian18.Notice("Started new chat session");
   }
   openSessionsModal() {
     new SessionsModal(
@@ -3113,10 +3332,10 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
 };
 
 // src/skills/skill-manager.ts
-var import_obsidian19 = require("obsidian");
+var import_obsidian20 = require("obsidian");
 
 // src/skills/git-resolver.ts
-var import_obsidian18 = require("obsidian");
+var import_obsidian19 = require("obsidian");
 
 // src/skills/frontmatter.ts
 function parseSkillContent(rawContent, fallbackId) {
@@ -3231,7 +3450,7 @@ var SkillGitResolver = class {
     let successfulUrl = "";
     for (const candUrl of rawCandidates) {
       try {
-        const res = await (0, import_obsidian18.requestUrl)({ url: candUrl, method: "GET" });
+        const res = await (0, import_obsidian19.requestUrl)({ url: candUrl, method: "GET" });
         if (res.status === 200 && res.text && res.text.trim().length > 0) {
           fetchedContent = res.text;
           successfulUrl = candUrl;
@@ -3447,6 +3666,59 @@ var VaultSkillsScanner = class {
 };
 
 // src/skills/skill-manager.ts
+var DEFAULT_SKILL_CREATOR_CONTENT = `# Skill Creator for Obsidian Harness Bot
+
+You are an expert agent architect specializing in designing, writing, and registering high-quality skills for the Obsidian Harness Bot ecosystem according to the SKILL.md standard.
+
+Follow this structured workflow to guide the user from an initial idea to an installed, working skill:
+
+---
+
+## Step 1: Capture Intent & Requirements
+1. Understand Goal: What specific task, reasoning methodology, or workflow should this skill enable?
+2. Determine Triggers & Pushy Description:
+   - What user phrases, keywords, or contexts should activate this skill?
+   - Formulate a clear, pushy description so the model knows exactly when to apply this skill (e.g. "Use whenever the user mentions X, Y, or Z...").
+3. Establish Structure:
+   - What are the inputs, required tools (Vault tools, notes), and output format (e.g. structured markdown, tables, checklists)?
+   - What edge cases, style guidelines, or step-by-step methodologies should the agent follow?
+
+---
+
+## Step 2: Draft the Skill
+Write clean, modular markdown instructions with YAML frontmatter.
+
+---
+
+## Step 3: Register the Skill via create_skill Tool
+Once the skill content is agreed upon (or drafted):
+1. Execute the create_skill tool with:
+   - id: kebab-case identifier (e.g. 'youtube-summarizer', 'literature-reviewer')
+   - name: Display name
+   - description: The trigger description
+   - content: The complete markdown instructions body
+   - tags: Array of category tags
+   - author: Author attribution
+   - version: Version string (e.g. '1.0.0')
+
+2. Inform the user that the skill is now immediately active in:
+   - The chat slash commands list as /[id]
+   - The Skills & Marketplace GUI manager (/skills)`;
+var DEFAULT_STARTER_SKILLS = [
+  {
+    id: "skill-creator",
+    name: "Skill Creator",
+    description: "Create new skills, modify and improve existing skills, and manage agent workflows. Use whenever the user wants to create a new skill, turn a workflow into a skill, optimize an existing skill, or add new slash commands to Obsidian Harness Bot.",
+    author: "Anthropic / Adapted",
+    homepage: "https://github.com/anthropics/skills/tree/main/skills/skill-creator",
+    tags: ["skills", "meta", "workflow", "creation"],
+    version: "1.0.0",
+    sourceType: "installed",
+    enabled: true,
+    content: DEFAULT_SKILL_CREATOR_CONTENT,
+    updatedAt: Date.now()
+  }
+];
 var SkillManager = class {
   constructor(app, settings, saveSettingsCallback) {
     this.localSkills = [];
@@ -3458,6 +3730,11 @@ var SkillManager = class {
   async init() {
     if (!this.settings.installedSkills) {
       this.settings.installedSkills = [];
+    }
+    const hasSkillCreator = this.settings.installedSkills.some((s) => s.id === "skill-creator");
+    if (!hasSkillCreator) {
+      this.settings.installedSkills.unshift(DEFAULT_STARTER_SKILLS[0]);
+      await this.saveSettingsCallback();
     }
     if (this.settings.scanVaultSkills !== false) {
       await this.refreshLocalSkills();
@@ -3504,6 +3781,32 @@ var SkillManager = class {
     return this.getAllSkills().find((s) => s.id === normalized);
   }
   /**
+   * Saves a custom skill directly into plugin storage (called by create_skill tool or GUI).
+   */
+  async saveCustomSkill(skillData) {
+    const normalizedId = skillData.id.toLowerCase().trim().replace(/\s+/g, "-").replace(/[^a-z0-9-_]/g, "");
+    const newSkill = {
+      id: normalizedId,
+      name: skillData.name.trim(),
+      description: skillData.description.trim(),
+      author: skillData.author?.trim() || "Custom / Agent",
+      tags: skillData.tags || ["custom"],
+      version: skillData.version?.trim() || "1.0.0",
+      homepage: skillData.homepage,
+      sourceType: "installed",
+      enabled: true,
+      content: skillData.content.trim(),
+      updatedAt: Date.now()
+    };
+    if (!this.settings.installedSkills) {
+      this.settings.installedSkills = [];
+    }
+    this.settings.installedSkills = this.settings.installedSkills.filter((s) => s.id !== normalizedId);
+    this.settings.installedSkills.push(newSkill);
+    await this.saveSettingsCallback();
+    return newSkill;
+  }
+  /**
    * Installs a skill from any Git or markdown URL.
    */
   async installFromUrl(url) {
@@ -3514,7 +3817,7 @@ var SkillManager = class {
     this.settings.installedSkills = this.settings.installedSkills.filter((s) => s.id !== resolved.id);
     this.settings.installedSkills.push(resolved);
     await this.saveSettingsCallback();
-    new import_obsidian19.Notice(`Skill "${resolved.name}" successfully installed!`);
+    new import_obsidian20.Notice(`Skill "${resolved.name}" successfully installed!`);
     return resolved;
   }
   /**
@@ -3531,7 +3834,7 @@ var SkillManager = class {
       return;
     this.settings.installedSkills = this.settings.installedSkills.filter((s) => s.id !== id);
     await this.saveSettingsCallback();
-    new import_obsidian19.Notice(`Skill uninstalled.`);
+    new import_obsidian20.Notice(`Skill uninstalled.`);
   }
   /**
    * Toggles skill enabled status.
@@ -3589,7 +3892,7 @@ ${skill.content}
 };
 
 // src/main.ts
-var HarnessPlugin = class extends import_obsidian20.Plugin {
+var HarnessPlugin = class extends import_obsidian21.Plugin {
   constructor() {
     super(...arguments);
     this.settings = DEFAULT_SETTINGS;

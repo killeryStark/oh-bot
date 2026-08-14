@@ -1,6 +1,6 @@
 {
   "name": "obsidian-harness-bot",
-  "version": "0.0.18-alpha",
+  "version": "0.0.19-alpha",
   "description": "Multi-step AI Agent Harness plugin for Obsidian running on Desktop and Mobile.",
   "main": "main.js",
   "scripts": {

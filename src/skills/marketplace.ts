@@ -6,6 +6,16 @@ export const OFFICIAL_MARKETPLACE_URL =
 
 export const BUILTIN_MARKETPLACE_SKILLS: MarketplaceSkillItem[] = [
   {
+    id: 'skill-creator',
+    name: 'Skill Creator',
+    description: 'Создание, проектирование и доработка новых скиллов и слэш-команд для Obsidian Harness Bot',
+    author: 'Anthropic / Adapted',
+    homepage: 'https://github.com/anthropics/skills/tree/main/skills/skill-creator',
+    downloadUrl: 'https://raw.githubusercontent.com/killeryStark/oh-bot/main/marketplace/skills/skill-creator/SKILL.md',
+    version: '1.0.0',
+    tags: ['skills', 'meta', 'workflow', 'creation'],
+  },
+  {
     id: 'brainstorming',
     name: 'Brainstorming & Design',
     description: 'Пошаговая разработка идей, архитектуры и спецификаций через структурированный диалог',
