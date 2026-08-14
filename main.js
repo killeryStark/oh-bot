@@ -28,7 +28,7 @@ __export(main_exports, {
   default: () => HarnessPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian21 = require("obsidian");
+var import_obsidian27 = require("obsidian");
 
 // src/types.ts
 var DEFAULT_PROVIDERS = [
@@ -117,11 +117,12 @@ var DEFAULT_SETTINGS = {
   currentSessionId: "",
   installedSkills: [],
   customMarketplaceUrl: "",
-  scanVaultSkills: true
+  scanVaultSkills: true,
+  mcpServers: []
 };
 
 // src/ui/settings-tab.ts
-var import_obsidian6 = require("obsidian");
+var import_obsidian9 = require("obsidian");
 
 // src/ui/components/add-provider-modal.ts
 var import_obsidian2 = require("obsidian");
@@ -806,8 +807,533 @@ var SkillViewModal = class extends import_obsidian5.Modal {
   }
 };
 
+// src/ui/mcp-modal.ts
+var import_obsidian8 = require("obsidian");
+
+// src/ui/components/mcp-tools-view-modal.ts
+var import_obsidian6 = require("obsidian");
+var McpToolsViewModal = class extends import_obsidian6.Modal {
+  constructor(app, server) {
+    super(app);
+    this.server = server;
+  }
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.addClass("harness-mcp-tools-modal");
+    const headerEl = contentEl.createEl("div", { cls: "harness-modal-header" });
+    const titleEl = headerEl.createEl("h2", { text: `Tools: ${this.server.name}` });
+    titleEl.style.margin = "0";
+    const tools = this.server.cachedTools || [];
+    contentEl.createEl("p", {
+      text: tools.length > 0 ? `This MCP server provides ${tools.length} tool${tools.length === 1 ? "" : "s"} available to the autonomous agent.` : 'No tools discovered for this server yet. Try clicking "Sync / Test" in the MCP servers list.',
+      cls: "harness-subtext"
+    });
+    if (tools.length === 0) {
+      const closeBtn2 = contentEl.createEl("button", { text: "Close", cls: "mod-cta" });
+      closeBtn2.style.marginTop = "16px";
+      closeBtn2.addEventListener("click", () => this.close());
+      return;
+    }
+    const toolsContainer = contentEl.createEl("div", { cls: "harness-mcp-tools-list" });
+    for (const tool of tools) {
+      const cardEl = toolsContainer.createEl("div", { cls: "harness-mcp-tool-card" });
+      const titleRow = cardEl.createEl("div", { cls: "harness-mcp-tool-header" });
+      titleRow.createEl("code", { text: tool.name, cls: "harness-tool-name-badge" });
+      if (tool.description) {
+        cardEl.createEl("p", { text: tool.description, cls: "harness-tool-desc" });
+      }
+      const properties = tool.parameters?.properties || {};
+      const propKeys = Object.keys(properties);
+      const requiredProps = new Set(tool.parameters?.required || []);
+      if (propKeys.length > 0) {
+        const paramsHeader = cardEl.createEl("div", { cls: "harness-tool-params-title" });
+        paramsHeader.createEl("strong", { text: "Parameters:" });
+        const paramsList = cardEl.createEl("div", { cls: "harness-tool-params-list" });
+        for (const key of propKeys) {
+          const prop = properties[key] || {};
+          const itemEl = paramsList.createEl("div", { cls: "harness-tool-param-item" });
+          const nameLine = itemEl.createEl("div", { cls: "harness-param-name-row" });
+          nameLine.createEl("code", { text: key, cls: "harness-param-name" });
+          nameLine.createEl("span", { text: ` (${prop.type || "any"})`, cls: "harness-param-type" });
+          if (requiredProps.has(key)) {
+            nameLine.createEl("span", { text: "required", cls: "harness-badge-required" });
+          }
+          if (prop.description) {
+            itemEl.createEl("div", { text: prop.description, cls: "harness-param-desc" });
+          }
+        }
+      }
+    }
+    const footerEl = contentEl.createEl("div", { cls: "harness-modal-footer" });
+    footerEl.style.marginTop = "16px";
+    const closeBtn = footerEl.createEl("button", { text: "Close", cls: "mod-cta" });
+    closeBtn.addEventListener("click", () => this.close());
+  }
+  onClose() {
+    const { contentEl } = this;
+    contentEl.empty();
+  }
+};
+
+// src/ui/components/mcp-server-edit-modal.ts
+var import_obsidian7 = require("obsidian");
+var McpServerEditModal = class extends import_obsidian7.Modal {
+  constructor(app, mcpManager, onSaved, serverToEdit) {
+    super(app);
+    this.name = "";
+    this.url = "";
+    this.description = "";
+    this.authType = "bearer";
+    this.customHeaderName = "X-API-Key";
+    this.apiToken = "";
+    // OAuth fields
+    this.oauthAuthUrl = "";
+    this.oauthTokenUrl = "";
+    this.oauthClientId = "";
+    this.oauthScopes = "";
+    this.mcpManager = mcpManager;
+    this.secretManager = new SecretManager(app);
+    this.serverToEdit = serverToEdit;
+    this.onSaved = onSaved;
+    if (serverToEdit) {
+      this.name = serverToEdit.name;
+      this.url = serverToEdit.url;
+      this.description = serverToEdit.description || "";
+      this.authType = serverToEdit.authType;
+      this.customHeaderName = serverToEdit.customHeaderName || "X-API-Key";
+      const existingToken = mcpManager.getAuthToken(serverToEdit);
+      this.apiToken = existingToken || "";
+      if (serverToEdit.oauthConfig) {
+        this.oauthAuthUrl = serverToEdit.oauthConfig.authorizationUrl || "";
+        this.oauthTokenUrl = serverToEdit.oauthConfig.tokenUrl || "";
+        this.oauthClientId = serverToEdit.oauthConfig.clientId || "";
+        this.oauthScopes = (serverToEdit.oauthConfig.scopes || []).join(" ");
+      }
+    }
+  }
+  onOpen() {
+    this.render();
+  }
+  render() {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.addClass("harness-mcp-edit-modal");
+    const isEdit = !!this.serverToEdit;
+    contentEl.createEl("h2", { text: isEdit ? `Edit MCP Server: ${this.name}` : "Add Web MCP Server" });
+    new import_obsidian7.Setting(contentEl).setName("Server Name").setDesc("A friendly display name for this remote MCP service.").addText(
+      (text) => text.setPlaceholder("e.g. My Remote Tools").setValue(this.name).onChange((v) => this.name = v)
+    );
+    new import_obsidian7.Setting(contentEl).setName("Remote SSE / Streamable HTTP URL").setDesc("The remote URL endpoint (supports standard MCP SSE or Streamable HTTP POST).").addText(
+      (text) => text.setPlaceholder("https://example.com/mcp or https://example.com/sse").setValue(this.url).onChange((v) => this.url = v)
+    );
+    new import_obsidian7.Setting(contentEl).setName("Description (Optional)").setDesc("Brief summary of tools provided by this server.").addText(
+      (text) => text.setPlaceholder("e.g. Web search and article fetching").setValue(this.description).onChange((v) => this.description = v)
+    );
+    new import_obsidian7.Setting(contentEl).setName("Authentication Method").setDesc("Select how the client should authenticate with this MCP endpoint.").addDropdown(
+      (dropdown) => dropdown.addOption("bearer", "Bearer Token (Authorization: Bearer ...)").addOption("custom_headers", "Custom Header (e.g. X-API-Key)").addOption("oauth2", "OAuth 2.1 (PKCE Web Redirect)").addOption("none", "No Authentication (Public Endpoint)").setValue(this.authType).onChange((v) => {
+        this.authType = v;
+        this.render();
+      })
+    );
+    if (this.authType === "bearer") {
+      new import_obsidian7.Setting(contentEl).setName("API Token / Secret").setDesc("Stored securely in Obsidian SecretManager. Will not appear in plain text.").addText((text) => {
+        text.inputEl.type = "password";
+        text.setPlaceholder("Enter API token or secret key...").setValue(this.apiToken).onChange((v) => this.apiToken = v);
+      });
+    } else if (this.authType === "custom_headers") {
+      new import_obsidian7.Setting(contentEl).setName("Custom Header Name").setDesc("HTTP header name to include.").addText(
+        (text) => text.setPlaceholder("X-API-Key").setValue(this.customHeaderName).onChange((v) => this.customHeaderName = v)
+      );
+      new import_obsidian7.Setting(contentEl).setName("Header Value / API Key").setDesc("Stored securely in Obsidian SecretManager.").addText((text) => {
+        text.inputEl.type = "password";
+        text.setPlaceholder("Enter API key...").setValue(this.apiToken).onChange((v) => this.apiToken = v);
+      });
+    } else if (this.authType === "oauth2") {
+      new import_obsidian7.Setting(contentEl).setName("Authorization URL").setDesc("OAuth provider authorization endpoint.").addText(
+        (text) => text.setPlaceholder("https://provider.com/oauth/authorize").setValue(this.oauthAuthUrl).onChange((v) => this.oauthAuthUrl = v)
+      );
+      new import_obsidian7.Setting(contentEl).setName("Token URL").setDesc("OAuth provider token exchange endpoint.").addText(
+        (text) => text.setPlaceholder("https://provider.com/oauth/token").setValue(this.oauthTokenUrl).onChange((v) => this.oauthTokenUrl = v)
+      );
+      new import_obsidian7.Setting(contentEl).setName("Client ID (Optional)").setDesc("OAuth client identifier if required by the service.").addText(
+        (text) => text.setPlaceholder("client_id_123").setValue(this.oauthClientId).onChange((v) => this.oauthClientId = v)
+      );
+      new import_obsidian7.Setting(contentEl).setName("Scopes (Optional)").setDesc("Space-separated list of OAuth scopes.").addText(
+        (text) => text.setPlaceholder("read write data:all").setValue(this.oauthScopes).onChange((v) => this.oauthScopes = v)
+      );
+    }
+    const footerEl = contentEl.createEl("div", { cls: "harness-modal-footer" });
+    footerEl.style.marginTop = "20px";
+    footerEl.style.display = "flex";
+    footerEl.style.justifyContent = "flex-end";
+    footerEl.style.gap = "10px";
+    const cancelBtn = footerEl.createEl("button", { text: "Cancel" });
+    cancelBtn.addEventListener("click", () => this.close());
+    const saveBtn = footerEl.createEl("button", {
+      text: isEdit ? "Save Changes" : "Save & Test Connection",
+      cls: "mod-cta"
+    });
+    saveBtn.addEventListener("click", async () => {
+      await this.handleSave(saveBtn);
+    });
+  }
+  async handleSave(saveBtn) {
+    if (!this.name.trim()) {
+      new import_obsidian7.Notice("Please enter a server name.");
+      return;
+    }
+    if (!this.url.trim()) {
+      new import_obsidian7.Notice("Please enter a valid remote URL.");
+      return;
+    }
+    const serverId = this.serverToEdit ? this.serverToEdit.id : this.name.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") || `mcp-${Date.now()}`;
+    const secretKeyName = `oh_bot_secret_mcp_${serverId}_token`;
+    if (this.apiToken.trim()) {
+      this.secretManager.setSecret(secretKeyName, this.apiToken.trim());
+    }
+    const serverConfig = {
+      id: serverId,
+      name: this.name.trim(),
+      description: this.description.trim(),
+      url: this.url.trim(),
+      enabled: this.serverToEdit ? this.serverToEdit.enabled : true,
+      authType: this.authType,
+      apiKeySecretName: this.authType === "bearer" || this.authType === "custom_headers" ? secretKeyName : void 0,
+      customHeaderName: this.authType === "custom_headers" ? this.customHeaderName.trim() : void 0,
+      oauthConfig: this.authType === "oauth2" ? {
+        authorizationUrl: this.oauthAuthUrl.trim(),
+        tokenUrl: this.oauthTokenUrl.trim(),
+        clientId: this.oauthClientId.trim() || void 0,
+        scopes: this.oauthScopes.trim() ? this.oauthScopes.trim().split(/\s+/) : void 0,
+        accessTokenSecretName: `oh_bot_secret_mcp_${serverId}_access`,
+        refreshTokenSecretName: `oh_bot_secret_mcp_${serverId}_refresh`
+      } : void 0,
+      cachedTools: this.serverToEdit ? this.serverToEdit.cachedTools : []
+    };
+    try {
+      saveBtn.disabled = true;
+      saveBtn.setText("Testing Connection...");
+      await this.mcpManager.addServer(serverConfig);
+      if (this.authType !== "oauth2") {
+        try {
+          const tools = await this.mcpManager.testAndSyncServer(serverId);
+          new import_obsidian7.Notice(`\u2713 Connected! Discovered ${tools.length} tool(s).`);
+        } catch (e) {
+          new import_obsidian7.Notice(`Server saved, but test connection reported: ${e.message}`);
+        }
+      } else {
+        new import_obsidian7.Notice(`Server saved. Click "Connect with OAuth" to log in.`);
+      }
+      this.onSaved();
+      this.close();
+    } catch (err) {
+      new import_obsidian7.Notice(`Failed to save server: ${err.message}`);
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.setText(this.serverToEdit ? "Save Changes" : "Save & Test Connection");
+    }
+  }
+  onClose() {
+    const { contentEl } = this;
+    contentEl.empty();
+  }
+};
+
+// src/ui/mcp-modal.ts
+var McpModal = class extends import_obsidian8.Modal {
+  constructor(app, plugin) {
+    super(app);
+    this.activeTab = "configured";
+    this.searchQuery = "";
+    this.isSyncingAll = false;
+    this.plugin = plugin;
+  }
+  async onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.addClass("harness-mcp-modal");
+    await this.render();
+  }
+  async render() {
+    const { contentEl } = this;
+    contentEl.empty();
+    const headerEl = contentEl.createEl("div", { cls: "harness-modal-header" });
+    const titleEl = headerEl.createEl("h2", { text: "MCP Servers & Integrations" });
+    titleEl.style.margin = "0";
+    const controlsRowEl = contentEl.createEl("div", { cls: "harness-mcp-controls-row" });
+    const tabsContainerEl = controlsRowEl.createEl("div", { cls: "harness-tab-group" });
+    const allServers = this.plugin.mcpManager.getAllServers();
+    const serverCount = allServers.length;
+    const tabConfiguredBtn = tabsContainerEl.createEl("button", {
+      cls: `harness-tab-btn ${this.activeTab === "configured" ? "is-active" : ""}`,
+      text: `Configured Servers (${serverCount})`
+    });
+    tabConfiguredBtn.addEventListener("click", () => {
+      this.activeTab = "configured";
+      this.render();
+    });
+    const tabCatalogBtn = tabsContainerEl.createEl("button", {
+      cls: `harness-tab-btn ${this.activeTab === "catalog" ? "is-active" : ""}`,
+      text: "Catalog & Add"
+    });
+    tabCatalogBtn.addEventListener("click", () => {
+      this.activeTab = "catalog";
+      this.render();
+    });
+    const refreshBtn = controlsRowEl.createEl("button", { cls: "clickable-icon" });
+    refreshBtn.setAttribute("aria-label", "Sync & Test all enabled MCP servers");
+    (0, import_obsidian8.setIcon)(refreshBtn, "refresh-cw");
+    refreshBtn.addEventListener("click", async () => {
+      if (this.isSyncingAll)
+        return;
+      this.isSyncingAll = true;
+      new import_obsidian8.Notice("Syncing all enabled MCP servers...");
+      const enabledServers = this.plugin.mcpManager.getEnabledServers();
+      for (const s of enabledServers) {
+        try {
+          await this.plugin.mcpManager.testAndSyncServer(s.id);
+        } catch (e) {
+        }
+      }
+      this.isSyncingAll = false;
+      new import_obsidian8.Notice("MCP Sync completed.");
+      await this.render();
+    });
+    const searchContainerEl = contentEl.createEl("div", { cls: "harness-search-wrapper" });
+    const searchInput = searchContainerEl.createEl("input", {
+      type: "search",
+      cls: "harness-search-input",
+      placeholder: "Search MCP servers by name, description, or tools...",
+      value: this.searchQuery
+    });
+    searchInput.addEventListener("input", () => {
+      this.searchQuery = searchInput.value.toLowerCase().trim();
+      this.renderBody(bodyContainerEl);
+    });
+    const bodyContainerEl = contentEl.createEl("div", { cls: "harness-mcp-body" });
+    this.renderBody(bodyContainerEl);
+  }
+  renderBody(container) {
+    container.empty();
+    if (this.activeTab === "configured") {
+      this.renderConfiguredList(container);
+    } else {
+      this.renderCatalogList(container);
+    }
+  }
+  renderConfiguredList(container) {
+    let servers = this.plugin.mcpManager.getAllServers();
+    if (this.searchQuery) {
+      servers = servers.filter(
+        (s) => s.name.toLowerCase().includes(this.searchQuery) || s.description && s.description.toLowerCase().includes(this.searchQuery) || s.cachedTools && s.cachedTools.some((t) => t.name.toLowerCase().includes(this.searchQuery) || (t.description || "").toLowerCase().includes(this.searchQuery))
+      );
+    }
+    if (servers.length === 0) {
+      const emptyEl = container.createEl("div", { cls: "harness-empty-state" });
+      emptyEl.createEl("p", {
+        text: this.searchQuery ? "No MCP servers matching your search query." : 'No MCP servers configured yet. Switch to the "Catalog & Add" tab to connect Todoist or custom remote MCP servers.'
+      });
+      const addBtn = emptyEl.createEl("button", { text: "Open Catalog & Add", cls: "mod-cta" });
+      addBtn.addEventListener("click", () => {
+        this.activeTab = "catalog";
+        this.render();
+      });
+      return;
+    }
+    const gridEl = container.createEl("div", { cls: "harness-mcp-grid" });
+    for (const server of servers) {
+      const cardEl = gridEl.createEl("div", {
+        cls: `harness-mcp-card ${server.enabled ? "is-enabled" : "is-disabled"}`
+      });
+      const cardHeaderEl = cardEl.createEl("div", { cls: "harness-mcp-card-header" });
+      const titleWrapper = cardHeaderEl.createEl("div", { cls: "harness-mcp-title-wrapper" });
+      titleWrapper.createEl("strong", { text: server.name, cls: "harness-mcp-title" });
+      titleWrapper.createEl("span", { text: "Remote SSE", cls: "harness-source-badge mod-remote" });
+      let statusText = "Disabled";
+      let statusCls = "mod-disabled";
+      if (server.enabled) {
+        if (server.lastError) {
+          statusText = "Error";
+          statusCls = "mod-error";
+        } else {
+          const toolCount = server.cachedTools ? server.cachedTools.length : 0;
+          statusText = `Connected (${toolCount} tool${toolCount === 1 ? "" : "s"})`;
+          statusCls = "mod-connected";
+        }
+      }
+      const statusBadge = titleWrapper.createEl("span", {
+        text: statusText,
+        cls: `harness-status-badge ${statusCls}`
+      });
+      if (server.lastError) {
+        statusBadge.setAttribute("title", server.lastError);
+      }
+      const toggleWrapper = cardHeaderEl.createEl("div", { cls: "harness-switch-wrapper" });
+      const toggleLabel = toggleWrapper.createEl("label", { cls: "harness-switch" });
+      toggleLabel.setAttribute("aria-label", server.enabled ? "Disable Server" : "Enable Server");
+      const toggleInput = toggleLabel.createEl("input", { type: "checkbox" });
+      toggleInput.checked = server.enabled;
+      toggleLabel.createEl("span", { cls: "harness-slider round" });
+      toggleInput.addEventListener("change", async () => {
+        await this.plugin.mcpManager.toggleServer(server.id, toggleInput.checked);
+        cardEl.toggleClass("is-enabled", toggleInput.checked);
+        cardEl.toggleClass("is-disabled", !toggleInput.checked);
+        toggleLabel.setAttribute("aria-label", toggleInput.checked ? "Disable Server" : "Enable Server");
+        await this.render();
+      });
+      const urlRow = cardEl.createEl("div", { cls: "harness-mcp-url-row" });
+      urlRow.createEl("code", { text: server.url, cls: "harness-mcp-url" });
+      if (server.description) {
+        cardEl.createEl("p", { text: server.description, cls: "harness-mcp-desc" });
+      }
+      if (server.lastError && server.enabled) {
+        const errorBox = cardEl.createEl("div", { cls: "harness-mcp-error-box" });
+        errorBox.createEl("span", { text: `\u26A0\uFE0F ${server.lastError}` });
+      }
+      const metaRowEl = cardEl.createEl("div", { cls: "harness-mcp-meta-row" });
+      const authInfo = metaRowEl.createEl("span", { cls: "harness-mcp-auth-label" });
+      const authToken = this.plugin.mcpManager.getAuthToken(server);
+      let authStatusText = "Auth: None";
+      if (server.authType === "bearer") {
+        authStatusText = authToken ? "Auth: Bearer Token \u2713" : "Auth: Bearer Token (Missing)";
+      } else if (server.authType === "custom_headers") {
+        authStatusText = authToken ? `Auth: ${server.customHeaderName || "Custom"} \u2713` : "Auth: Custom Header (Missing)";
+      } else if (server.authType === "oauth2") {
+        authStatusText = authToken ? "Auth: OAuth 2.1 Connected \u2713" : "Auth: OAuth (Login Required)";
+      }
+      authInfo.setText(authStatusText);
+      const actionsEl = cardEl.createEl("div", { cls: "harness-mcp-actions" });
+      const testBtn = actionsEl.createEl("button", { text: "Sync & Test", cls: "harness-btn-sm" });
+      testBtn.addEventListener("click", async () => {
+        try {
+          testBtn.disabled = true;
+          testBtn.setText("Testing...");
+          const tools = await this.plugin.mcpManager.testAndSyncServer(server.id);
+          new import_obsidian8.Notice(`\u2713 ${server.name}: Synced ${tools.length} tool(s).`);
+          await this.render();
+        } catch (err) {
+          new import_obsidian8.Notice(`Test failed: ${err.message}`);
+          await this.render();
+        } finally {
+          testBtn.disabled = false;
+          testBtn.setText("Sync & Test");
+        }
+      });
+      if (server.authType === "oauth2") {
+        const oauthBtn = actionsEl.createEl("button", {
+          text: authToken ? "Re-login OAuth" : "Login with OAuth",
+          cls: "harness-btn-sm mod-cta"
+        });
+        oauthBtn.addEventListener("click", async () => {
+          try {
+            await this.plugin.mcpManager.startOAuthFlow(server.id);
+          } catch (err) {
+            new import_obsidian8.Notice(`OAuth error: ${err.message}`);
+          }
+        });
+      }
+      const viewToolsBtn = actionsEl.createEl("button", { text: "View Tools", cls: "harness-btn-sm" });
+      viewToolsBtn.addEventListener("click", () => {
+        new McpToolsViewModal(this.app, server).open();
+      });
+      const editBtn = actionsEl.createEl("button", { text: "Edit", cls: "harness-btn-sm" });
+      editBtn.addEventListener("click", () => {
+        new McpServerEditModal(this.app, this.plugin.mcpManager, () => this.render(), server).open();
+      });
+      const deleteBtn = actionsEl.createEl("button", { text: "Delete", cls: "harness-btn-sm mod-warning" });
+      deleteBtn.addEventListener("click", async () => {
+        await this.plugin.mcpManager.removeServer(server.id);
+        new import_obsidian8.Notice(`Removed ${server.name}`);
+        await this.render();
+      });
+    }
+  }
+  renderCatalogList(container) {
+    container.createEl("h3", { text: "Curated Remote MCP Servers" });
+    const catalogItems = this.plugin.mcpManager.getCatalog();
+    const installedServers = this.plugin.mcpManager.getAllServers();
+    const catalogGridEl = container.createEl("div", { cls: "harness-mcp-grid" });
+    for (const item of catalogItems) {
+      const isInstalled = installedServers.some((s) => s.id === item.id);
+      const cardEl = catalogGridEl.createEl("div", { cls: "harness-mcp-card mod-catalog" });
+      const headerRowEl = cardEl.createEl("div", { cls: "harness-mcp-card-header" });
+      const titleWrapper = headerRowEl.createEl("div", { cls: "harness-mcp-title-wrapper" });
+      titleWrapper.createEl("strong", { text: item.name, cls: "harness-mcp-title" });
+      titleWrapper.createEl("span", { text: "Verified", cls: "harness-source-badge mod-installed" });
+      cardEl.createEl("p", { text: item.description, cls: "harness-mcp-desc" });
+      if (item.authDescription) {
+        const authDesc = cardEl.createEl("p", { text: `\u2139\uFE0F ${item.authDescription}`, cls: "harness-subtext" });
+        authDesc.style.fontSize = "12px";
+      }
+      if (item.tags && item.tags.length > 0) {
+        const tagsContainer = cardEl.createEl("div", { cls: "harness-mcp-tags" });
+        for (const tag of item.tags) {
+          tagsContainer.createEl("span", { text: `#${tag}`, cls: "harness-tag-pill" });
+        }
+      }
+      const actionsEl = cardEl.createEl("div", { cls: "harness-mcp-actions" });
+      actionsEl.style.marginTop = "12px";
+      if (isInstalled) {
+        const installedBtn = actionsEl.createEl("button", {
+          text: "Configured (Manage in Tab 1)",
+          cls: "harness-btn-sm"
+        });
+        installedBtn.addEventListener("click", () => {
+          this.activeTab = "configured";
+          this.render();
+        });
+      } else {
+        const addTokenBtn = actionsEl.createEl("button", {
+          text: "Add & Set API Token",
+          cls: "harness-btn-sm mod-cta"
+        });
+        addTokenBtn.addEventListener("click", async () => {
+          const serverConfig = await this.plugin.mcpManager.installFromCatalog(item);
+          new McpServerEditModal(this.app, this.plugin.mcpManager, () => this.render(), serverConfig).open();
+        });
+        if (item.oauthDefaults) {
+          const addOAuthBtn = actionsEl.createEl("button", {
+            text: "Connect with OAuth",
+            cls: "harness-btn-sm"
+          });
+          addOAuthBtn.addEventListener("click", async () => {
+            const serverConfig = await this.plugin.mcpManager.installFromCatalog(item);
+            serverConfig.authType = "oauth2";
+            await this.plugin.mcpManager.updateServer(serverConfig.id, serverConfig);
+            await this.plugin.mcpManager.startOAuthFlow(serverConfig.id);
+            this.activeTab = "configured";
+            await this.render();
+          });
+        }
+      }
+    }
+    const customSectionEl = container.createEl("div", { cls: "harness-mcp-custom-section" });
+    customSectionEl.style.marginTop = "28px";
+    customSectionEl.createEl("h3", { text: "Add Custom Remote MCP Server" });
+    customSectionEl.createEl("p", {
+      text: "Connect any remote MCP server running over SSE or Streamable HTTP POST. Supports custom Bearer tokens, headers, or OAuth 2.1.",
+      cls: "harness-subtext"
+    });
+    const addCustomBtn = customSectionEl.createEl("button", {
+      text: "+ Add Custom MCP Server",
+      cls: "mod-cta"
+    });
+    addCustomBtn.addEventListener("click", () => {
+      new McpServerEditModal(this.app, this.plugin.mcpManager, () => {
+        this.activeTab = "configured";
+        this.render();
+      }).open();
+    });
+  }
+  onClose() {
+    const { contentEl } = this;
+    contentEl.empty();
+  }
+};
+
 // src/ui/settings-tab.ts
-var HarnessSettingTab = class extends import_obsidian6.PluginSettingTab {
+var HarnessSettingTab = class extends import_obsidian9.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.plugin = plugin;
@@ -819,7 +1345,7 @@ var HarnessSettingTab = class extends import_obsidian6.PluginSettingTab {
     containerEl.empty();
     containerEl.addClass("harness-settings-container");
     containerEl.createEl("h2", { text: "Obsidian Harness Bot Settings" });
-    new import_obsidian6.Setting(containerEl).setName("Default Active Provider").setDesc("Select the default AI provider for agent operations").addDropdown((dropdown) => {
+    new import_obsidian9.Setting(containerEl).setName("Default Active Provider").setDesc("Select the default AI provider for agent operations").addDropdown((dropdown) => {
       dropdown.addOption("", "(Not configured)");
       for (const prov of this.plugin.settings.providers) {
         const hasKey = prov.type === "ollama" || this.secretManager.hasSecret(prov.apiKeySecretName);
@@ -842,7 +1368,7 @@ var HarnessSettingTab = class extends import_obsidian6.PluginSettingTab {
     const currentActiveProvider = this.plugin.settings.providers.find(
       (p) => p.id === this.plugin.settings.activeProviderId
     );
-    const modelSetting = new import_obsidian6.Setting(containerEl).setName("Default Active Model").setDesc(currentActiveProvider ? `Select model for ${currentActiveProvider.name}` : "Select an active provider first");
+    const modelSetting = new import_obsidian9.Setting(containerEl).setName("Default Active Model").setDesc(currentActiveProvider ? `Select model for ${currentActiveProvider.name}` : "Select an active provider first");
     if (currentActiveProvider && currentActiveProvider.models.length > 0) {
       modelSetting.addDropdown((dropdown) => {
         for (const m of currentActiveProvider.models) {
@@ -866,7 +1392,7 @@ var HarnessSettingTab = class extends import_obsidian6.PluginSettingTab {
       });
     }
     containerEl.createEl("h3", { text: "Provider Configuration" });
-    const providerSelectSetting = new import_obsidian6.Setting(containerEl).setName("Select Provider to Configure").setDesc("Choose a provider to configure its API key, base URL, and model list").addDropdown((dropdown) => {
+    const providerSelectSetting = new import_obsidian9.Setting(containerEl).setName("Select Provider to Configure").setDesc("Choose a provider to configure its API key, base URL, and model list").addDropdown((dropdown) => {
       for (const prov of this.plugin.settings.providers) {
         dropdown.addOption(prov.id, prov.name);
       }
@@ -903,14 +1429,14 @@ var HarnessSettingTab = class extends import_obsidian6.PluginSettingTab {
       providerCardEl.style.marginBottom = "16px";
       providerCardEl.style.backgroundColor = "var(--background-secondary)";
       providerCardEl.createEl("h4", { text: `Configuration: ${configProvider.name}` });
-      new import_obsidian6.Setting(providerCardEl).setName("Base URL").setDesc("API Endpoint URL").addText(
+      new import_obsidian9.Setting(providerCardEl).setName("Base URL").setDesc("API Endpoint URL").addText(
         (text) => text.setValue(configProvider.baseUrl).onChange(async (val) => {
           configProvider.baseUrl = val.trim();
           await this.plugin.saveSettings();
         })
       );
       const hasKey = this.secretManager.hasSecret(configProvider.apiKeySecretName);
-      const keySetting = new import_obsidian6.Setting(providerCardEl).setName("API Key").setDesc(hasKey ? "Key is configured in SecretStorage" : "Enter API Key to store securely");
+      const keySetting = new import_obsidian9.Setting(providerCardEl).setName("API Key").setDesc(hasKey ? "Key is configured in SecretStorage" : "Enter API Key to store securely");
       keySetting.addText((text) => {
         text.inputEl.type = "password";
         text.setPlaceholder(hasKey ? "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" : "Enter API Key");
@@ -923,7 +1449,7 @@ var HarnessSettingTab = class extends import_obsidian6.PluginSettingTab {
               this.plugin.settings.activeModel = configProvider.models[0] || "";
             }
             await this.plugin.saveSettings();
-            new import_obsidian6.Notice(`API Key saved for ${configProvider.name}`);
+            new import_obsidian9.Notice(`API Key saved for ${configProvider.name}`);
           }
         });
       });
@@ -933,12 +1459,12 @@ var HarnessSettingTab = class extends import_obsidian6.PluginSettingTab {
           btn.setWarning();
           btn.onClick(async () => {
             this.secretManager.setSecret(configProvider.apiKeySecretName, "");
-            new import_obsidian6.Notice(`API Key cleared for ${configProvider.name}`);
+            new import_obsidian9.Notice(`API Key cleared for ${configProvider.name}`);
             this.display();
           });
         });
       }
-      const modelsSetting = new import_obsidian6.Setting(providerCardEl).setName("Available Models").setDesc(`${configProvider.models.length} model(s) configured`);
+      const modelsSetting = new import_obsidian9.Setting(providerCardEl).setName("Available Models").setDesc(`${configProvider.models.length} model(s) configured`);
       if (configProvider.models.length > 0) {
         modelsSetting.addDropdown((dropdown) => {
           for (const m of configProvider.models) {
@@ -954,10 +1480,10 @@ var HarnessSettingTab = class extends import_obsidian6.PluginSettingTab {
       modelsSetting.addButton((btn) => {
         btn.setClass("harness-btn-icon-round");
         btn.setTooltip("Fetch models from endpoint");
-        (0, import_obsidian6.setIcon)(btn.buttonEl, "refresh-cw");
+        (0, import_obsidian9.setIcon)(btn.buttonEl, "refresh-cw");
         btn.onClick(async () => {
           const apiKey = this.secretManager.getSecret(configProvider.apiKeySecretName) || "";
-          new import_obsidian6.Notice(`Fetching models for ${configProvider.name}...`);
+          new import_obsidian9.Notice(`Fetching models for ${configProvider.name}...`);
           const fetched = await fetchAvailableModels(configProvider.baseUrl, apiKey);
           if (fetched.length > 0) {
             configProvider.models = fetched;
@@ -965,17 +1491,17 @@ var HarnessSettingTab = class extends import_obsidian6.PluginSettingTab {
               this.plugin.settings.activeModel = fetched[0];
             }
             await this.plugin.saveSettings();
-            new import_obsidian6.Notice(`Updated ${configProvider.name} with ${fetched.length} models!`);
+            new import_obsidian9.Notice(`Updated ${configProvider.name} with ${fetched.length} models!`);
             this.display();
           } else {
-            new import_obsidian6.Notice("Could not fetch models automatically from endpoint.");
+            new import_obsidian9.Notice("Could not fetch models automatically from endpoint.");
           }
         });
       });
       modelsSetting.addButton((btn) => {
         btn.setClass("harness-btn-icon-round");
         btn.setTooltip("Edit models list");
-        (0, import_obsidian6.setIcon)(btn.buttonEl, "pencil");
+        (0, import_obsidian9.setIcon)(btn.buttonEl, "pencil");
         btn.onClick(() => {
           new EditModelsModal(this.app, configProvider, async (updatedModels) => {
             configProvider.models = updatedModels;
@@ -990,10 +1516,10 @@ var HarnessSettingTab = class extends import_obsidian6.PluginSettingTab {
         });
       });
       if (configProvider.isCustom) {
-        const deleteSetting = new import_obsidian6.Setting(providerCardEl).setName("Delete Provider").setDesc("Remove this custom provider from settings");
+        const deleteSetting = new import_obsidian9.Setting(providerCardEl).setName("Delete Provider").setDesc("Remove this custom provider from settings");
         deleteSetting.addButton((btn) => {
           btn.setButtonText("Delete Provider");
-          (0, import_obsidian6.setIcon)(btn.buttonEl, "trash");
+          (0, import_obsidian9.setIcon)(btn.buttonEl, "trash");
           btn.setWarning();
           btn.onClick(async () => {
             this.plugin.settings.providers = this.plugin.settings.providers.filter(
@@ -1005,43 +1531,51 @@ var HarnessSettingTab = class extends import_obsidian6.PluginSettingTab {
               this.plugin.settings.activeModel = "";
             }
             await this.plugin.saveSettings();
-            new import_obsidian6.Notice(`Deleted provider "${configProvider.name}".`);
+            new import_obsidian9.Notice(`Deleted provider "${configProvider.name}".`);
             this.display();
           });
         });
       }
     }
     containerEl.createEl("h3", { text: "General & Safety" });
-    new import_obsidian6.Setting(containerEl).setName("Vault Modification Safety Mode").setDesc("Strict mode prompts for user confirmation before writing or modifying any Vault file").addDropdown(
+    new import_obsidian9.Setting(containerEl).setName("Vault Modification Safety Mode").setDesc("Strict mode prompts for user confirmation before writing or modifying any Vault file").addDropdown(
       (dropdown) => dropdown.addOption("strict", "Strict (Prompt before file edits)").addOption("auto", "Auto (Auto-approve file edits)").setValue(this.plugin.settings.safetyMode).onChange(async (value) => {
         this.plugin.settings.safetyMode = value;
         await this.plugin.saveSettings();
       })
     );
     containerEl.createEl("h3", { text: "Skills & Marketplace" });
-    new import_obsidian6.Setting(containerEl).setName("Manage Skills & Marketplace").setDesc("Install skills from GitHub, browse the marketplace, or manage local vault skills").addButton(
+    new import_obsidian9.Setting(containerEl).setName("Manage Skills & Marketplace").setDesc("Install skills from GitHub, browse the marketplace, or manage local vault skills").addButton(
       (btn) => btn.setButtonText("Open Skills Manager").setCta().onClick(() => {
         new SkillsModal(this.app, this.plugin).open();
       })
     );
-    new import_obsidian6.Setting(containerEl).setName("Auto-scan Vault Folders").setDesc("Scan .agents/skills/, .skills/, .claude/skills/, .gemini/skills/ in Vault for local skills").addToggle(
+    new import_obsidian9.Setting(containerEl).setName("Auto-scan Vault Folders").setDesc("Scan .agents/skills/, .skills/, .claude/skills/, .gemini/skills/ in Vault for local skills").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.scanVaultSkills !== false).onChange(async (val) => {
         this.plugin.settings.scanVaultSkills = val;
         await this.plugin.saveSettings();
         await this.plugin.skillManager.refreshLocalSkills();
       })
     );
-    new import_obsidian6.Setting(containerEl).setName("Custom Marketplace Manifest URL").setDesc("Optional URL to load custom community skills manifest JSON").addText(
+    new import_obsidian9.Setting(containerEl).setName("Custom Marketplace Manifest URL").setDesc("Optional URL to load custom community skills manifest JSON").addText(
       (text) => text.setPlaceholder("https://raw.githubusercontent.com/.../skills.json").setValue(this.plugin.settings.customMarketplaceUrl || "").onChange(async (val) => {
         this.plugin.settings.customMarketplaceUrl = val.trim();
         await this.plugin.saveSettings();
+      })
+    );
+    containerEl.createEl("h3", { text: "Model Context Protocol (MCP) Servers" });
+    const mcpServers = this.plugin.mcpManager?.getAllServers() || [];
+    const enabledMcpCount = mcpServers.filter((s) => s.enabled).length;
+    new import_obsidian9.Setting(containerEl).setName("Manage MCP Servers & Integrations").setDesc(`${enabledMcpCount} of ${mcpServers.length} servers active. Connect remote tools like Todoist, web search, and custom APIs.`).addButton(
+      (btn) => btn.setButtonText("Open MCP Servers (/mcp)").setCta().onClick(() => {
+        new McpModal(this.app, this.plugin).open();
       })
     );
   }
 };
 
 // src/ui/chat-view.ts
-var import_obsidian18 = require("obsidian");
+var import_obsidian21 = require("obsidian");
 
 // src/engine/providers/base.ts
 var LLMProvider = class {
@@ -1121,7 +1655,7 @@ var SSEStreamParser = class {
 };
 
 // src/engine/providers/openrouter.ts
-var import_obsidian7 = require("obsidian");
+var import_obsidian10 = require("obsidian");
 var OpenRouterProvider = class extends LLMProvider {
   constructor() {
     super(...arguments);
@@ -1229,7 +1763,7 @@ var OpenRouterProvider = class extends LLMProvider {
       if (signal?.aborted || err.name === "AbortError") {
         throw new Error("Generation stopped by user.");
       }
-      const reqRes = await (0, import_obsidian7.requestUrl)({
+      const reqRes = await (0, import_obsidian10.requestUrl)({
         url: endpoint,
         method: "POST",
         headers: {
@@ -1249,7 +1783,7 @@ var OpenRouterProvider = class extends LLMProvider {
 };
 
 // src/engine/providers/openai.ts
-var import_obsidian8 = require("obsidian");
+var import_obsidian11 = require("obsidian");
 var OpenAIProvider = class extends LLMProvider {
   constructor() {
     super(...arguments);
@@ -1355,7 +1889,7 @@ var OpenAIProvider = class extends LLMProvider {
       if (signal?.aborted || err.name === "AbortError") {
         throw new Error("Generation stopped by user.");
       }
-      const reqRes = await (0, import_obsidian8.requestUrl)({
+      const reqRes = await (0, import_obsidian11.requestUrl)({
         url: endpoint,
         method: "POST",
         headers: {
@@ -1375,7 +1909,7 @@ var OpenAIProvider = class extends LLMProvider {
 };
 
 // src/engine/providers/anthropic.ts
-var import_obsidian9 = require("obsidian");
+var import_obsidian12 = require("obsidian");
 var AnthropicProvider = class extends LLMProvider {
   constructor() {
     super(...arguments);
@@ -1491,7 +2025,7 @@ var AnthropicProvider = class extends LLMProvider {
       if (signal?.aborted || err.name === "AbortError") {
         throw new Error("Generation stopped by user.");
       }
-      const reqRes = await (0, import_obsidian9.requestUrl)({
+      const reqRes = await (0, import_obsidian12.requestUrl)({
         url: endpoint,
         method: "POST",
         headers: {
@@ -1527,7 +2061,7 @@ var AnthropicProvider = class extends LLMProvider {
 };
 
 // src/engine/providers/ollama.ts
-var import_obsidian10 = require("obsidian");
+var import_obsidian13 = require("obsidian");
 var OllamaProvider = class extends LLMProvider {
   constructor() {
     super(...arguments);
@@ -1566,7 +2100,7 @@ var OllamaProvider = class extends LLMProvider {
     if (signal?.aborted) {
       throw new Error("Generation stopped by user.");
     }
-    const reqRes = await (0, import_obsidian10.requestUrl)({
+    const reqRes = await (0, import_obsidian13.requestUrl)({
       url: endpoint,
       method: "POST",
       headers,
@@ -1773,7 +2307,7 @@ var AgentTool = class {
 };
 
 // src/tools/vault/read-file.ts
-var import_obsidian11 = require("obsidian");
+var import_obsidian14 = require("obsidian");
 var VaultReadFileTool = class extends AgentTool {
   constructor() {
     super(...arguments);
@@ -1794,7 +2328,7 @@ var VaultReadFileTool = class extends AgentTool {
   async execute(args, app) {
     try {
       const file = app.vault.getAbstractFileByPath(args.path);
-      if (!file || !(file instanceof import_obsidian11.TFile)) {
+      if (!file || !(file instanceof import_obsidian14.TFile)) {
         return {
           success: false,
           output: "",
@@ -1872,7 +2406,7 @@ var VaultCreateFileTool = class extends AgentTool {
 };
 
 // src/tools/vault/patch-file.ts
-var import_obsidian12 = require("obsidian");
+var import_obsidian15 = require("obsidian");
 var VaultPatchFileTool = class extends AgentTool {
   constructor() {
     super(...arguments);
@@ -1902,7 +2436,7 @@ var VaultPatchFileTool = class extends AgentTool {
   async execute(args, app) {
     try {
       const file = app.vault.getAbstractFileByPath(args.path);
-      if (!file || !(file instanceof import_obsidian12.TFile)) {
+      if (!file || !(file instanceof import_obsidian15.TFile)) {
         return {
           success: false,
           output: "",
@@ -1933,7 +2467,7 @@ var VaultPatchFileTool = class extends AgentTool {
 };
 
 // src/tools/vault/list-dir.ts
-var import_obsidian13 = require("obsidian");
+var import_obsidian16 = require("obsidian");
 var VaultListDirTool = class extends AgentTool {
   constructor() {
     super(...arguments);
@@ -1955,7 +2489,7 @@ var VaultListDirTool = class extends AgentTool {
     try {
       const folderPath = (args.path || "").replace(/^\//, "");
       const folder = folderPath === "" ? app.vault.getRoot() : app.vault.getAbstractFileByPath(folderPath);
-      if (!folder || !(folder instanceof import_obsidian13.TFolder)) {
+      if (!folder || !(folder instanceof import_obsidian16.TFolder)) {
         return {
           success: false,
           output: "",
@@ -1965,7 +2499,7 @@ var VaultListDirTool = class extends AgentTool {
       const items = folder.children.map((child) => ({
         name: child.name,
         path: child.path,
-        type: child instanceof import_obsidian13.TFolder ? "folder" : "file"
+        type: child instanceof import_obsidian16.TFolder ? "folder" : "file"
       }));
       return {
         success: true,
@@ -2024,7 +2558,7 @@ var VaultSearchNotesTool = class extends AgentTool {
 };
 
 // src/tools/skills/create-skill.ts
-var import_obsidian14 = require("obsidian");
+var import_obsidian17 = require("obsidian");
 var CreateSkillTool = class extends AgentTool {
   constructor(skillManager) {
     super();
@@ -2102,7 +2636,7 @@ var CreateSkillTool = class extends AgentTool {
         author: typeof author === "string" ? author : void 0,
         version: typeof version === "string" ? version : void 0
       });
-      new import_obsidian14.Notice(`Skill "${saved.name}" (/${saved.id}) created!`);
+      new import_obsidian17.Notice(`Skill "${saved.name}" (/${saved.id}) created!`);
       return {
         success: true,
         output: `Successfully created and registered skill "${saved.name}" (ID: ${saved.id}, version: ${saved.version || "1.0.0"}).
@@ -2218,9 +2752,53 @@ var ListSkillsTool = class extends AgentTool {
   }
 };
 
+// src/tools/mcp/bridge-tool.ts
+var McpBridgeTool = class {
+  constructor(serverId, serverName, toolSchema, mcpManager) {
+    this.serverId = serverId;
+    this.rawToolName = toolSchema.name;
+    this.mcpManager = mcpManager;
+    this.name = `mcp__${serverId}__${toolSchema.name}`;
+    this.description = `[${serverName} MCP] ${toolSchema.description || toolSchema.name}`;
+    this.parameters = toolSchema.parameters || { type: "object", properties: {} };
+    const nameLower = toolSchema.name.toLowerCase();
+    const descLower = (toolSchema.description || "").toLowerCase();
+    const mutationKeywords = [
+      "create",
+      "add",
+      "delete",
+      "remove",
+      "update",
+      "patch",
+      "post",
+      "write",
+      "insert",
+      "set",
+      "send",
+      "modify",
+      "close",
+      "complete",
+      "reopen"
+    ];
+    this.isMutation = mutationKeywords.some(
+      (kw) => nameLower.includes(kw) || descLower.includes(kw)
+    );
+  }
+  toSchema() {
+    return {
+      name: this.name,
+      description: this.description,
+      parameters: this.parameters
+    };
+  }
+  async execute(args, app) {
+    return await this.mcpManager.executeTool(this.serverId, this.rawToolName, args);
+  }
+};
+
 // src/tools/registry.ts
 var ToolRegistry = class {
-  constructor(skillManager) {
+  constructor(skillManager, mcpManager) {
     this.tools = /* @__PURE__ */ new Map();
     this.createSkillTool = new CreateSkillTool();
     this.readSkillTool = new ReadSkillTool();
@@ -2236,23 +2814,59 @@ var ToolRegistry = class {
     if (skillManager) {
       this.setSkillManager(skillManager);
     }
+    if (mcpManager) {
+      this.setMcpManager(mcpManager);
+    }
   }
   setSkillManager(skillManager) {
     this.createSkillTool.setSkillManager(skillManager);
     this.readSkillTool.setSkillManager(skillManager);
     this.listSkillsTool.setSkillManager(skillManager);
   }
+  setMcpManager(mcpManager) {
+    this.mcpManager = mcpManager;
+  }
   registerTool(tool) {
     this.tools.set(tool.name, tool);
   }
   getTool(name) {
-    return this.tools.get(name);
+    const staticTool = this.tools.get(name);
+    if (staticTool)
+      return staticTool;
+    if (name.startsWith("mcp__") && this.mcpManager) {
+      const parts = name.split("__");
+      if (parts.length >= 3) {
+        const serverId = parts[1];
+        const rawToolName = parts.slice(2).join("__");
+        const server = this.mcpManager.getServer(serverId);
+        if (server && server.enabled) {
+          const cachedSchema = server.cachedTools?.find((t) => t.name === rawToolName) || {
+            name: rawToolName,
+            description: `Tool from ${server.name}`,
+            parameters: { type: "object", properties: {} }
+          };
+          return new McpBridgeTool(server.id, server.name, cachedSchema, this.mcpManager);
+        }
+      }
+    }
+    return void 0;
   }
   /**
-   * Returns all registered tools as deterministically sorted ToolSchemas.
+   * Returns all registered tools (local tools + enabled MCP tools) as deterministically sorted ToolSchemas.
    */
   getSchemas() {
     const rawSchemas = Array.from(this.tools.values()).map((t) => t.toSchema());
+    if (this.mcpManager) {
+      const enabledServers = this.mcpManager.getEnabledServers();
+      for (const server of enabledServers) {
+        if (server.cachedTools && server.cachedTools.length > 0) {
+          for (const toolSchema of server.cachedTools) {
+            const bridge = new McpBridgeTool(server.id, server.name, toolSchema, this.mcpManager);
+            rawSchemas.push(bridge.toSchema());
+          }
+        }
+      }
+    }
     return sortToolSchemasDeterministically(rawSchemas);
   }
   async executeTool(name, args, app) {
@@ -2414,7 +3028,7 @@ var SessionManager = class {
 };
 
 // src/utils/mention-helper.ts
-var import_obsidian15 = require("obsidian");
+var import_obsidian18 = require("obsidian");
 var MentionHelper = class {
   /**
    * Returns all searchable files and folders in the Vault for @ autocomplete suggestions.
@@ -2426,7 +3040,7 @@ var MentionHelper = class {
     for (const item of allFiles) {
       if (item.path === "/" || item.path === "")
         continue;
-      const isFolder = item instanceof import_obsidian15.TFolder;
+      const isFolder = item instanceof import_obsidian18.TFolder;
       if (!queryLower || item.name.toLowerCase().includes(queryLower) || item.path.toLowerCase().includes(queryLower)) {
         items.push({
           name: item.name,
@@ -2456,7 +3070,7 @@ var MentionHelper = class {
     for (const match of matches) {
       const targetPath = match[1];
       const item = app.vault.getAbstractFileByPath(targetPath);
-      if (item instanceof import_obsidian15.TFile) {
+      if (item instanceof import_obsidian18.TFile) {
         try {
           const content = await app.vault.read(item);
           attachedBlocks.push(
@@ -2467,9 +3081,9 @@ ${content}
           );
         } catch (e) {
         }
-      } else if (item instanceof import_obsidian15.TFolder) {
+      } else if (item instanceof import_obsidian18.TFolder) {
         try {
-          const children = item.children.map((c) => `- ${c.name} (${c instanceof import_obsidian15.TFolder ? "folder" : "file"})`).join("\n");
+          const children = item.children.map((c) => `- ${c.name} (${c instanceof import_obsidian18.TFolder ? "folder" : "file"})`).join("\n");
           attachedBlocks.push(
             `[Attached Folder: @${item.path}]
 \`\`\`
@@ -2490,8 +3104,8 @@ ${attachedBlocks.join("\n\n")}`;
 };
 
 // src/ui/components/confirmation-modal.ts
-var import_obsidian16 = require("obsidian");
-var ConfirmationModal = class extends import_obsidian16.Modal {
+var import_obsidian19 = require("obsidian");
+var ConfirmationModal = class extends import_obsidian19.Modal {
   constructor(app, toolCall, onResult) {
     super(app);
     this.toolCall = toolCall;
@@ -2507,7 +3121,7 @@ var ConfirmationModal = class extends import_obsidian16.Modal {
     });
     const codeBlock = contentEl.createEl("pre");
     codeBlock.createEl("code", { text: this.toolCall.function.arguments });
-    new import_obsidian16.Setting(contentEl).addButton(
+    new import_obsidian19.Setting(contentEl).addButton(
       (btn) => btn.setButtonText("Deny").onClick(() => {
         this.onResult(false);
         this.close();
@@ -2526,8 +3140,8 @@ var ConfirmationModal = class extends import_obsidian16.Modal {
 };
 
 // src/ui/components/sessions-modal.ts
-var import_obsidian17 = require("obsidian");
-var SessionsModal = class extends import_obsidian17.Modal {
+var import_obsidian20 = require("obsidian");
+var SessionsModal = class extends import_obsidian20.Modal {
   constructor(app, sessions, currentSessionId, onSelect, onDelete, onNewSession) {
     super(app);
     this.sessions = [...sessions];
@@ -2544,7 +3158,7 @@ var SessionsModal = class extends import_obsidian17.Modal {
     contentEl.empty();
     contentEl.addClass("harness-modal-content");
     contentEl.createEl("h2", { text: "Chat Sessions" });
-    const topSetting = new import_obsidian17.Setting(contentEl).setName("New Conversation").setDesc("Start a fresh agent harness session");
+    const topSetting = new import_obsidian20.Setting(contentEl).setName("New Conversation").setDesc("Start a fresh agent harness session");
     topSetting.addButton((btn) => {
       btn.setButtonText("+ New Session");
       btn.setCta();
@@ -2596,7 +3210,7 @@ var SessionsModal = class extends import_obsidian17.Modal {
       actionsEl.style.display = "flex";
       actionsEl.style.gap = "4px";
       const delBtn = actionsEl.createEl("button", { cls: "harness-btn-icon-round" });
-      (0, import_obsidian17.setIcon)(delBtn, "trash");
+      (0, import_obsidian20.setIcon)(delBtn, "trash");
       delBtn.setAttribute("aria-label", "Delete session");
       delBtn.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -2613,7 +3227,7 @@ var SessionsModal = class extends import_obsidian17.Modal {
 
 // src/ui/chat-view.ts
 var HARNESS_VIEW_TYPE = "harness-chat-view";
-var HarnessChatView = class extends import_obsidian18.ItemView {
+var HarnessChatView = class extends import_obsidian21.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.isInputExpanded = false;
@@ -2622,7 +3236,7 @@ var HarnessChatView = class extends import_obsidian18.ItemView {
     this.currentSuggestItems = [];
     this.currentAbortController = null;
     this.plugin = plugin;
-    this.toolRegistry = new ToolRegistry(this.plugin.skillManager);
+    this.toolRegistry = new ToolRegistry(this.plugin.skillManager, this.plugin.mcpManager);
     this.agentHarness = new AgentHarness(this.app, this.plugin.settings, this.toolRegistry);
     this.exporter = new MarkdownExporter(this.app);
     this.initSession();
@@ -2662,27 +3276,27 @@ var HarnessChatView = class extends import_obsidian18.ItemView {
     titleEl.style.alignItems = "center";
     titleEl.style.gap = "6px";
     const botIconEl = titleEl.createEl("span");
-    (0, import_obsidian18.setIcon)(botIconEl, "bot");
+    (0, import_obsidian21.setIcon)(botIconEl, "bot");
     titleEl.createEl("span", { text: "Harness Bot", cls: "harness-title" });
     const headerActionsEl = headerEl.createEl("div", { cls: "harness-chat-header-actions" });
     const newSessionBtn = headerActionsEl.createEl("button", { cls: "clickable-icon" });
     newSessionBtn.setAttribute("aria-label", "New Session");
-    (0, import_obsidian18.setIcon)(newSessionBtn, "plus");
+    (0, import_obsidian21.setIcon)(newSessionBtn, "plus");
     newSessionBtn.addEventListener("click", () => {
       this.createNewSession();
     });
     const sessionsBtn = headerActionsEl.createEl("button", { cls: "clickable-icon" });
     sessionsBtn.setAttribute("aria-label", "View Saved Sessions (/sessions)");
-    (0, import_obsidian18.setIcon)(sessionsBtn, "history");
+    (0, import_obsidian21.setIcon)(sessionsBtn, "history");
     sessionsBtn.addEventListener("click", () => {
       this.openSessionsModal();
     });
     const exportBtn = headerActionsEl.createEl("button", { cls: "clickable-icon" });
     exportBtn.setAttribute("aria-label", "Export Chat to Markdown");
-    (0, import_obsidian18.setIcon)(exportBtn, "upload");
+    (0, import_obsidian21.setIcon)(exportBtn, "upload");
     exportBtn.addEventListener("click", async () => {
       if (this.currentSession.messages.length === 0) {
-        new import_obsidian18.Notice("No chat history to export.");
+        new import_obsidian21.Notice("No chat history to export.");
         return;
       }
       try {
@@ -2690,14 +3304,14 @@ var HarnessChatView = class extends import_obsidian18.ItemView {
           this.currentSession.messages,
           this.currentSession.model || this.plugin.settings.activeModel || "default"
         );
-        new import_obsidian18.Notice(`Chat exported to ${exportedPath}`);
+        new import_obsidian21.Notice(`Chat exported to ${exportedPath}`);
       } catch (e) {
-        new import_obsidian18.Notice(`Export failed: ${e.message}`);
+        new import_obsidian21.Notice(`Export failed: ${e.message}`);
       }
     });
     const clearBtn = headerActionsEl.createEl("button", { cls: "clickable-icon" });
     clearBtn.setAttribute("aria-label", "Clear Messages in Session");
-    (0, import_obsidian18.setIcon)(clearBtn, "trash");
+    (0, import_obsidian21.setIcon)(clearBtn, "trash");
     clearBtn.addEventListener("click", async () => {
       this.currentSession.messages = [];
       await this.saveSessionState();
@@ -2715,7 +3329,7 @@ var HarnessChatView = class extends import_obsidian18.ItemView {
     this.expandBtnEl = textareaWrapperEl.createEl("button", { cls: "harness-expand-btn clickable-icon" });
     this.expandBtnEl.setAttribute("aria-label", "Expand to full view");
     this.expandBtnEl.style.display = "none";
-    (0, import_obsidian18.setIcon)(this.expandBtnEl, "maximize-2");
+    (0, import_obsidian21.setIcon)(this.expandBtnEl, "maximize-2");
     this.expandBtnEl.addEventListener("click", () => {
       this.toggleInputExpand();
     });
@@ -2734,7 +3348,7 @@ var HarnessChatView = class extends import_obsidian18.ItemView {
         this.currentAbortController.abort();
         this.currentAbortController = null;
         this.setSendButtonState(false);
-        new import_obsidian18.Notice("Generation stopped.");
+        new import_obsidian21.Notice("Generation stopped.");
         return;
       }
       const text = this.inputTextAreaEl.value.trim();
@@ -2772,12 +3386,18 @@ var HarnessChatView = class extends import_obsidian18.ItemView {
         this.resetTextareaHeight();
         new SkillsModal(this.app, this.plugin).open();
         return;
+      } else if (text === "/mcp") {
+        this.inputTextAreaEl.value = "";
+        this.hideSuggest();
+        this.resetTextareaHeight();
+        new McpModal(this.app, this.plugin).open();
+        return;
       }
       const activeProv = this.plugin.settings.providers.find(
         (p) => p.id === this.plugin.settings.activeProviderId
       );
       if (!activeProv) {
-        new import_obsidian18.Notice("Please configure and select an AI provider in Settings first.");
+        new import_obsidian21.Notice("Please configure and select an AI provider in Settings first.");
         return;
       }
       this.inputTextAreaEl.value = "";
@@ -2859,7 +3479,7 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
         if (err.message && err.message.includes("stopped")) {
           textContentEl.setText(textContentEl.innerText + " [Stopped]");
         } else {
-          new import_obsidian18.Notice(`Agent error: ${err.message}`);
+          new import_obsidian21.Notice(`Agent error: ${err.message}`);
           textContentEl.setText(`Error: ${err.message}`);
         }
       } finally {
@@ -2917,11 +3537,11 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
     const summaryEl = detailsEl.createEl("summary", { cls: "harness-collapsible-summary" });
     const leftEl = summaryEl.createEl("div", { cls: "harness-collapsible-summary-left" });
     const iconSpan = leftEl.createEl("span");
-    (0, import_obsidian18.setIcon)(iconSpan, "sparkles");
+    (0, import_obsidian21.setIcon)(iconSpan, "sparkles");
     leftEl.createEl("span", { text: "Reasoning / \u0420\u0430\u0441\u0441\u0443\u0436\u0434\u0435\u043D\u0438\u044F" });
     summaryEl.createEl("span", { text: "View", cls: "harness-collapsible-badge" });
     const bodyEl = detailsEl.createEl("div", { cls: "harness-collapsible-body harness-thinking-text" });
-    await import_obsidian18.MarkdownRenderer.render(this.app, thoughtText, bodyEl, "", this);
+    await import_obsidian21.MarkdownRenderer.render(this.app, thoughtText, bodyEl, "", this);
   }
   formatContentForCard(rawStr) {
     if (!rawStr || rawStr.trim() === "")
@@ -2940,7 +3560,7 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
     const summaryEl = detailsEl.createEl("summary", { cls: "harness-collapsible-summary" });
     const leftEl = summaryEl.createEl("div", { cls: "harness-collapsible-summary-left" });
     const iconSpan = leftEl.createEl("span");
-    (0, import_obsidian18.setIcon)(iconSpan, "wrench");
+    (0, import_obsidian21.setIcon)(iconSpan, "wrench");
     leftEl.createEl("span", { text: `Tool: ${toolName}` });
     summaryEl.createEl("span", { text: "Args", cls: "harness-collapsible-badge" });
     const bodyEl = detailsEl.createEl("div", { cls: "harness-collapsible-body" });
@@ -2954,7 +3574,7 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
     const summaryEl = detailsEl.createEl("summary", { cls: "harness-collapsible-summary" });
     const leftEl = summaryEl.createEl("div", { cls: "harness-collapsible-summary-left" });
     const iconSpan = leftEl.createEl("span");
-    (0, import_obsidian18.setIcon)(iconSpan, "file-text");
+    (0, import_obsidian21.setIcon)(iconSpan, "file-text");
     leftEl.createEl("span", { text: `Output: ${toolName}` });
     summaryEl.createEl("span", { text: "Result", cls: "harness-collapsible-badge" });
     const bodyEl = detailsEl.createEl("div", { cls: "harness-collapsible-body" });
@@ -2981,13 +3601,13 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
     this.isInputExpanded = !this.isInputExpanded;
     if (this.isInputExpanded) {
       this.inputAreaEl.addClass("is-expanded");
-      (0, import_obsidian18.setIcon)(this.expandBtnEl, "minimize-2");
+      (0, import_obsidian21.setIcon)(this.expandBtnEl, "minimize-2");
       this.expandBtnEl.setAttribute("aria-label", "Collapse view");
       this.expandBtnEl.style.display = "flex";
       this.inputTextAreaEl.focus();
     } else {
       this.inputAreaEl.removeClass("is-expanded");
-      (0, import_obsidian18.setIcon)(this.expandBtnEl, "maximize-2");
+      (0, import_obsidian21.setIcon)(this.expandBtnEl, "maximize-2");
       this.expandBtnEl.setAttribute("aria-label", "Expand to full view");
       this.autoResizeTextarea();
       this.inputTextAreaEl.focus();
@@ -2998,12 +3618,12 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
       return;
     this.sendButtonEl.empty();
     if (isGenerating) {
-      (0, import_obsidian18.setIcon)(this.sendButtonEl, "square");
+      (0, import_obsidian21.setIcon)(this.sendButtonEl, "square");
       this.sendButtonEl.addClass("mod-warning");
       this.sendButtonEl.removeClass("mod-cta");
       this.sendButtonEl.setAttribute("aria-label", "Stop generation");
     } else {
-      (0, import_obsidian18.setIcon)(this.sendButtonEl, "send");
+      (0, import_obsidian21.setIcon)(this.sendButtonEl, "send");
       this.sendButtonEl.addClass("mod-cta");
       this.sendButtonEl.removeClass("mod-warning");
       this.sendButtonEl.setAttribute("aria-label", "Send message");
@@ -3079,6 +3699,16 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
         }
       },
       {
+        cmd: "/mcp",
+        desc: "Open MCP Servers & Integrations Manager",
+        action: () => {
+          this.inputTextAreaEl.value = "";
+          this.hideSuggest();
+          this.resetTextareaHeight();
+          new McpModal(this.app, this.plugin).open();
+        }
+      },
+      {
         cmd: "/export",
         desc: "Export chat to Markdown note",
         action: () => {
@@ -3149,7 +3779,7 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
       if (index === 0)
         itemEl.addClass("is-selected");
       const iconSpan = itemEl.createEl("span", { cls: "harness-suggest-icon" });
-      (0, import_obsidian18.setIcon)(iconSpan, item.isFolder ? "folder" : "file-text");
+      (0, import_obsidian21.setIcon)(iconSpan, item.isFolder ? "folder" : "file-text");
       itemEl.createEl("span", { text: ` ${item.path}` });
       itemEl.addEventListener("click", onSelect);
     });
@@ -3186,7 +3816,7 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
     this.saveSessionState();
     this.renderMessages();
     this.refreshModelDropdown();
-    new import_obsidian18.Notice("Started new chat session");
+    new import_obsidian21.Notice("Started new chat session");
   }
   openSessionsModal() {
     new SessionsModal(
@@ -3308,7 +3938,7 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
         msgEl.createEl("div", { text: "You", cls: "harness-message-header" });
         const bodyEl = msgEl.createEl("div", { cls: "harness-message-body" });
         const rawContent = typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content || "");
-        await import_obsidian18.MarkdownRenderer.render(this.app, rawContent, bodyEl, "", this);
+        await import_obsidian21.MarkdownRenderer.render(this.app, rawContent, bodyEl, "", this);
       } else if (msg.role === "assistant") {
         const msgEl = this.messagesContainerEl.createEl("div", { cls: "harness-message harness-message-assistant" });
         msgEl.createEl("div", {
@@ -3330,7 +3960,7 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
         }
         if (parsed.finalAnswer) {
           const answerContainer = bodyEl.createEl("div", { cls: "harness-answer-text" });
-          await import_obsidian18.MarkdownRenderer.render(this.app, parsed.finalAnswer, answerContainer, "", this);
+          await import_obsidian21.MarkdownRenderer.render(this.app, parsed.finalAnswer, answerContainer, "", this);
         }
       } else if (msg.role === "tool") {
         const rawContent = typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content || "");
@@ -3347,10 +3977,10 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
 };
 
 // src/skills/skill-manager.ts
-var import_obsidian20 = require("obsidian");
+var import_obsidian23 = require("obsidian");
 
 // src/skills/git-resolver.ts
-var import_obsidian19 = require("obsidian");
+var import_obsidian22 = require("obsidian");
 
 // src/skills/frontmatter.ts
 function parseSkillContent(rawContent, fallbackId) {
@@ -3465,7 +4095,7 @@ var SkillGitResolver = class {
     let successfulUrl = "";
     for (const candUrl of rawCandidates) {
       try {
-        const res = await (0, import_obsidian19.requestUrl)({ url: candUrl, method: "GET" });
+        const res = await (0, import_obsidian22.requestUrl)({ url: candUrl, method: "GET" });
         if (res.status === 200 && res.text && res.text.trim().length > 0) {
           fetchedContent = res.text;
           successfulUrl = candUrl;
@@ -3832,7 +4462,7 @@ var SkillManager = class {
     this.settings.installedSkills = this.settings.installedSkills.filter((s) => s.id !== resolved.id);
     this.settings.installedSkills.push(resolved);
     await this.saveSettingsCallback();
-    new import_obsidian20.Notice(`Skill "${resolved.name}" successfully installed!`);
+    new import_obsidian23.Notice(`Skill "${resolved.name}" successfully installed!`);
     return resolved;
   }
   /**
@@ -3849,7 +4479,7 @@ var SkillManager = class {
       return;
     this.settings.installedSkills = this.settings.installedSkills.filter((s) => s.id !== id);
     await this.saveSettingsCallback();
-    new import_obsidian20.Notice(`Skill uninstalled.`);
+    new import_obsidian23.Notice(`Skill uninstalled.`);
   }
   /**
    * Toggles skill enabled status.
@@ -3906,8 +4536,621 @@ ${skill.content}
   }
 };
 
+// src/mcp/mcp-manager.ts
+var import_obsidian26 = require("obsidian");
+
+// src/mcp/client.ts
+var import_obsidian24 = require("obsidian");
+var McpClient = class {
+  constructor(options) {
+    this.postUrl = null;
+    this.nextRequestId = 1;
+    this.url = options.url.trim().replace(/\/+$/, "");
+    this.authType = options.authType;
+    this.authToken = options.authToken;
+    this.customHeaderName = options.customHeaderName;
+    this.timeoutMs = options.timeoutMs || 3e4;
+  }
+  /**
+   * Generates authorization & common HTTP headers.
+   */
+  getHeaders() {
+    const headers = {
+      "Accept": "application/json, text/event-stream, text/plain, */*",
+      "Content-Type": "application/json"
+    };
+    if (this.authToken) {
+      if (this.authType === "bearer" || this.authType === "oauth2") {
+        headers["Authorization"] = `Bearer ${this.authToken}`;
+      } else if (this.authType === "custom_headers" && this.customHeaderName) {
+        headers[this.customHeaderName] = this.authToken;
+      }
+    }
+    return headers;
+  }
+  /**
+   * Discovers the POST endpoint for message exchange.
+   * Handles standard MCP SSE endpoints (which yield an 'endpoint' event)
+   * or fallback to direct POST on the provided URL.
+   */
+  async discoverEndpoint() {
+    if (this.postUrl) {
+      return this.postUrl;
+    }
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), Math.min(this.timeoutMs, 8e3));
+      const sseHeaders = { ...this.getHeaders(), "Accept": "text/event-stream" };
+      const response = await fetch(this.url, {
+        method: "GET",
+        headers: sseHeaders,
+        signal: controller.signal
+      });
+      if (response.ok && response.body) {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        for (let i = 0; i < 5; i++) {
+          const { value, done } = await reader.read();
+          if (done)
+            break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          for (let j = 0; j < lines.length; j++) {
+            const line = lines[j].trim();
+            if (line.startsWith("event: endpoint") || line.startsWith("event: message")) {
+              const dataLine = lines.slice(j + 1).find((l) => l.trim().startsWith("data:"));
+              if (dataLine) {
+                const endpointData = dataLine.replace(/^data:\s*/, "").trim();
+                reader.cancel();
+                clearTimeout(timeoutId);
+                if (endpointData.startsWith("http://") || endpointData.startsWith("https://")) {
+                  this.postUrl = endpointData;
+                } else {
+                  const base = new URL(this.url);
+                  const resolved = new URL(endpointData, base.origin);
+                  this.postUrl = resolved.toString();
+                }
+                return this.postUrl;
+              }
+            }
+          }
+        }
+        reader.cancel();
+      }
+      clearTimeout(timeoutId);
+    } catch (err) {
+    }
+    this.postUrl = this.url;
+    return this.postUrl;
+  }
+  /**
+   * Sends a JSON-RPC request to the MCP server.
+   */
+  async sendJsonRpc(method, params) {
+    const postEndpoint = await this.discoverEndpoint();
+    const requestId = this.nextRequestId++;
+    const payload = {
+      jsonrpc: "2.0",
+      id: requestId,
+      method,
+      params
+    };
+    const reqOptions = {
+      url: postEndpoint,
+      method: "POST",
+      headers: this.getHeaders(),
+      body: JSON.stringify(payload),
+      throw: false
+    };
+    const res = await (0, import_obsidian24.requestUrl)(reqOptions);
+    if (res.status === 401 || res.status === 403) {
+      throw new Error(`Authentication error (${res.status}): Please check API Token or OAuth permissions.`);
+    }
+    if (res.status < 200 || res.status >= 300) {
+      throw new Error(`MCP Server HTTP ${res.status}: ${res.text || "Request failed"}`);
+    }
+    let json;
+    try {
+      json = typeof res.json === "object" ? res.json : JSON.parse(res.text);
+    } catch (e) {
+      throw new Error(`Failed to parse JSON-RPC response: ${res.text}`);
+    }
+    if (json.error) {
+      throw new Error(`MCP Error [${json.error.code}]: ${json.error.message}`);
+    }
+    return json.result;
+  }
+  /**
+   * Initializes session with the MCP server.
+   */
+  async initialize() {
+    const initResult = await this.sendJsonRpc("initialize", {
+      protocolVersion: "2024-11-05",
+      capabilities: {
+        roots: { listChanged: false },
+        sampling: {}
+      },
+      clientInfo: {
+        name: "obsidian-harness-bot",
+        version: "1.0.0"
+      }
+    });
+    try {
+      const postEndpoint = await this.discoverEndpoint();
+      await (0, import_obsidian24.requestUrl)({
+        url: postEndpoint,
+        method: "POST",
+        headers: this.getHeaders(),
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          method: "notifications/initialized"
+        }),
+        throw: false
+      });
+    } catch (e) {
+    }
+  }
+  /**
+   * Fetches the list of tools exposed by the MCP server.
+   */
+  async listTools() {
+    let result;
+    try {
+      result = await this.sendJsonRpc("tools/list", {});
+    } catch (err) {
+      await this.initialize();
+      result = await this.sendJsonRpc("tools/list", {});
+    }
+    const tools = result?.tools || [];
+    const schemas = [];
+    for (const tool of tools) {
+      const inputSchema = tool.inputSchema || { type: "object", properties: {} };
+      schemas.push({
+        name: tool.name,
+        description: tool.description || `Tool provided by MCP Server (${tool.name})`,
+        parameters: {
+          type: "object",
+          properties: inputSchema.properties || {},
+          required: inputSchema.required || []
+        }
+      });
+    }
+    return schemas;
+  }
+  /**
+   * Calls a remote MCP tool and formats the response as a ToolResult.
+   */
+  async callTool(name, args) {
+    try {
+      const result = await this.sendJsonRpc("tools/call", {
+        name,
+        arguments: args
+      });
+      if (!result) {
+        return {
+          success: true,
+          output: "Tool executed successfully with empty result."
+        };
+      }
+      if (Array.isArray(result.content)) {
+        const textParts = result.content.map((item) => {
+          if (item.type === "text")
+            return item.text;
+          if (item.type === "resource")
+            return JSON.stringify(item.resource, null, 2);
+          return JSON.stringify(item);
+        }).join("\n");
+        if (result.isError) {
+          return {
+            success: false,
+            output: "",
+            error: textParts || "MCP Tool reported an error during execution."
+          };
+        }
+        return {
+          success: true,
+          output: textParts || "Success"
+        };
+      }
+      if (typeof result === "string") {
+        return { success: true, output: result };
+      }
+      return {
+        success: true,
+        output: JSON.stringify(result, null, 2)
+      };
+    } catch (err) {
+      return {
+        success: false,
+        output: "",
+        error: `MCP callTool "${name}" failed: ${err.message}`
+      };
+    }
+  }
+};
+
+// src/mcp/oauth.ts
+var import_obsidian25 = require("obsidian");
+var McpOAuthHelper = class {
+  /**
+   * Generates a cryptographically random string for PKCE and state verification.
+   */
+  static generateRandomString(length = 43) {
+    const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
+    const randomValues = new Uint8Array(length);
+    window.crypto.getRandomValues(randomValues);
+    let result = "";
+    for (let i = 0; i < length; i++) {
+      result += charset[randomValues[i] % charset.length];
+    }
+    return result;
+  }
+  /**
+   * Computes SHA-256 base64url-encoded code challenge from code_verifier.
+   */
+  static async generateCodeChallenge(codeVerifier) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(codeVerifier);
+    const digest = await window.crypto.subtle.digest("SHA-256", data);
+    const bytes = new Uint8Array(digest);
+    let binary = "";
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+  /**
+   * Prepares and starts the PKCE authorization flow, returning the authorization URL to open.
+   */
+  static async startOAuthFlow(server) {
+    const oauth = server.oauthConfig;
+    if (!oauth || !oauth.authorizationUrl || !oauth.tokenUrl) {
+      throw new Error(`Server "${server.name}" has incomplete OAuth configuration.`);
+    }
+    const state = this.generateRandomString(32);
+    const codeVerifier = this.generateRandomString(64);
+    const codeChallenge = await this.generateCodeChallenge(codeVerifier);
+    this.pendingStates.set(state, {
+      serverId: server.id,
+      codeVerifier,
+      tokenUrl: oauth.tokenUrl,
+      clientId: oauth.clientId,
+      accessTokenSecretName: oauth.accessTokenSecretName || `oh_bot_secret_mcp_${server.id}_access`,
+      refreshTokenSecretName: oauth.refreshTokenSecretName || `oh_bot_secret_mcp_${server.id}_refresh`,
+      createdAt: Date.now()
+    });
+    const cutoff = Date.now() - 15 * 60 * 1e3;
+    for (const [key, val] of this.pendingStates.entries()) {
+      if (val.createdAt < cutoff) {
+        this.pendingStates.delete(key);
+      }
+    }
+    const authUrl = new URL(oauth.authorizationUrl);
+    authUrl.searchParams.set("response_type", "code");
+    authUrl.searchParams.set("redirect_uri", "obsidian://oh-bot-mcp-auth");
+    authUrl.searchParams.set("state", state);
+    authUrl.searchParams.set("code_challenge", codeChallenge);
+    authUrl.searchParams.set("code_challenge_method", "S256");
+    if (oauth.clientId) {
+      authUrl.searchParams.set("client_id", oauth.clientId);
+    }
+    if (oauth.scopes && oauth.scopes.length > 0) {
+      authUrl.searchParams.set("scope", oauth.scopes.join(" "));
+    }
+    return authUrl.toString();
+  }
+  /**
+   * Handles the OAuth callback from `obsidian://oh-bot-mcp-auth?code=...&state=...`
+   */
+  static async handleCallback(params, secretManager) {
+    const code = params.code;
+    const state = params.state;
+    const errorParam = params.error || params.error_description;
+    if (errorParam) {
+      return { serverId: "", success: false, error: `OAuth provider error: ${errorParam}` };
+    }
+    if (!code || !state) {
+      return { serverId: "", success: false, error: "Missing code or state parameters in OAuth callback." };
+    }
+    const pending = this.pendingStates.get(state);
+    if (!pending) {
+      return { serverId: "", success: false, error: "Invalid or expired OAuth state session." };
+    }
+    this.pendingStates.delete(state);
+    try {
+      const bodyParams = {
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: "obsidian://oh-bot-mcp-auth",
+        code_verifier: pending.codeVerifier
+      };
+      if (pending.clientId) {
+        bodyParams.client_id = pending.clientId;
+      }
+      const formBody = new URLSearchParams(bodyParams).toString();
+      const response = await (0, import_obsidian25.requestUrl)({
+        url: pending.tokenUrl,
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Accept": "application/json"
+        },
+        body: formBody,
+        throw: false
+      });
+      if (response.status < 200 || response.status >= 300) {
+        return {
+          serverId: pending.serverId,
+          success: false,
+          error: `Token exchange failed (HTTP ${response.status}): ${response.text}`
+        };
+      }
+      const tokenData = typeof response.json === "object" ? response.json : JSON.parse(response.text);
+      const accessToken = tokenData.access_token;
+      const refreshToken = tokenData.refresh_token;
+      if (!accessToken) {
+        return {
+          serverId: pending.serverId,
+          success: false,
+          error: "Token response did not contain an access_token."
+        };
+      }
+      secretManager.setSecret(pending.accessTokenSecretName, accessToken);
+      if (refreshToken && pending.refreshTokenSecretName) {
+        secretManager.setSecret(pending.refreshTokenSecretName, refreshToken);
+      }
+      return { serverId: pending.serverId, success: true };
+    } catch (err) {
+      return {
+        serverId: pending.serverId,
+        success: false,
+        error: `OAuth token exchange failed: ${err.message}`
+      };
+    }
+  }
+};
+McpOAuthHelper.pendingStates = /* @__PURE__ */ new Map();
+
+// src/mcp/mcp-manager.ts
+var DEFAULT_CATALOG = [
+  {
+    id: "todoist",
+    name: "Todoist (Official Hosted Remote MCP)",
+    description: "\u041E\u0444\u0438\u0446\u0438\u0430\u043B\u044C\u043D\u044B\u0439 \u043E\u0431\u043B\u0430\u0447\u043D\u044B\u0439 MCP \u0441\u0435\u0440\u0432\u0435\u0440 Todoist \u0434\u043B\u044F \u0443\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u044F \u0437\u0430\u0434\u0430\u0447\u0430\u043C\u0438, \u043F\u0440\u043E\u0435\u043A\u0442\u0430\u043C\u0438, \u0441\u0435\u043A\u0446\u0438\u044F\u043C\u0438, \u043A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u044F\u043C\u0438 \u0438 \u043D\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u044F\u043C\u0438 \u0432 \u0440\u0435\u0430\u043B\u044C\u043D\u043E\u043C \u0432\u0440\u0435\u043C\u0435\u043D\u0438.",
+    url: "https://ai.todoist.net/mcp",
+    authType: "bearer",
+    authDescription: "\u041F\u043E\u0434\u0434\u0435\u0440\u0436\u0438\u0432\u0430\u0435\u0442 \u043F\u0435\u0440\u0441\u043E\u043D\u0430\u043B\u044C\u043D\u044B\u0439 API \u0442\u043E\u043A\u0435\u043D (Developer Token) \u0438\u043B\u0438 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u043D\u044B\u0439 \u0432\u0445\u043E\u0434 \u0447\u0435\u0440\u0435\u0437 OAuth.",
+    docUrl: "https://developer.todoist.com/guides/#authorization",
+    tags: ["tasks", "productivity", "todoist", "remote-sse"],
+    oauthDefaults: {
+      authorizationUrl: "https://todoist.com/oauth/authorize",
+      tokenUrl: "https://todoist.com/oauth/access_token"
+    }
+  }
+];
+var McpManager = class {
+  constructor(app, settings, onSaveSettings) {
+    this.catalog = DEFAULT_CATALOG;
+    this.app = app;
+    this.settings = settings;
+    this.onSaveSettings = onSaveSettings;
+    this.secretManager = new SecretManager(app);
+  }
+  async init() {
+    if (!this.settings.mcpServers) {
+      this.settings.mcpServers = [];
+    }
+    try {
+      const adapter = this.app.vault.adapter;
+      const manifestPath = `${this.app.vault.configDir}/plugins/oh-bot/marketplace/mcp.json`;
+      if (await adapter.exists(manifestPath)) {
+        const raw = await adapter.read(manifestPath);
+        const manifest = JSON.parse(raw);
+        if (manifest.servers && Array.isArray(manifest.servers)) {
+          this.catalog = manifest.servers;
+        }
+      }
+    } catch (e) {
+      this.catalog = DEFAULT_CATALOG;
+    }
+  }
+  getAllServers() {
+    return this.settings.mcpServers || [];
+  }
+  getEnabledServers() {
+    return (this.settings.mcpServers || []).filter((s) => s.enabled);
+  }
+  getServer(id) {
+    return (this.settings.mcpServers || []).find((s) => s.id === id);
+  }
+  getCatalog() {
+    return this.catalog;
+  }
+  async addServer(config) {
+    if (!this.settings.mcpServers) {
+      this.settings.mcpServers = [];
+    }
+    const existingIndex = this.settings.mcpServers.findIndex((s) => s.id === config.id);
+    if (existingIndex >= 0) {
+      this.settings.mcpServers[existingIndex] = config;
+    } else {
+      this.settings.mcpServers.push(config);
+    }
+    await this.onSaveSettings();
+  }
+  async updateServer(id, updates) {
+    const server = this.getServer(id);
+    if (!server) {
+      throw new Error(`MCP Server "${id}" not found.`);
+    }
+    Object.assign(server, updates);
+    await this.onSaveSettings();
+  }
+  async removeServer(id) {
+    const server = this.getServer(id);
+    if (!server)
+      return;
+    if (server.apiKeySecretName) {
+      this.secretManager.setSecret(server.apiKeySecretName, "");
+    }
+    if (server.oauthConfig?.accessTokenSecretName) {
+      this.secretManager.setSecret(server.oauthConfig.accessTokenSecretName, "");
+    }
+    if (server.oauthConfig?.refreshTokenSecretName) {
+      this.secretManager.setSecret(server.oauthConfig.refreshTokenSecretName, "");
+    }
+    this.settings.mcpServers = (this.settings.mcpServers || []).filter((s) => s.id !== id);
+    await this.onSaveSettings();
+  }
+  async toggleServer(id, enabled) {
+    const server = this.getServer(id);
+    if (!server)
+      return;
+    server.enabled = enabled;
+    await this.onSaveSettings();
+  }
+  /**
+   * Retrieves active authentication token for a server.
+   */
+  getAuthToken(server) {
+    if (server.authType === "bearer" || server.authType === "custom_headers") {
+      if (server.apiKeySecretName) {
+        return this.secretManager.getSecret(server.apiKeySecretName) || void 0;
+      }
+    } else if (server.authType === "oauth2") {
+      const accessSecret = server.oauthConfig?.accessTokenSecretName || `oh_bot_secret_mcp_${server.id}_access`;
+      return this.secretManager.getSecret(accessSecret) || void 0;
+    }
+    return void 0;
+  }
+  /**
+   * Instantiates an McpClient for a given server configuration.
+   */
+  createClient(server) {
+    const token = this.getAuthToken(server);
+    return new McpClient({
+      url: server.url,
+      authType: server.authType,
+      authToken: token,
+      customHeaderName: server.customHeaderName
+    });
+  }
+  /**
+   * Tests connection to the server, queries tools/list, and caches the result.
+   */
+  async testAndSyncServer(serverId) {
+    const server = this.getServer(serverId);
+    if (!server) {
+      throw new Error(`MCP Server "${serverId}" not found.`);
+    }
+    const client = this.createClient(server);
+    try {
+      const tools = await client.listTools();
+      server.cachedTools = tools;
+      server.lastConnected = Date.now();
+      server.lastError = void 0;
+      await this.onSaveSettings();
+      return tools;
+    } catch (err) {
+      server.lastError = err.message || "Connection failed";
+      await this.onSaveSettings();
+      throw err;
+    }
+  }
+  /**
+   * Executes a tool on a remote MCP server.
+   */
+  async executeTool(serverId, toolName, args) {
+    const server = this.getServer(serverId);
+    if (!server) {
+      return {
+        success: false,
+        output: "",
+        error: `MCP Server "${serverId}" not found or has been removed.`
+      };
+    }
+    if (!server.enabled) {
+      return {
+        success: false,
+        output: "",
+        error: `MCP Server "${server.name}" is currently disabled.`
+      };
+    }
+    const client = this.createClient(server);
+    return await client.callTool(toolName, args);
+  }
+  /**
+   * Triggers the OAuth 2.1 PKCE authorization flow in the browser.
+   */
+  async startOAuthFlow(serverId) {
+    const server = this.getServer(serverId);
+    if (!server) {
+      throw new Error(`Server "${serverId}" not found.`);
+    }
+    const authUrl = await McpOAuthHelper.startOAuthFlow(server);
+    window.open(authUrl, "_blank");
+    new import_obsidian26.Notice(`Opening browser for ${server.name} authorization...`);
+  }
+  /**
+   * Handles incoming OAuth deep link callback.
+   */
+  async handleOAuthCallback(params) {
+    const result = await McpOAuthHelper.handleCallback(params, this.secretManager);
+    if (result.success && result.serverId) {
+      try {
+        const server = this.getServer(result.serverId);
+        if (server) {
+          server.enabled = true;
+          await this.testAndSyncServer(result.serverId);
+          new import_obsidian26.Notice(`\u2713 Successfully connected to ${server.name}!`);
+        }
+      } catch (err) {
+        new import_obsidian26.Notice(`Connected, but tool discovery failed: ${err.message}`);
+      }
+    }
+    return result;
+  }
+  /**
+   * Installs or adds an MCP server from the curated catalog.
+   */
+  async installFromCatalog(item, customApiKey) {
+    const secretKeyName = `oh_bot_secret_mcp_${item.id}_token`;
+    if (customApiKey) {
+      this.secretManager.setSecret(secretKeyName, customApiKey);
+    }
+    const serverConfig = {
+      id: item.id,
+      name: item.name,
+      description: item.description,
+      url: item.url,
+      enabled: true,
+      authType: item.authType,
+      apiKeySecretName: secretKeyName,
+      oauthConfig: item.oauthDefaults ? {
+        authorizationUrl: item.oauthDefaults.authorizationUrl,
+        tokenUrl: item.oauthDefaults.tokenUrl,
+        clientId: item.oauthDefaults.clientId,
+        scopes: item.oauthDefaults.scopes,
+        accessTokenSecretName: `oh_bot_secret_mcp_${item.id}_access`,
+        refreshTokenSecretName: `oh_bot_secret_mcp_${item.id}_refresh`
+      } : void 0,
+      cachedTools: []
+    };
+    await this.addServer(serverConfig);
+    if (!customApiKey && item.authType !== "none") {
+      return serverConfig;
+    }
+    try {
+      await this.testAndSyncServer(item.id);
+    } catch (e) {
+    }
+    return serverConfig;
+  }
+};
+
 // src/main.ts
-var HarnessPlugin = class extends import_obsidian21.Plugin {
+var HarnessPlugin = class extends import_obsidian27.Plugin {
   constructor() {
     super(...arguments);
     this.settings = DEFAULT_SETTINGS;
@@ -3918,6 +5161,13 @@ var HarnessPlugin = class extends import_obsidian21.Plugin {
       await this.saveSettings();
     });
     await this.skillManager.init();
+    this.mcpManager = new McpManager(this.app, this.settings, async () => {
+      await this.saveSettings();
+    });
+    await this.mcpManager.init();
+    this.registerObsidianProtocolHandler("oh-bot-mcp-auth", async (params) => {
+      await this.mcpManager.handleOAuthCallback(params);
+    });
     this.registerView(HARNESS_VIEW_TYPE, (leaf) => new HarnessChatView(leaf, this));
     this.addRibbonIcon("bot", "Open Obsidian Harness Bot", () => {
       this.activateView();
@@ -3934,6 +5184,13 @@ var HarnessPlugin = class extends import_obsidian21.Plugin {
       name: "Open Skills & Marketplace (/skills)",
       callback: () => {
         new SkillsModal(this.app, this).open();
+      }
+    });
+    this.addCommand({
+      id: "open-harness-mcp-modal",
+      name: "Open MCP Servers & Integrations (/mcp)",
+      callback: () => {
+        new McpModal(this.app, this).open();
       }
     });
     this.addSettingTab(new HarnessSettingTab(this.app, this));

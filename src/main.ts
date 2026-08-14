@@ -4,10 +4,13 @@ import { HarnessSettingTab } from './ui/settings-tab';
 import { HarnessChatView, HARNESS_VIEW_TYPE } from './ui/chat-view';
 import { SkillManager } from './skills/skill-manager';
 import { SkillsModal } from './ui/skills-modal';
+import { McpManager } from './mcp/mcp-manager';
+import { McpModal } from './ui/mcp-modal';
 
 export default class HarnessPlugin extends Plugin {
   settings: HarnessSettings = DEFAULT_SETTINGS;
   skillManager!: SkillManager;
+  mcpManager!: McpManager;
 
   async onload() {
     await this.loadSettings();
@@ -17,6 +20,17 @@ export default class HarnessPlugin extends Plugin {
       await this.saveSettings();
     });
     await this.skillManager.init();
+
+    // Initialize MCP Manager
+    this.mcpManager = new McpManager(this.app, this.settings, async () => {
+      await this.saveSettings();
+    });
+    await this.mcpManager.init();
+
+    // Register Obsidian deep link protocol handler for OAuth 2.1 PKCE (obsidian://oh-bot-mcp-auth)
+    this.registerObsidianProtocolHandler('oh-bot-mcp-auth', async (params) => {
+      await this.mcpManager.handleOAuthCallback(params);
+    });
 
     // Register Sidebar Chat View
     this.registerView(HARNESS_VIEW_TYPE, (leaf) => new HarnessChatView(leaf, this));
@@ -40,6 +54,14 @@ export default class HarnessPlugin extends Plugin {
       name: 'Open Skills & Marketplace (/skills)',
       callback: () => {
         new SkillsModal(this.app, this).open();
+      },
+    });
+
+    this.addCommand({
+      id: 'open-harness-mcp-modal',
+      name: 'Open MCP Servers & Integrations (/mcp)',
+      callback: () => {
+        new McpModal(this.app, this).open();
       },
     });
 

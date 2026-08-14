@@ -780,3 +780,300 @@
   word-break: break-word;
 }
 
+/* ==========================================================================
+   MCP (Model Context Protocol) Styles & Mobile Optimization
+   ========================================================================== */
+
+.harness-mcp-modal {
+  max-width: 800px;
+  width: 92vw;
+}
+
+.harness-mcp-controls-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 12px 0;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.harness-mcp-body {
+  margin-top: 14px;
+}
+
+.harness-mcp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.harness-mcp-card {
+  border: 1px solid var(--background-modifier-border);
+  background-color: var(--background-secondary);
+  border-radius: 8px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.harness-mcp-card:hover {
+  border-color: var(--interactive-accent);
+}
+
+.harness-mcp-card.is-disabled {
+  opacity: 0.72;
+  border-style: dashed;
+}
+
+.harness-mcp-card.mod-catalog {
+  background-color: var(--background-secondary-alt);
+  border: 1px solid var(--interactive-accent-faint, var(--background-modifier-border));
+}
+
+.harness-mcp-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.harness-mcp-title-wrapper {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.harness-mcp-title {
+  font-size: 1.05em;
+  color: var(--text-normal);
+}
+
+.harness-source-badge.mod-remote {
+  background-color: var(--background-primary);
+  color: var(--text-accent);
+  border: 1px solid var(--background-modifier-border);
+  font-size: 0.72em;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.harness-status-badge {
+  font-size: 0.72em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.harness-status-badge.mod-connected {
+  background-color: rgba(46, 160, 67, 0.15);
+  color: #2ea043;
+  border: 1px solid rgba(46, 160, 67, 0.3);
+}
+
+.harness-status-badge.mod-error {
+  background-color: rgba(218, 54, 51, 0.15);
+  color: #da3633;
+  border: 1px solid rgba(218, 54, 51, 0.3);
+}
+
+.harness-status-badge.mod-disabled {
+  background-color: var(--background-modifier-border);
+  color: var(--text-muted);
+}
+
+.harness-mcp-url-row {
+  margin: 2px 0;
+}
+
+.harness-mcp-url {
+  font-size: 0.78em;
+  color: var(--text-muted);
+  background-color: var(--background-primary);
+  padding: 2px 6px;
+  border-radius: 4px;
+  word-break: break-all;
+  display: inline-block;
+  max-width: 100%;
+}
+
+.harness-mcp-desc {
+  font-size: 0.88em;
+  line-height: 1.45;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.harness-mcp-error-box {
+  background-color: rgba(218, 54, 51, 0.1);
+  border-left: 3px solid #da3633;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 0.8em;
+  color: #da3633;
+  word-break: break-word;
+}
+
+.harness-mcp-meta-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.78em;
+  color: var(--text-muted);
+  padding-top: 4px;
+  border-top: 1px solid var(--background-modifier-border);
+  margin-top: auto;
+}
+
+.harness-mcp-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.harness-mcp-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+
+.harness-mcp-custom-section {
+  background-color: var(--background-secondary-alt);
+  border: 1px dashed var(--background-modifier-border);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.harness-mcp-custom-section h3 {
+  margin: 0 0 6px 0;
+}
+
+/* Tools View Modal */
+.harness-mcp-tools-modal {
+  max-width: 700px;
+  width: 90vw;
+}
+
+.harness-mcp-tools-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+  max-height: 55vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.harness-mcp-tool-card {
+  border: 1px solid var(--background-modifier-border);
+  background-color: var(--background-secondary);
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+
+.harness-tool-name-badge {
+  font-size: 0.9em;
+  font-weight: 600;
+  color: var(--text-accent);
+  background-color: var(--background-primary);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.harness-tool-desc {
+  font-size: 0.85em;
+  color: var(--text-muted);
+  margin: 6px 0 8px 0;
+}
+
+.harness-tool-params-title {
+  font-size: 0.8em;
+  color: var(--text-normal);
+  margin-bottom: 4px;
+}
+
+.harness-tool-params-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 8px;
+  border-left: 2px solid var(--background-modifier-border);
+}
+
+.harness-tool-param-item {
+  font-size: 0.8em;
+}
+
+.harness-param-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.harness-param-name {
+  font-weight: 600;
+}
+
+.harness-param-type {
+  color: var(--text-muted);
+}
+
+.harness-badge-required {
+  font-size: 0.7em;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background-color: rgba(218, 54, 51, 0.15);
+  color: #da3633;
+}
+
+.harness-param-desc {
+  color: var(--text-muted);
+  margin-left: 6px;
+}
+
+/* Mobile Responsive Optimization */
+@media (max-width: 600px) {
+  .harness-mcp-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .harness-mcp-modal,
+  .harness-mcp-tools-modal,
+  .harness-mcp-edit-modal {
+    width: 96vw !important;
+    padding: 12px !important;
+  }
+
+  .harness-mcp-actions .harness-btn-sm {
+    min-height: 40px;
+    padding: 6px 12px !important;
+    flex: 1 1 auto;
+    text-align: center;
+  }
+
+  .harness-mcp-controls-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .harness-tab-group {
+    width: 100%;
+    display: flex;
+  }
+
+  .harness-tab-btn {
+    flex: 1;
+    text-align: center;
+    padding: 8px 6px;
+    min-height: 44px;
+  }
+}
+
+

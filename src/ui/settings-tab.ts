@@ -6,6 +6,7 @@ import { EditModelsModal } from './components/edit-models-modal';
 import { fetchAvailableModels } from '../utils/model-fetcher';
 import { SecretManager } from '../utils/secrets';
 import { SkillsModal } from './skills-modal';
+import { McpModal } from './mcp-modal';
 
 export class HarnessSettingTab extends PluginSettingTab {
   plugin: HarnessPlugin;
@@ -321,6 +322,23 @@ export class HarnessSettingTab extends PluginSettingTab {
           .onChange(async (val) => {
             this.plugin.settings.customMarketplaceUrl = val.trim();
             await this.plugin.saveSettings();
+          })
+      );
+
+    containerEl.createEl('h3', { text: 'Model Context Protocol (MCP) Servers' });
+
+    const mcpServers = this.plugin.mcpManager?.getAllServers() || [];
+    const enabledMcpCount = mcpServers.filter((s) => s.enabled).length;
+
+    new Setting(containerEl)
+      .setName('Manage MCP Servers & Integrations')
+      .setDesc(`${enabledMcpCount} of ${mcpServers.length} servers active. Connect remote tools like Todoist, web search, and custom APIs.`)
+      .addButton((btn) =>
+        btn
+          .setButtonText('Open MCP Servers (/mcp)')
+          .setCta()
+          .onClick(() => {
+            new McpModal(this.app, this.plugin).open();
           })
       );
   }

@@ -10,6 +10,7 @@ import { parseThoughts } from '../utils/thought-helper';
 import { ConfirmationModal } from './components/confirmation-modal';
 import { SessionsModal } from './components/sessions-modal';
 import { SkillsModal } from './skills-modal';
+import { McpModal } from './mcp-modal';
 
 export const HARNESS_VIEW_TYPE = 'harness-chat-view';
 
@@ -43,7 +44,7 @@ export class HarnessChatView extends ItemView {
   constructor(leaf: WorkspaceLeaf, plugin: HarnessPlugin) {
     super(leaf);
     this.plugin = plugin;
-    this.toolRegistry = new ToolRegistry(this.plugin.skillManager);
+    this.toolRegistry = new ToolRegistry(this.plugin.skillManager, this.plugin.mcpManager);
     this.agentHarness = new AgentHarness(this.app, this.plugin.settings, this.toolRegistry);
     this.exporter = new MarkdownExporter(this.app);
     this.initSession();
@@ -231,6 +232,12 @@ export class HarnessChatView extends ItemView {
         this.hideSuggest();
         this.resetTextareaHeight();
         new SkillsModal(this.app, this.plugin).open();
+        return;
+      } else if (text === '/mcp') {
+        this.inputTextAreaEl.value = '';
+        this.hideSuggest();
+        this.resetTextareaHeight();
+        new McpModal(this.app, this.plugin).open();
         return;
       }
 
@@ -578,6 +585,16 @@ export class HarnessChatView extends ItemView {
           this.hideSuggest();
           this.resetTextareaHeight();
           new SkillsModal(this.app, this.plugin).open();
+        },
+      },
+      {
+        cmd: '/mcp',
+        desc: 'Open MCP Servers & Integrations Manager',
+        action: () => {
+          this.inputTextAreaEl.value = '';
+          this.hideSuggest();
+          this.resetTextareaHeight();
+          new McpModal(this.app, this.plugin).open();
         },
       },
       {

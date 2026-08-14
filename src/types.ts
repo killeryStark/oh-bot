@@ -101,6 +101,7 @@ export interface ChatSession {
 }
 
 import { SkillMetadata } from './skills/types';
+import { McpServerConfig } from './mcp/types';
 
 export interface HarnessSettings {
   providers: ProviderConfig[];
@@ -113,6 +114,7 @@ export interface HarnessSettings {
   installedSkills?: SkillMetadata[];
   customMarketplaceUrl?: string;
   scanVaultSkills?: boolean;
+  mcpServers?: McpServerConfig[];
 }
 
 export const DEFAULT_SETTINGS: HarnessSettings = {
@@ -126,6 +128,7 @@ export const DEFAULT_SETTINGS: HarnessSettings = {
   installedSkills: [],
   customMarketplaceUrl: '',
   scanVaultSkills: true,
+  mcpServers: [],
 };
 
 export interface LLMMessage {
