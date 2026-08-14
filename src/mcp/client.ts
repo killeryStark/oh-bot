@@ -126,18 +126,45 @@ export class McpClient {
       throw new Error(`MCP Server HTTP ${res.status}: ${res.text || 'Request failed'}`);
     }
 
-    let json: McpJsonRpcResponse;
+    let json: McpJsonRpcResponse | null = null;
     try {
-      json = typeof res.json === 'object' ? res.json : JSON.parse(res.text);
-    } catch (e) {
+      if (typeof res.json === 'object' && res.json !== null) {
+        json = res.json;
+      } else {
+        const text = (res.text || '').trim();
+        // Check if response is SSE-formatted (e.g. "event: message\ndata: {...}")
+        if (text.includes('data:')) {
+          const lines = text.split('\n');
+          for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (line.startsWith('data:')) {
+              const payloadStr = line.replace(/^data:\s*/, '').trim();
+              try {
+                const parsed = JSON.parse(payloadStr);
+                if (parsed && (parsed.result !== undefined || parsed.error !== undefined || parsed.jsonrpc)) {
+                  json = parsed;
+                  break;
+                }
+              } catch (err) {
+                // Continue to other data lines
+              }
+            }
+          }
+        }
+
+        if (!json) {
+          json = JSON.parse(text);
+        }
+      }
+    } catch (e: any) {
       throw new Error(`Failed to parse JSON-RPC response: ${res.text}`);
     }
 
-    if (json.error) {
+    if (json && json.error) {
       throw new Error(`MCP Error [${json.error.code}]: ${json.error.message}`);
     }
 
-    return json.result;
+    return json?.result;
   }
 
   /**

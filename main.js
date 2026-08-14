@@ -164,6 +164,9 @@ var SecretManager = class {
   constructor(app) {
     this.app = app;
   }
+  normalizeKey(secretName) {
+    return secretName.startsWith("oh_bot_") ? secretName : `oh_bot_${secretName}`;
+  }
   /**
    * Retrieves the secret value associated with the given secret name using SecretStorage API or fallback.
    */
@@ -171,17 +174,18 @@ var SecretManager = class {
     if (!secretName) {
       return null;
     }
+    const key = this.normalizeKey(secretName);
     try {
       const secretStorage = this.app.secretStorage;
       if (secretStorage && typeof secretStorage.getSecret === "function") {
-        const secret = secretStorage.getSecret(secretName);
+        const secret = secretStorage.getSecret(key) || secretStorage.getSecret(secretName);
         if (secret)
           return secret;
       }
     } catch (e) {
     }
     try {
-      const localVal = window.localStorage.getItem(`oh_bot_${secretName}`);
+      const localVal = window.localStorage.getItem(key) || window.localStorage.getItem(secretName);
       if (localVal)
         return localVal;
     } catch (e) {
@@ -194,18 +198,22 @@ var SecretManager = class {
   setSecret(secretName, value) {
     if (!secretName)
       return;
+    const key = this.normalizeKey(secretName);
     try {
       const secretStorage = this.app.secretStorage;
       if (secretStorage && typeof secretStorage.setSecret === "function") {
+        secretStorage.setSecret(key, value);
         secretStorage.setSecret(secretName, value);
       }
     } catch (e) {
     }
     try {
       if (value) {
-        window.localStorage.setItem(`oh_bot_${secretName}`, value);
+        window.localStorage.setItem(key, value);
+        window.localStorage.setItem(secretName, value);
       } else {
-        window.localStorage.removeItem(`oh_bot_${secretName}`);
+        window.localStorage.removeItem(key);
+        window.localStorage.removeItem(secretName);
       }
     } catch (e) {
     }
@@ -4760,16 +4768,40 @@ var McpClient = class {
     if (res.status < 200 || res.status >= 300) {
       throw new Error(`MCP Server HTTP ${res.status}: ${res.text || "Request failed"}`);
     }
-    let json;
+    let json = null;
     try {
-      json = typeof res.json === "object" ? res.json : JSON.parse(res.text);
+      if (typeof res.json === "object" && res.json !== null) {
+        json = res.json;
+      } else {
+        const text = (res.text || "").trim();
+        if (text.includes("data:")) {
+          const lines = text.split("\n");
+          for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (line.startsWith("data:")) {
+              const payloadStr = line.replace(/^data:\s*/, "").trim();
+              try {
+                const parsed = JSON.parse(payloadStr);
+                if (parsed && (parsed.result !== void 0 || parsed.error !== void 0 || parsed.jsonrpc)) {
+                  json = parsed;
+                  break;
+                }
+              } catch (err) {
+              }
+            }
+          }
+        }
+        if (!json) {
+          json = JSON.parse(text);
+        }
+      }
     } catch (e) {
       throw new Error(`Failed to parse JSON-RPC response: ${res.text}`);
     }
-    if (json.error) {
+    if (json && json.error) {
       throw new Error(`MCP Error [${json.error.code}]: ${json.error.message}`);
     }
-    return json.result;
+    return json?.result;
   }
   /**
    * Initializes session with the MCP server.

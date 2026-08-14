@@ -7,6 +7,10 @@ export class SecretManager {
     this.app = app;
   }
 
+  private normalizeKey(secretName: string): string {
+    return secretName.startsWith('oh_bot_') ? secretName : `oh_bot_${secretName}`;
+  }
+
   /**
    * Retrieves the secret value associated with the given secret name using SecretStorage API or fallback.
    */
@@ -15,10 +19,12 @@ export class SecretManager {
       return null;
     }
 
+    const key = this.normalizeKey(secretName);
+
     try {
       const secretStorage = (this.app as any).secretStorage;
       if (secretStorage && typeof secretStorage.getSecret === 'function') {
-        const secret = secretStorage.getSecret(secretName);
+        const secret = secretStorage.getSecret(key) || secretStorage.getSecret(secretName);
         if (secret) return secret;
       }
     } catch (e) {
@@ -26,7 +32,7 @@ export class SecretManager {
     }
 
     try {
-      const localVal = window.localStorage.getItem(`oh_bot_${secretName}`);
+      const localVal = window.localStorage.getItem(key) || window.localStorage.getItem(secretName);
       if (localVal) return localVal;
     } catch (e) {
       // Ignore localStorage errors
@@ -41,9 +47,12 @@ export class SecretManager {
   setSecret(secretName: string, value: string): void {
     if (!secretName) return;
 
+    const key = this.normalizeKey(secretName);
+
     try {
       const secretStorage = (this.app as any).secretStorage;
       if (secretStorage && typeof secretStorage.setSecret === 'function') {
+        secretStorage.setSecret(key, value);
         secretStorage.setSecret(secretName, value);
       }
     } catch (e) {
@@ -52,9 +61,11 @@ export class SecretManager {
 
     try {
       if (value) {
-        window.localStorage.setItem(`oh_bot_${secretName}`, value);
+        window.localStorage.setItem(key, value);
+        window.localStorage.setItem(secretName, value);
       } else {
-        window.localStorage.removeItem(`oh_bot_${secretName}`);
+        window.localStorage.removeItem(key);
+        window.localStorage.removeItem(secretName);
       }
     } catch (e) {
       // Ignore
