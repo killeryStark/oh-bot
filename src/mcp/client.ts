@@ -132,27 +132,12 @@ export class McpClient {
         json = res.json;
       } else {
         const text = (res.text || '').trim();
-        // Check if response is SSE-formatted (e.g. "event: message\ndata: {...}")
-        if (text.includes('data:')) {
-          const lines = text.split('\n');
-          for (let i = 0; i < lines.length; i++) {
-            const line = lines[i].trim();
-            if (line.startsWith('data:')) {
-              const payloadStr = line.replace(/^data:\s*/, '').trim();
-              try {
-                const parsed = JSON.parse(payloadStr);
-                if (parsed && (parsed.result !== undefined || parsed.error !== undefined || parsed.jsonrpc)) {
-                  json = parsed;
-                  break;
-                }
-              } catch (err) {
-                // Continue to other data lines
-              }
-            }
-          }
-        }
-
-        if (!json) {
+        const startIdx = text.indexOf('{');
+        const endIdx = text.lastIndexOf('}');
+        if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+          const jsonSubstring = text.substring(startIdx, endIdx + 1);
+          json = JSON.parse(jsonSubstring);
+        } else {
           json = JSON.parse(text);
         }
       }

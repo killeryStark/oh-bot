@@ -4,9 +4,11 @@ if you want to view the source, please visit the github repository of this plugi
 */
 
 "use strict";
+var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
+var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
 var __export = (target, all) => {
   for (var name in all)
@@ -20,6 +22,14 @@ var __copyProps = (to, from, except, desc) => {
   }
   return to;
 };
+var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
+  // If the importer is in node compatibility mode or this is not an ESM
+  // file that has been converted to a CommonJS file using a Babel-
+  // compatible transform (i.e. "__esModule" has not been set), then set
+  // "default" to the CommonJS "module.exports" for node compatibility.
+  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
+  mod
+));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
 // src/main.ts
@@ -891,6 +901,7 @@ var McpToolsViewModal = class extends import_obsidian6.Modal {
 
 // src/ui/components/mcp-server-edit-modal.ts
 var import_obsidian7 = require("obsidian");
+var obsidianModule = __toESM(require("obsidian"));
 
 // src/utils/browser.ts
 function openExternalUrl(url) {
@@ -927,6 +938,7 @@ var McpServerEditModal = class extends import_obsidian7.Modal {
     this.url = "";
     this.description = "";
     this.authType = "bearer";
+    this.apiKeySecretName = "";
     this.customHeaderName = "X-API-Key";
     this.apiToken = "";
     this.showPassword = false;
@@ -944,6 +956,7 @@ var McpServerEditModal = class extends import_obsidian7.Modal {
       this.url = serverToEdit.url || "";
       this.description = serverToEdit.description || "";
       this.authType = serverToEdit.authType || "bearer";
+      this.apiKeySecretName = serverToEdit.apiKeySecretName || `oh_bot_secret_mcp_${serverToEdit.id}_token`;
       this.customHeaderName = serverToEdit.customHeaderName || "X-API-Key";
       const existingToken = mcpManager.getAuthToken(serverToEdit);
       this.apiToken = existingToken || "";
@@ -1010,6 +1023,19 @@ var McpServerEditModal = class extends import_obsidian7.Modal {
       })
     );
     if (this.authType === "bearer") {
+      const SecretComp = obsidianModule.SecretComponent;
+      if (typeof SecretComp === "function") {
+        const defaultSecretName = this.apiKeySecretName || `oh_bot_secret_mcp_${this.serverToEdit?.id || "todoist"}_token`;
+        new import_obsidian7.Setting(contentEl).setName("Secret in SecretStorage").setDesc("Select or create a named secret in Obsidian Secret Storage").addComponent((el) => {
+          return new SecretComp(this.app, el).setValue(this.apiKeySecretName || defaultSecretName).onChange((val) => {
+            this.apiKeySecretName = val;
+            const secretVal = this.secretManager.getSecret(val);
+            if (secretVal) {
+              this.apiToken = secretVal;
+            }
+          });
+        });
+      }
       const tokenSetting = new import_obsidian7.Setting(contentEl).setName("API Token / Secret").setDesc("Stored securely in Obsidian SecretManager.");
       tokenSetting.addText((text) => {
         text.inputEl.type = this.showPassword ? "text" : "password";
@@ -1024,12 +1050,12 @@ var McpServerEditModal = class extends import_obsidian7.Modal {
               if (clip && clip.trim()) {
                 this.apiToken = clip.trim();
                 text.setValue(this.apiToken);
-                new import_obsidian7.Notice("[Debug] \u2713 Token pasted from clipboard!");
+                new import_obsidian7.Notice("\u2713 Token pasted from clipboard!");
               } else {
-                new import_obsidian7.Notice("[Debug] Clipboard is empty.");
+                new import_obsidian7.Notice("Clipboard is empty.");
               }
             } catch (err) {
-              new import_obsidian7.Notice(`[Debug] Could not read clipboard: ${err.message || "permission denied"}`);
+              new import_obsidian7.Notice("Could not read clipboard. Please paste manually.");
             }
           });
         });
@@ -1062,10 +1088,10 @@ var McpServerEditModal = class extends import_obsidian7.Modal {
               if (clip && clip.trim()) {
                 this.apiToken = clip.trim();
                 text.setValue(this.apiToken);
-                new import_obsidian7.Notice("[Debug] \u2713 Key pasted from clipboard!");
+                new import_obsidian7.Notice("\u2713 Key pasted from clipboard!");
               }
             } catch (e) {
-              new import_obsidian7.Notice(`[Debug] Clipboard error: ${e.message}`);
+              new import_obsidian7.Notice("Please paste key manually.");
             }
           });
         });
@@ -1099,7 +1125,6 @@ var McpServerEditModal = class extends import_obsidian7.Modal {
     actionSetting.addButton((btn) => {
       btn.setButtonText("Cancel");
       btn.onClick(() => {
-        new import_obsidian7.Notice("[Debug] Cancel clicked");
         this.close();
       });
     });
@@ -1107,32 +1132,24 @@ var McpServerEditModal = class extends import_obsidian7.Modal {
       btn.setButtonText(isEdit ? "Save Changes" : "Save & Test Connection");
       btn.setCta();
       btn.onClick(async () => {
-        new import_obsidian7.Notice("[Debug] Save button clicked!");
         await this.handleSave(btn);
       });
     });
   }
   async handleSave(saveButton) {
     try {
-      new import_obsidian7.Notice("[Debug] Starting validation...");
       if (!this.name || !this.name.trim()) {
-        new import_obsidian7.Notice("[Error] Please enter a server name.");
+        new import_obsidian7.Notice("Please enter a server name.");
         return;
       }
       if (!this.url || !this.url.trim()) {
-        new import_obsidian7.Notice("[Error] Please enter a valid remote URL.");
+        new import_obsidian7.Notice("Please enter a valid remote URL.");
         return;
       }
       const serverId = this.serverToEdit ? this.serverToEdit.id : this.name.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") || `mcp-${Date.now()}`;
-      const secretKeyName = this.serverToEdit?.apiKeySecretName || `oh_bot_secret_mcp_${serverId}_token`;
-      new import_obsidian7.Notice(`[Debug] Saving secret for ${serverId}...`);
+      const secretKeyName = this.apiKeySecretName || this.serverToEdit?.apiKeySecretName || `oh_bot_secret_mcp_${serverId}_token`;
       if (this.apiToken && this.apiToken.trim()) {
-        try {
-          this.secretManager.setSecret(secretKeyName, this.apiToken.trim());
-          new import_obsidian7.Notice("[Debug] Secret stored successfully");
-        } catch (e) {
-          new import_obsidian7.Notice(`[Debug Warning] Secret store error: ${e.message}`);
-        }
+        this.secretManager.setSecret(secretKeyName, this.apiToken.trim());
       }
       const serverConfig = {
         id: serverId,
@@ -1157,11 +1174,8 @@ var McpServerEditModal = class extends import_obsidian7.Modal {
         saveButton.setDisabled(true);
         saveButton.setButtonText("Testing Connection...");
       }
-      new import_obsidian7.Notice(`[Debug] Adding server ${serverConfig.name} to settings...`);
       await this.mcpManager.addServer(serverConfig);
-      new import_obsidian7.Notice(`[Debug] Server saved in settings!`);
       if (this.authType !== "oauth2") {
-        new import_obsidian7.Notice(`[Debug] Testing connection to ${serverConfig.url}...`);
         try {
           const tools = await this.mcpManager.testAndSyncServer(serverId);
           new import_obsidian7.Notice(`\u2713 Connected! Discovered ${tools.length} tool(s).`);
@@ -1174,7 +1188,7 @@ var McpServerEditModal = class extends import_obsidian7.Modal {
       this.onSaved();
       this.close();
     } catch (err) {
-      new import_obsidian7.Notice(`[Error] Failed to save server: ${err.message}`);
+      new import_obsidian7.Notice(`Failed to save server: ${err.message}`);
     } finally {
       if (saveButton) {
         saveButton.setDisabled(false);
@@ -4774,24 +4788,12 @@ var McpClient = class {
         json = res.json;
       } else {
         const text = (res.text || "").trim();
-        if (text.includes("data:")) {
-          const lines = text.split("\n");
-          for (let i = 0; i < lines.length; i++) {
-            const line = lines[i].trim();
-            if (line.startsWith("data:")) {
-              const payloadStr = line.replace(/^data:\s*/, "").trim();
-              try {
-                const parsed = JSON.parse(payloadStr);
-                if (parsed && (parsed.result !== void 0 || parsed.error !== void 0 || parsed.jsonrpc)) {
-                  json = parsed;
-                  break;
-                }
-              } catch (err) {
-              }
-            }
-          }
-        }
-        if (!json) {
+        const startIdx = text.indexOf("{");
+        const endIdx = text.lastIndexOf("}");
+        if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+          const jsonSubstring = text.substring(startIdx, endIdx + 1);
+          json = JSON.parse(jsonSubstring);
+        } else {
           json = JSON.parse(text);
         }
       }

@@ -1,4 +1,5 @@
 import { App, Modal, Notice, Setting, setIcon, ButtonComponent } from 'obsidian';
+import * as obsidianModule from 'obsidian';
 import { McpAuthType, McpServerConfig } from '../../mcp/types';
 import { McpManager } from '../../mcp/mcp-manager';
 import { SecretManager } from '../../utils/secrets';
@@ -14,6 +15,7 @@ export class McpServerEditModal extends Modal {
   private url: string = '';
   private description: string = '';
   private authType: McpAuthType = 'bearer';
+  private apiKeySecretName: string = '';
   private customHeaderName: string = 'X-API-Key';
   private apiToken: string = '';
   private showPassword: boolean = false;
@@ -41,6 +43,7 @@ export class McpServerEditModal extends Modal {
       this.url = serverToEdit.url || '';
       this.description = serverToEdit.description || '';
       this.authType = serverToEdit.authType || 'bearer';
+      this.apiKeySecretName = serverToEdit.apiKeySecretName || `oh_bot_secret_mcp_${serverToEdit.id}_token`;
       this.customHeaderName = serverToEdit.customHeaderName || 'X-API-Key';
       
       const existingToken = mcpManager.getAuthToken(serverToEdit);
@@ -146,8 +149,28 @@ export class McpServerEditModal extends Modal {
           })
       );
 
-    // Auth Details Section (with Paste button and Visibility toggle)
+    // Auth Details Section
     if (this.authType === 'bearer') {
+      // 1. SecretStorage picker (if supported by Obsidian SecretComponent)
+      const SecretComp = (obsidianModule as any).SecretComponent;
+      if (typeof SecretComp === 'function') {
+        const defaultSecretName = this.apiKeySecretName || `oh_bot_secret_mcp_${this.serverToEdit?.id || 'todoist'}_token`;
+        new Setting(contentEl)
+          .setName('Secret in SecretStorage')
+          .setDesc('Select or create a named secret in Obsidian Secret Storage')
+          .addComponent((el) => {
+            return new SecretComp(this.app, el)
+              .setValue(this.apiKeySecretName || defaultSecretName)
+              .onChange((val: string) => {
+                this.apiKeySecretName = val;
+                const secretVal = this.secretManager.getSecret(val);
+                if (secretVal) {
+                  this.apiToken = secretVal;
+                }
+              });
+          });
+      }
+
       const tokenSetting = new Setting(contentEl)
         .setName('API Token / Secret')
         .setDesc('Stored securely in Obsidian SecretManager.');
@@ -170,12 +193,12 @@ export class McpServerEditModal extends Modal {
               if (clip && clip.trim()) {
                 this.apiToken = clip.trim();
                 text.setValue(this.apiToken);
-                new Notice('[Debug] ✓ Token pasted from clipboard!');
+                new Notice('✓ Token pasted from clipboard!');
               } else {
-                new Notice('[Debug] Clipboard is empty.');
+                new Notice('Clipboard is empty.');
               }
             } catch (err: any) {
-              new Notice(`[Debug] Could not read clipboard: ${err.message || 'permission denied'}`);
+              new Notice('Could not read clipboard. Please paste manually.');
             }
           });
         });
@@ -224,10 +247,10 @@ export class McpServerEditModal extends Modal {
               if (clip && clip.trim()) {
                 this.apiToken = clip.trim();
                 text.setValue(this.apiToken);
-                new Notice('[Debug] ✓ Key pasted from clipboard!');
+                new Notice('✓ Key pasted from clipboard!');
               }
-            } catch (e: any) {
-              new Notice(`[Debug] Clipboard error: ${e.message}`);
+            } catch (e) {
+              new Notice('Please paste key manually.');
             }
           });
         });
@@ -299,7 +322,6 @@ export class McpServerEditModal extends Modal {
     actionSetting.addButton((btn) => {
       btn.setButtonText('Cancel');
       btn.onClick(() => {
-        new Notice('[Debug] Cancel clicked');
         this.close();
       });
     });
@@ -308,7 +330,6 @@ export class McpServerEditModal extends Modal {
       btn.setButtonText(isEdit ? 'Save Changes' : 'Save & Test Connection');
       btn.setCta();
       btn.onClick(async () => {
-        new Notice('[Debug] Save button clicked!');
         await this.handleSave(btn);
       });
     });
@@ -316,14 +337,12 @@ export class McpServerEditModal extends Modal {
 
   private async handleSave(saveButton?: ButtonComponent) {
     try {
-      new Notice('[Debug] Starting validation...');
-
       if (!this.name || !this.name.trim()) {
-        new Notice('[Error] Please enter a server name.');
+        new Notice('Please enter a server name.');
         return;
       }
       if (!this.url || !this.url.trim()) {
-        new Notice('[Error] Please enter a valid remote URL.');
+        new Notice('Please enter a valid remote URL.');
         return;
       }
 
@@ -331,18 +350,11 @@ export class McpServerEditModal extends Modal {
         ? this.serverToEdit.id
         : this.name.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || `mcp-${Date.now()}`;
 
-      const secretKeyName = this.serverToEdit?.apiKeySecretName || `oh_bot_secret_mcp_${serverId}_token`;
-
-      new Notice(`[Debug] Saving secret for ${serverId}...`);
+      const secretKeyName = this.apiKeySecretName || this.serverToEdit?.apiKeySecretName || `oh_bot_secret_mcp_${serverId}_token`;
 
       // Save token to SecretManager
       if (this.apiToken && this.apiToken.trim()) {
-        try {
-          this.secretManager.setSecret(secretKeyName, this.apiToken.trim());
-          new Notice('[Debug] Secret stored successfully');
-        } catch (e: any) {
-          new Notice(`[Debug Warning] Secret store error: ${e.message}`);
-        }
+        this.secretManager.setSecret(secretKeyName, this.apiToken.trim());
       }
 
       const serverConfig: McpServerConfig = {
@@ -372,12 +384,9 @@ export class McpServerEditModal extends Modal {
         saveButton.setButtonText('Testing Connection...');
       }
 
-      new Notice(`[Debug] Adding server ${serverConfig.name} to settings...`);
       await this.mcpManager.addServer(serverConfig);
-      new Notice(`[Debug] Server saved in settings!`);
 
       if (this.authType !== 'oauth2') {
-        new Notice(`[Debug] Testing connection to ${serverConfig.url}...`);
         try {
           const tools = await this.mcpManager.testAndSyncServer(serverId);
           new Notice(`✓ Connected! Discovered ${tools.length} tool(s).`);
@@ -391,7 +400,7 @@ export class McpServerEditModal extends Modal {
       this.onSaved();
       this.close();
     } catch (err: any) {
-      new Notice(`[Error] Failed to save server: ${err.message}`);
+      new Notice(`Failed to save server: ${err.message}`);
     } finally {
       if (saveButton) {
         saveButton.setDisabled(false);
