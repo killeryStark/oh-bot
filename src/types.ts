@@ -100,6 +100,8 @@ export interface ChatSession {
   model: string;
 }
 
+import { SkillMetadata } from './skills/types';
+
 export interface HarnessSettings {
   providers: ProviderConfig[];
   activeProviderId: string;
@@ -108,6 +110,9 @@ export interface HarnessSettings {
   safetyMode: SafetyMode;
   sessions: ChatSession[];
   currentSessionId?: string;
+  installedSkills?: SkillMetadata[];
+  customMarketplaceUrl?: string;
+  scanVaultSkills?: boolean;
 }
 
 export const DEFAULT_SETTINGS: HarnessSettings = {
@@ -118,6 +123,9 @@ export const DEFAULT_SETTINGS: HarnessSettings = {
   safetyMode: 'strict',
   sessions: [],
   currentSessionId: '',
+  installedSkills: [],
+  customMarketplaceUrl: '',
+  scanVaultSkills: true,
 };
 
 export interface LLMMessage {

@@ -9,6 +9,7 @@ import { MentionHelper } from '../utils/mention-helper';
 import { parseThoughts } from '../utils/thought-helper';
 import { ConfirmationModal } from './components/confirmation-modal';
 import { SessionsModal } from './components/sessions-modal';
+import { SkillsModal } from './skills-modal';
 
 export const HARNESS_VIEW_TYPE = 'harness-chat-view';
 
@@ -111,6 +112,14 @@ export class HarnessChatView extends ItemView {
     setIcon(sessionsBtn, 'history');
     sessionsBtn.addEventListener('click', () => {
       this.openSessionsModal();
+    });
+
+    // Skills & Marketplace Button
+    const skillsBtn = headerActionsEl.createEl('button', { cls: 'clickable-icon' });
+    skillsBtn.setAttribute('aria-label', 'Skills & Marketplace (/skills)');
+    setIcon(skillsBtn, 'sparkles');
+    skillsBtn.addEventListener('click', () => {
+      new SkillsModal(this.app, this.plugin).open();
     });
 
     // Export Button
@@ -225,6 +234,12 @@ export class HarnessChatView extends ItemView {
         this.resetTextareaHeight();
         exportBtn.click();
         return;
+      } else if (text === '/skills') {
+        this.inputTextAreaEl.value = '';
+        this.hideSuggest();
+        this.resetTextareaHeight();
+        new SkillsModal(this.app, this.plugin).open();
+        return;
       }
 
       const activeProv = this.plugin.settings.providers.find(
@@ -243,17 +258,34 @@ export class HarnessChatView extends ItemView {
         this.toggleInputExpand();
       }
 
+      // Check if message invokes an active skill
+      let activeSkillDirective = '';
+      let processedUserText = text;
+      const skillMatch = text.match(/^\/([a-zA-Z0-9-_]+)(?:\s+([\s\S]*))?$/);
+      if (skillMatch) {
+        const candidateId = skillMatch[1].toLowerCase();
+        const skill = this.plugin.skillManager?.getSkill(candidateId);
+        if (skill) {
+          activeSkillDirective = this.plugin.skillManager.getActiveSkillDirective(skill);
+          const restText = (skillMatch[2] || '').trim();
+          processedUserText = restText ? `[⚡ Skill: ${skill.name}]\n${restText}` : `[⚡ Skill: ${skill.name}] Apply skill methodology.`;
+        }
+      }
+
+      const availableSkillsDirectives = this.plugin.skillManager?.generateSystemPromptDirectives() || '';
+      const extraSystemDirectives = [availableSkillsDirectives, activeSkillDirective].filter(Boolean).join('\n\n');
+
       // Set generating state (Stop icon)
       this.currentAbortController = new AbortController();
       this.setSendButtonState(true);
 
       // Set auto-title on first message
       if (this.currentSession.messages.length === 0) {
-        this.currentSession.title = SessionManager.generateTitle(text);
+        this.currentSession.title = SessionManager.generateTitle(processedUserText);
       }
 
       // Enriched text with resolved @mentions
-      const resolvedContent = await MentionHelper.resolveMentions(this.app, text);
+      const resolvedContent = await MentionHelper.resolveMentions(this.app, processedUserText);
 
       // Append clean user message to UI state (WITHOUT timestamp)
       const userMsg: LLMMessage = { role: 'user', content: resolvedContent };
@@ -301,7 +333,8 @@ export class HarnessChatView extends ItemView {
           },
           this.plugin.settings.activeProviderId,
           this.currentSession.model || this.plugin.settings.activeModel,
-          this.currentAbortController.signal
+          this.currentAbortController.signal,
+          extraSystemDirectives
         );
 
         this.currentSession.messages = updatedHistory;
@@ -546,6 +579,16 @@ export class HarnessChatView extends ItemView {
         },
       },
       {
+        cmd: '/skills',
+        desc: 'Open Skills Manager & Marketplace',
+        action: () => {
+          this.inputTextAreaEl.value = '';
+          this.hideSuggest();
+          this.resetTextareaHeight();
+          new SkillsModal(this.app, this.plugin).open();
+        },
+      },
+      {
         cmd: '/export',
         desc: 'Export chat to Markdown note',
         action: () => {
@@ -559,6 +602,21 @@ export class HarnessChatView extends ItemView {
         },
       },
     ];
+
+    // Dynamic active skills from SkillManager
+    const activeSkills = this.plugin.skillManager?.getActiveSkills() || [];
+    for (const skill of activeSkills) {
+      commands.push({
+        cmd: `/${skill.id}`,
+        desc: `[Skill] ${skill.name}${skill.description ? ` - ${skill.description}` : ''}`,
+        action: () => {
+          this.inputTextAreaEl.value = `/${skill.id} `;
+          this.hideSuggest();
+          this.autoResizeTextarea();
+          this.inputTextAreaEl.focus();
+        },
+      });
+    }
 
     const filtered = commands.filter((c) => c.cmd.toLowerCase().includes(query) || c.desc.toLowerCase().includes(query));
 

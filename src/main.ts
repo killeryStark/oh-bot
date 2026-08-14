@@ -2,12 +2,21 @@ import { Plugin, WorkspaceLeaf } from 'obsidian';
 import { DEFAULT_SETTINGS, HarnessSettings } from './types';
 import { HarnessSettingTab } from './ui/settings-tab';
 import { HarnessChatView, HARNESS_VIEW_TYPE } from './ui/chat-view';
+import { SkillManager } from './skills/skill-manager';
+import { SkillsModal } from './ui/skills-modal';
 
 export default class HarnessPlugin extends Plugin {
   settings: HarnessSettings = DEFAULT_SETTINGS;
+  skillManager!: SkillManager;
 
   async onload() {
     await this.loadSettings();
+
+    // Initialize Skill Manager
+    this.skillManager = new SkillManager(this.app, this.settings, async () => {
+      await this.saveSettings();
+    });
+    await this.skillManager.init();
 
     // Register Sidebar Chat View
     this.registerView(HARNESS_VIEW_TYPE, (leaf) => new HarnessChatView(leaf, this));
@@ -17,12 +26,20 @@ export default class HarnessPlugin extends Plugin {
       this.activateView();
     });
 
-    // Command Palette Command
+    // Command Palette Commands
     this.addCommand({
       id: 'open-obsidian-harness-bot',
       name: 'Open Obsidian Harness Bot',
       callback: () => {
         this.activateView();
+      },
+    });
+
+    this.addCommand({
+      id: 'open-harness-skills-modal',
+      name: 'Open Skills & Marketplace (/skills)',
+      callback: () => {
+        new SkillsModal(this.app, this).open();
       },
     });
 

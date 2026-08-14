@@ -28,7 +28,7 @@ __export(main_exports, {
   default: () => HarnessPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian16 = require("obsidian");
+var import_obsidian20 = require("obsidian");
 
 // src/types.ts
 var DEFAULT_PROVIDERS = [
@@ -114,11 +114,14 @@ var DEFAULT_SETTINGS = {
   systemPrompt: "You are an autonomous AI Agent inside Obsidian. You have tools to read, create, patch, search, and inspect notes in the vault. Use these tools step-by-step to fulfill the user request.",
   safetyMode: "strict",
   sessions: [],
-  currentSessionId: ""
+  currentSessionId: "",
+  installedSkills: [],
+  customMarketplaceUrl: "",
+  scanVaultSkills: true
 };
 
 // src/ui/settings-tab.ts
-var import_obsidian4 = require("obsidian");
+var import_obsidian6 = require("obsidian");
 
 // src/ui/components/add-provider-modal.ts
 var import_obsidian2 = require("obsidian");
@@ -399,8 +402,398 @@ var EditModelsModal = class extends import_obsidian3.Modal {
   }
 };
 
+// src/ui/skills-modal.ts
+var import_obsidian5 = require("obsidian");
+
+// src/skills/marketplace.ts
+var import_obsidian4 = require("obsidian");
+var OFFICIAL_MARKETPLACE_URL = "https://raw.githubusercontent.com/killeryStark/oh-bot/main/marketplace/skills.json";
+var BUILTIN_MARKETPLACE_SKILLS = [
+  {
+    id: "brainstorming",
+    name: "Brainstorming & Design",
+    description: "\u041F\u043E\u0448\u0430\u0433\u043E\u0432\u0430\u044F \u0440\u0430\u0437\u0440\u0430\u0431\u043E\u0442\u043A\u0430 \u0438\u0434\u0435\u0439, \u0430\u0440\u0445\u0438\u0442\u0435\u043A\u0442\u0443\u0440\u044B \u0438 \u0441\u043F\u0435\u0446\u0438\u0444\u0438\u043A\u0430\u0446\u0438\u0439 \u0447\u0435\u0440\u0435\u0437 \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0438\u0440\u043E\u0432\u0430\u043D\u043D\u044B\u0439 \u0434\u0438\u0430\u043B\u043E\u0433",
+    author: "superpowers-org",
+    homepage: "https://github.com/superpowers-org/skills",
+    downloadUrl: "https://raw.githubusercontent.com/superpowers-org/skills/main/skills/brainstorming/SKILL.md",
+    version: "1.1.0",
+    tags: ["planning", "design", "workflow"]
+  },
+  {
+    id: "pkm-researcher",
+    name: "Vault PKM Researcher",
+    description: "\u0413\u043B\u0443\u0431\u043E\u043A\u043E\u0435 \u0438\u0441\u0441\u043B\u0435\u0434\u043E\u0432\u0430\u043D\u0438\u0435 \u0437\u0430\u043C\u0435\u0442\u043E\u043A \u0432 \u0445\u0440\u0430\u043D\u0438\u043B\u0438\u0449\u0435, \u0441\u0438\u043D\u0442\u0435\u0437 \u0441\u0432\u044F\u0437\u0435\u0439 \u0438 \u043F\u043E\u0434\u0433\u043E\u0442\u043E\u0432\u043A\u0430 \u0430\u043D\u0430\u043B\u0438\u0442\u0438\u0447\u0435\u0441\u043A\u0438\u0445 \u043E\u0442\u0447\u0435\u0442\u043E\u0432",
+    author: "Obsidian Harness Contributors",
+    homepage: "https://github.com/killeryStark/oh-bot",
+    downloadUrl: "https://raw.githubusercontent.com/killeryStark/oh-bot/main/marketplace/skills/pkm-researcher/SKILL.md",
+    version: "1.0.0",
+    tags: ["research", "obsidian", "notes"]
+  },
+  {
+    id: "code-architect",
+    name: "Code & Script Architect",
+    description: "\u041F\u0440\u043E\u0435\u043A\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435, \u0430\u0443\u0434\u0438\u0442, \u0440\u0435\u0444\u0430\u043A\u0442\u043E\u0440\u0438\u043D\u0433 \u043A\u043E\u0434\u0430 \u0438 \u043D\u0430\u043F\u0438\u0441\u0430\u043D\u0438\u0435 \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0437\u0430\u0446\u0438\u0439 \u0434\u043B\u044F Obsidian",
+    author: "Obsidian Harness Contributors",
+    homepage: "https://github.com/killeryStark/oh-bot",
+    downloadUrl: "https://raw.githubusercontent.com/killeryStark/oh-bot/main/marketplace/skills/code-architect/SKILL.md",
+    version: "1.0.0",
+    tags: ["coding", "refactoring", "scripts"]
+  },
+  {
+    id: "daily-journal-coach",
+    name: "Daily Journal Coach",
+    description: "\u0410\u043D\u0430\u043B\u0438\u0437 \u0435\u0436\u0435\u0434\u043D\u0435\u0432\u043D\u044B\u0445 \u0437\u0430\u043C\u0435\u0442\u043E\u043A, \u0432\u044B\u044F\u0432\u043B\u0435\u043D\u0438\u0435 \u043F\u0430\u0442\u0442\u0435\u0440\u043D\u043E\u0432 \u043F\u0440\u043E\u0434\u0443\u043A\u0442\u0438\u0432\u043D\u043E\u0441\u0442\u0438 \u0438 \u0444\u043E\u0440\u043C\u0443\u043B\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u0441\u0430\u043C\u043C\u0430\u0440\u0438 \u0434\u043D\u044F",
+    author: "Obsidian Harness Contributors",
+    homepage: "https://github.com/killeryStark/oh-bot",
+    downloadUrl: "https://raw.githubusercontent.com/killeryStark/oh-bot/main/marketplace/skills/daily-journal-coach/SKILL.md",
+    version: "1.0.0",
+    tags: ["productivity", "journal", "pkm"]
+  },
+  {
+    id: "markdown-stylist",
+    name: "Markdown Formatter & Stylist",
+    description: "\u041F\u0440\u0438\u0432\u0435\u0434\u0435\u043D\u0438\u0435 \u0437\u0430\u043C\u0435\u0442\u043E\u043A \u043A \u0438\u0434\u0435\u0430\u043B\u044C\u043D\u043E\u0439 \u0442\u0438\u043F\u043E\u0433\u0440\u0430\u0444\u0438\u043A\u0435, \u0441\u0442\u0440\u0443\u043A\u0442\u0443\u0440\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043A\u043E\u0432, \u0442\u0430\u0431\u043B\u0438\u0446 \u0438 \u0441\u043F\u0438\u0441\u043A\u043E\u0432",
+    author: "Obsidian Harness Contributors",
+    homepage: "https://github.com/killeryStark/oh-bot",
+    downloadUrl: "https://raw.githubusercontent.com/killeryStark/oh-bot/main/marketplace/skills/markdown-stylist/SKILL.md",
+    version: "1.0.0",
+    tags: ["formatting", "markdown", "typography"]
+  }
+];
+var MarketplaceRegistry = class {
+  /**
+   * Fetches latest skills catalog from remote URL or falls back to built-in list.
+   */
+  static async fetchCatalog(customUrl) {
+    const targetUrl = customUrl?.trim() || OFFICIAL_MARKETPLACE_URL;
+    try {
+      const res = await (0, import_obsidian4.requestUrl)({ url: targetUrl, method: "GET" });
+      if (res.status === 200 && res.text) {
+        const manifest = JSON.parse(res.text);
+        if (manifest && Array.isArray(manifest.skills)) {
+          return manifest.skills;
+        }
+      }
+    } catch (err) {
+      console.warn("[oh-bot] Could not fetch remote marketplace catalog, using built-ins:", err);
+    }
+    return BUILTIN_MARKETPLACE_SKILLS;
+  }
+};
+
+// src/ui/skills-modal.ts
+var SkillsModal = class extends import_obsidian5.Modal {
+  constructor(app, plugin) {
+    super(app);
+    this.activeTab = "installed";
+    this.searchQuery = "";
+    this.marketplaceCatalog = [];
+    this.isLoadingMarketplace = false;
+    this.plugin = plugin;
+  }
+  async onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.addClass("harness-skills-modal");
+    await this.render();
+  }
+  async render() {
+    const { contentEl } = this;
+    contentEl.empty();
+    const headerEl = contentEl.createEl("div", { cls: "harness-modal-header" });
+    const titleEl = headerEl.createEl("h2", { text: "Skills & Marketplace" });
+    titleEl.style.margin = "0";
+    const controlsRowEl = contentEl.createEl("div", { cls: "harness-skills-controls-row" });
+    const tabsContainerEl = controlsRowEl.createEl("div", { cls: "harness-tab-group" });
+    const allSkills = this.plugin.skillManager.getAllSkills();
+    const installedCount = allSkills.length;
+    const tabInstalledBtn = tabsContainerEl.createEl("button", {
+      cls: `harness-tab-btn ${this.activeTab === "installed" ? "is-active" : ""}`,
+      text: `Installed & Local (${installedCount})`
+    });
+    tabInstalledBtn.addEventListener("click", () => {
+      this.activeTab = "installed";
+      this.render();
+    });
+    const tabMarketplaceBtn = tabsContainerEl.createEl("button", {
+      cls: `harness-tab-btn ${this.activeTab === "marketplace" ? "is-active" : ""}`,
+      text: "Marketplace & Import"
+    });
+    tabMarketplaceBtn.addEventListener("click", async () => {
+      this.activeTab = "marketplace";
+      await this.loadMarketplace();
+      this.render();
+    });
+    const refreshBtn = controlsRowEl.createEl("button", { cls: "clickable-icon" });
+    refreshBtn.setAttribute("aria-label", "Rescan Vault & Reload Marketplace");
+    (0, import_obsidian5.setIcon)(refreshBtn, "refresh-cw");
+    refreshBtn.addEventListener("click", async () => {
+      new import_obsidian5.Notice("Rescanning Vault skills and reloading marketplace...");
+      await this.plugin.skillManager.refreshLocalSkills();
+      if (this.activeTab === "marketplace") {
+        await this.loadMarketplace(true);
+      }
+      await this.render();
+    });
+    const searchContainerEl = contentEl.createEl("div", { cls: "harness-search-wrapper" });
+    const searchInput = searchContainerEl.createEl("input", {
+      type: "search",
+      cls: "harness-search-input",
+      placeholder: "Search skills by name, description, author, or tags...",
+      value: this.searchQuery
+    });
+    searchInput.addEventListener("input", () => {
+      this.searchQuery = searchInput.value.toLowerCase().trim();
+      this.renderBody(bodyContainerEl);
+    });
+    const bodyContainerEl = contentEl.createEl("div", { cls: "harness-skills-body" });
+    this.renderBody(bodyContainerEl);
+  }
+  async loadMarketplace(force = false) {
+    if (this.marketplaceCatalog.length === 0 || force) {
+      this.isLoadingMarketplace = true;
+      try {
+        this.marketplaceCatalog = await MarketplaceRegistry.fetchCatalog(
+          this.plugin.settings.customMarketplaceUrl
+        );
+      } catch (err) {
+        console.warn("Failed to load marketplace catalog:", err);
+      } finally {
+        this.isLoadingMarketplace = false;
+      }
+    }
+  }
+  renderBody(container) {
+    container.empty();
+    if (this.activeTab === "installed") {
+      this.renderInstalledList(container);
+    } else {
+      this.renderMarketplaceList(container);
+    }
+  }
+  renderInstalledList(container) {
+    let skills = this.plugin.skillManager.getAllSkills();
+    if (this.searchQuery) {
+      skills = skills.filter(
+        (s) => s.name.toLowerCase().includes(this.searchQuery) || s.description.toLowerCase().includes(this.searchQuery) || s.author && s.author.toLowerCase().includes(this.searchQuery) || s.tags && s.tags.some((t) => t.toLowerCase().includes(this.searchQuery))
+      );
+    }
+    if (skills.length === 0) {
+      const emptyEl = container.createEl("div", { cls: "harness-empty-state" });
+      emptyEl.createEl("p", {
+        text: this.searchQuery ? "No skills matching your search query." : "No skills installed yet. Visit the Marketplace tab or place SKILL.md files into .agents/skills/ in your Vault."
+      });
+      return;
+    }
+    const gridEl = container.createEl("div", { cls: "harness-skills-grid" });
+    for (const skill of skills) {
+      const cardEl = gridEl.createEl("div", { cls: `harness-skill-card ${skill.enabled ? "is-enabled" : "is-disabled"}` });
+      const cardHeaderEl = cardEl.createEl("div", { cls: "harness-skill-card-header" });
+      const titleWrapper = cardHeaderEl.createEl("div", { cls: "harness-skill-title-wrapper" });
+      const nameEl = titleWrapper.createEl("strong", { text: skill.name, cls: "harness-skill-title" });
+      if (skill.version) {
+        titleWrapper.createEl("span", { text: ` v${skill.version}`, cls: "harness-skill-version" });
+      }
+      let badgeText = "Installed";
+      let badgeCls = "mod-installed";
+      if (skill.sourceType === "local_vault") {
+        badgeText = skill.localPath ? `Vault: ${skill.localPath}` : "Vault Local";
+        badgeCls = "mod-vault";
+      } else if (skill.sourceUrl?.includes("github.com")) {
+        badgeText = "GitHub";
+        badgeCls = "mod-github";
+      }
+      const badgeEl = titleWrapper.createEl("span", { text: badgeText, cls: `harness-source-badge ${badgeCls}` });
+      if (skill.localPath) {
+        badgeEl.setAttribute("title", skill.localPath);
+      }
+      const toggleWrapper = cardHeaderEl.createEl("div", { cls: "harness-toggle-wrapper" });
+      const toggleInput = toggleWrapper.createEl("input", { type: "checkbox" });
+      toggleInput.checked = skill.enabled;
+      toggleInput.addEventListener("change", async () => {
+        await this.plugin.skillManager.toggleSkill(skill.id, toggleInput.checked);
+        cardEl.toggleClass("is-enabled", toggleInput.checked);
+        cardEl.toggleClass("is-disabled", !toggleInput.checked);
+      });
+      if (skill.description) {
+        cardEl.createEl("p", { text: skill.description, cls: "harness-skill-desc" });
+      }
+      const metaRowEl = cardEl.createEl("div", { cls: "harness-skill-meta-row" });
+      if (skill.author) {
+        const authorEl = metaRowEl.createEl("span", { cls: "harness-skill-author" });
+        authorEl.createEl("span", { text: "By: " });
+        if (skill.homepage) {
+          const authorLink = authorEl.createEl("a", { text: skill.author, href: skill.homepage });
+          authorLink.setAttribute("target", "_blank");
+        } else {
+          authorEl.createEl("span", { text: skill.author });
+        }
+      }
+      if (skill.tags && skill.tags.length > 0) {
+        const tagsContainer = metaRowEl.createEl("div", { cls: "harness-skill-tags" });
+        for (const tag of skill.tags) {
+          tagsContainer.createEl("span", { text: `#${tag}`, cls: "harness-tag-pill" });
+        }
+      }
+      const actionsEl = cardEl.createEl("div", { cls: "harness-skill-actions" });
+      const viewBtn = actionsEl.createEl("button", { text: "View Instructions", cls: "harness-btn-sm" });
+      viewBtn.addEventListener("click", () => {
+        new SkillViewModal(this.app, skill).open();
+      });
+      if (skill.sourceUrl && skill.sourceType === "installed") {
+        const updateBtn = actionsEl.createEl("button", { text: "Update", cls: "harness-btn-sm" });
+        updateBtn.addEventListener("click", async () => {
+          try {
+            updateBtn.disabled = true;
+            updateBtn.setText("Updating...");
+            await this.plugin.skillManager.updateSkillFromGit(skill.id);
+            await this.render();
+          } catch (err) {
+            new import_obsidian5.Notice(`Update failed: ${err.message}`);
+          } finally {
+            updateBtn.disabled = false;
+            updateBtn.setText("Update");
+          }
+        });
+      }
+      if (skill.sourceType === "installed") {
+        const deleteBtn = actionsEl.createEl("button", { text: "Delete", cls: "harness-btn-sm mod-warning" });
+        deleteBtn.addEventListener("click", async () => {
+          await this.plugin.skillManager.uninstallSkill(skill.id);
+          await this.render();
+        });
+      }
+    }
+  }
+  renderMarketplaceList(container) {
+    const importBoxEl = container.createEl("div", { cls: "harness-import-box" });
+    importBoxEl.createEl("h3", { text: "Import Skill from Git Repository or URL" });
+    importBoxEl.createEl("p", {
+      text: "Enter a GitHub repository URL (e.g. https://github.com/owner/repo or tree/main/skills/skill-name) or direct raw SKILL.md URL:",
+      cls: "harness-subtext"
+    });
+    const importRowEl = importBoxEl.createEl("div", { cls: "harness-import-row" });
+    const importInput = importRowEl.createEl("input", {
+      type: "text",
+      cls: "harness-import-input",
+      placeholder: "https://github.com/owner/repo or owner/repo"
+    });
+    const importBtn = importRowEl.createEl("button", { text: "Import & Install", cls: "mod-cta" });
+    importBtn.addEventListener("click", async () => {
+      const url = importInput.value.trim();
+      if (!url) {
+        new import_obsidian5.Notice("Please enter a Git repository or skill URL.");
+        return;
+      }
+      try {
+        importBtn.disabled = true;
+        importBtn.setText("Importing...");
+        await this.plugin.skillManager.installFromUrl(url);
+        importInput.value = "";
+        this.activeTab = "installed";
+        await this.render();
+      } catch (err) {
+        new import_obsidian5.Notice(`Import error: ${err.message}`);
+      } finally {
+        importBtn.disabled = false;
+        importBtn.setText("Import & Install");
+      }
+    });
+    container.createEl("h3", { text: "Curated Marketplace Catalog" });
+    if (this.isLoadingMarketplace) {
+      container.createEl("p", { text: "Loading marketplace catalog..." });
+      return;
+    }
+    let items = this.marketplaceCatalog;
+    if (this.searchQuery) {
+      items = items.filter(
+        (i) => i.name.toLowerCase().includes(this.searchQuery) || i.description.toLowerCase().includes(this.searchQuery) || i.author.toLowerCase().includes(this.searchQuery) || i.tags && i.tags.some((t) => t.toLowerCase().includes(this.searchQuery))
+      );
+    }
+    const gridEl = container.createEl("div", { cls: "harness-skills-grid" });
+    const installedSkills = this.plugin.skillManager.getAllSkills();
+    for (const item of items) {
+      const isInstalled = installedSkills.some((s) => s.id === item.id);
+      const cardEl = gridEl.createEl("div", { cls: "harness-skill-card" });
+      const headerRowEl = cardEl.createEl("div", { cls: "harness-skill-card-header" });
+      const titleWrapper = headerRowEl.createEl("div", { cls: "harness-skill-title-wrapper" });
+      titleWrapper.createEl("strong", { text: item.name, cls: "harness-skill-title" });
+      if (item.version) {
+        titleWrapper.createEl("span", { text: ` v${item.version}`, cls: "harness-skill-version" });
+      }
+      cardEl.createEl("p", { text: item.description, cls: "harness-skill-desc" });
+      const metaRowEl = cardEl.createEl("div", { cls: "harness-skill-meta-row" });
+      const authorEl = metaRowEl.createEl("span", { cls: "harness-skill-author" });
+      authorEl.createEl("span", { text: "By: " });
+      if (item.homepage) {
+        const link = authorEl.createEl("a", { text: item.author, href: item.homepage });
+        link.setAttribute("target", "_blank");
+      } else {
+        authorEl.createEl("span", { text: item.author });
+      }
+      if (item.tags && item.tags.length > 0) {
+        const tagsContainer = metaRowEl.createEl("div", { cls: "harness-skill-tags" });
+        for (const tag of item.tags) {
+          tagsContainer.createEl("span", { text: `#${tag}`, cls: "harness-tag-pill" });
+        }
+      }
+      const actionsEl = cardEl.createEl("div", { cls: "harness-skill-actions" });
+      const actionBtn = actionsEl.createEl("button", {
+        text: isInstalled ? "Installed (Uninstall)" : "Install Skill",
+        cls: `harness-btn-sm ${isInstalled ? "mod-warning" : "mod-cta"}`
+      });
+      actionBtn.addEventListener("click", async () => {
+        try {
+          actionBtn.disabled = true;
+          if (isInstalled) {
+            await this.plugin.skillManager.uninstallSkill(item.id);
+          } else {
+            actionBtn.setText("Installing...");
+            await this.plugin.skillManager.installFromMarketplace(item);
+          }
+          await this.render();
+        } catch (err) {
+          new import_obsidian5.Notice(`Failed: ${err.message}`);
+        } finally {
+          actionBtn.disabled = false;
+        }
+      });
+    }
+  }
+  onClose() {
+    const { contentEl } = this;
+    contentEl.empty();
+  }
+};
+var SkillViewModal = class extends import_obsidian5.Modal {
+  constructor(app, skill) {
+    super(app);
+    this.skill = skill;
+  }
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.addClass("harness-skill-view-modal");
+    contentEl.createEl("h2", { text: `Skill: ${this.skill.name}` });
+    if (this.skill.description) {
+      contentEl.createEl("p", { text: this.skill.description, cls: "harness-subtext" });
+    }
+    const preEl = contentEl.createEl("pre", { cls: "harness-skill-content-preview" });
+    preEl.createEl("code", { text: this.skill.content });
+    const closeBtn = contentEl.createEl("button", { text: "Close", cls: "mod-cta" });
+    closeBtn.style.marginTop = "16px";
+    closeBtn.addEventListener("click", () => {
+      this.close();
+    });
+  }
+  onClose() {
+    const { contentEl } = this;
+    contentEl.empty();
+  }
+};
+
 // src/ui/settings-tab.ts
-var HarnessSettingTab = class extends import_obsidian4.PluginSettingTab {
+var HarnessSettingTab = class extends import_obsidian6.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.plugin = plugin;
@@ -412,7 +805,7 @@ var HarnessSettingTab = class extends import_obsidian4.PluginSettingTab {
     containerEl.empty();
     containerEl.addClass("harness-settings-container");
     containerEl.createEl("h2", { text: "Obsidian Harness Bot Settings" });
-    new import_obsidian4.Setting(containerEl).setName("Default Active Provider").setDesc("Select the default AI provider for agent operations").addDropdown((dropdown) => {
+    new import_obsidian6.Setting(containerEl).setName("Default Active Provider").setDesc("Select the default AI provider for agent operations").addDropdown((dropdown) => {
       dropdown.addOption("", "(Not configured)");
       for (const prov of this.plugin.settings.providers) {
         const hasKey = prov.type === "ollama" || this.secretManager.hasSecret(prov.apiKeySecretName);
@@ -435,7 +828,7 @@ var HarnessSettingTab = class extends import_obsidian4.PluginSettingTab {
     const currentActiveProvider = this.plugin.settings.providers.find(
       (p) => p.id === this.plugin.settings.activeProviderId
     );
-    const modelSetting = new import_obsidian4.Setting(containerEl).setName("Default Active Model").setDesc(currentActiveProvider ? `Select model for ${currentActiveProvider.name}` : "Select an active provider first");
+    const modelSetting = new import_obsidian6.Setting(containerEl).setName("Default Active Model").setDesc(currentActiveProvider ? `Select model for ${currentActiveProvider.name}` : "Select an active provider first");
     if (currentActiveProvider && currentActiveProvider.models.length > 0) {
       modelSetting.addDropdown((dropdown) => {
         for (const m of currentActiveProvider.models) {
@@ -459,7 +852,7 @@ var HarnessSettingTab = class extends import_obsidian4.PluginSettingTab {
       });
     }
     containerEl.createEl("h3", { text: "Provider Configuration" });
-    const providerSelectSetting = new import_obsidian4.Setting(containerEl).setName("Select Provider to Configure").setDesc("Choose a provider to configure its API key, base URL, and model list").addDropdown((dropdown) => {
+    const providerSelectSetting = new import_obsidian6.Setting(containerEl).setName("Select Provider to Configure").setDesc("Choose a provider to configure its API key, base URL, and model list").addDropdown((dropdown) => {
       for (const prov of this.plugin.settings.providers) {
         dropdown.addOption(prov.id, prov.name);
       }
@@ -496,14 +889,14 @@ var HarnessSettingTab = class extends import_obsidian4.PluginSettingTab {
       providerCardEl.style.marginBottom = "16px";
       providerCardEl.style.backgroundColor = "var(--background-secondary)";
       providerCardEl.createEl("h4", { text: `Configuration: ${configProvider.name}` });
-      new import_obsidian4.Setting(providerCardEl).setName("Base URL").setDesc("API Endpoint URL").addText(
+      new import_obsidian6.Setting(providerCardEl).setName("Base URL").setDesc("API Endpoint URL").addText(
         (text) => text.setValue(configProvider.baseUrl).onChange(async (val) => {
           configProvider.baseUrl = val.trim();
           await this.plugin.saveSettings();
         })
       );
       const hasKey = this.secretManager.hasSecret(configProvider.apiKeySecretName);
-      const keySetting = new import_obsidian4.Setting(providerCardEl).setName("API Key").setDesc(hasKey ? "Key is configured in SecretStorage" : "Enter API Key to store securely");
+      const keySetting = new import_obsidian6.Setting(providerCardEl).setName("API Key").setDesc(hasKey ? "Key is configured in SecretStorage" : "Enter API Key to store securely");
       keySetting.addText((text) => {
         text.inputEl.type = "password";
         text.setPlaceholder(hasKey ? "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" : "Enter API Key");
@@ -516,7 +909,7 @@ var HarnessSettingTab = class extends import_obsidian4.PluginSettingTab {
               this.plugin.settings.activeModel = configProvider.models[0] || "";
             }
             await this.plugin.saveSettings();
-            new import_obsidian4.Notice(`API Key saved for ${configProvider.name}`);
+            new import_obsidian6.Notice(`API Key saved for ${configProvider.name}`);
           }
         });
       });
@@ -526,12 +919,12 @@ var HarnessSettingTab = class extends import_obsidian4.PluginSettingTab {
           btn.setWarning();
           btn.onClick(async () => {
             this.secretManager.setSecret(configProvider.apiKeySecretName, "");
-            new import_obsidian4.Notice(`API Key cleared for ${configProvider.name}`);
+            new import_obsidian6.Notice(`API Key cleared for ${configProvider.name}`);
             this.display();
           });
         });
       }
-      const modelsSetting = new import_obsidian4.Setting(providerCardEl).setName("Available Models").setDesc(`${configProvider.models.length} model(s) configured`);
+      const modelsSetting = new import_obsidian6.Setting(providerCardEl).setName("Available Models").setDesc(`${configProvider.models.length} model(s) configured`);
       if (configProvider.models.length > 0) {
         modelsSetting.addDropdown((dropdown) => {
           for (const m of configProvider.models) {
@@ -547,10 +940,10 @@ var HarnessSettingTab = class extends import_obsidian4.PluginSettingTab {
       modelsSetting.addButton((btn) => {
         btn.setClass("harness-btn-icon-round");
         btn.setTooltip("Fetch models from endpoint");
-        (0, import_obsidian4.setIcon)(btn.buttonEl, "refresh-cw");
+        (0, import_obsidian6.setIcon)(btn.buttonEl, "refresh-cw");
         btn.onClick(async () => {
           const apiKey = this.secretManager.getSecret(configProvider.apiKeySecretName) || "";
-          new import_obsidian4.Notice(`Fetching models for ${configProvider.name}...`);
+          new import_obsidian6.Notice(`Fetching models for ${configProvider.name}...`);
           const fetched = await fetchAvailableModels(configProvider.baseUrl, apiKey);
           if (fetched.length > 0) {
             configProvider.models = fetched;
@@ -558,17 +951,17 @@ var HarnessSettingTab = class extends import_obsidian4.PluginSettingTab {
               this.plugin.settings.activeModel = fetched[0];
             }
             await this.plugin.saveSettings();
-            new import_obsidian4.Notice(`Updated ${configProvider.name} with ${fetched.length} models!`);
+            new import_obsidian6.Notice(`Updated ${configProvider.name} with ${fetched.length} models!`);
             this.display();
           } else {
-            new import_obsidian4.Notice("Could not fetch models automatically from endpoint.");
+            new import_obsidian6.Notice("Could not fetch models automatically from endpoint.");
           }
         });
       });
       modelsSetting.addButton((btn) => {
         btn.setClass("harness-btn-icon-round");
         btn.setTooltip("Edit models list");
-        (0, import_obsidian4.setIcon)(btn.buttonEl, "pencil");
+        (0, import_obsidian6.setIcon)(btn.buttonEl, "pencil");
         btn.onClick(() => {
           new EditModelsModal(this.app, configProvider, async (updatedModels) => {
             configProvider.models = updatedModels;
@@ -583,10 +976,10 @@ var HarnessSettingTab = class extends import_obsidian4.PluginSettingTab {
         });
       });
       if (configProvider.isCustom) {
-        const deleteSetting = new import_obsidian4.Setting(providerCardEl).setName("Delete Provider").setDesc("Remove this custom provider from settings");
+        const deleteSetting = new import_obsidian6.Setting(providerCardEl).setName("Delete Provider").setDesc("Remove this custom provider from settings");
         deleteSetting.addButton((btn) => {
           btn.setButtonText("Delete Provider");
-          (0, import_obsidian4.setIcon)(btn.buttonEl, "trash");
+          (0, import_obsidian6.setIcon)(btn.buttonEl, "trash");
           btn.setWarning();
           btn.onClick(async () => {
             this.plugin.settings.providers = this.plugin.settings.providers.filter(
@@ -598,41 +991,43 @@ var HarnessSettingTab = class extends import_obsidian4.PluginSettingTab {
               this.plugin.settings.activeModel = "";
             }
             await this.plugin.saveSettings();
-            new import_obsidian4.Notice(`Deleted provider "${configProvider.name}".`);
+            new import_obsidian6.Notice(`Deleted provider "${configProvider.name}".`);
             this.display();
           });
         });
       }
     }
     containerEl.createEl("h3", { text: "General & Safety" });
-    new import_obsidian4.Setting(containerEl).setName("Vault Modification Safety Mode").setDesc("Strict mode prompts for user confirmation before writing or modifying any Vault file").addDropdown(
+    new import_obsidian6.Setting(containerEl).setName("Vault Modification Safety Mode").setDesc("Strict mode prompts for user confirmation before writing or modifying any Vault file").addDropdown(
       (dropdown) => dropdown.addOption("strict", "Strict (Prompt before file edits)").addOption("auto", "Auto (Auto-approve file edits)").setValue(this.plugin.settings.safetyMode).onChange(async (value) => {
         this.plugin.settings.safetyMode = value;
         await this.plugin.saveSettings();
       })
     );
-    const promptSetting = new import_obsidian4.Setting(containerEl).setName("System Prompt").setDesc("Base instructions for the Agent Harness");
-    promptSetting.setClass("harness-fullwidth-setting");
-    promptSetting.addTextArea((text) => {
-      text.inputEl.addClass("harness-fullwidth-textarea");
-      text.setValue(this.plugin.settings.systemPrompt);
-      const autoResize = () => {
-        text.inputEl.style.height = "auto";
-        text.inputEl.style.height = Math.max(140, text.inputEl.scrollHeight + 8) + "px";
-      };
-      setTimeout(autoResize, 20);
-      text.inputEl.addEventListener("input", autoResize);
-      text.onChange(async (value) => {
-        this.plugin.settings.systemPrompt = value;
+    containerEl.createEl("h3", { text: "Skills & Marketplace" });
+    new import_obsidian6.Setting(containerEl).setName("Manage Skills & Marketplace").setDesc("Install skills from GitHub, browse the marketplace, or manage local vault skills").addButton(
+      (btn) => btn.setButtonText("Open Skills Manager").setCta().onClick(() => {
+        new SkillsModal(this.app, this.plugin).open();
+      })
+    );
+    new import_obsidian6.Setting(containerEl).setName("Auto-scan Vault Folders").setDesc("Scan .agents/skills/, .skills/, .claude/skills/, .gemini/skills/ in Vault for local skills").addToggle(
+      (toggle) => toggle.setValue(this.plugin.settings.scanVaultSkills !== false).onChange(async (val) => {
+        this.plugin.settings.scanVaultSkills = val;
         await this.plugin.saveSettings();
-        autoResize();
-      });
-    });
+        await this.plugin.skillManager.refreshLocalSkills();
+      })
+    );
+    new import_obsidian6.Setting(containerEl).setName("Custom Marketplace Manifest URL").setDesc("Optional URL to load custom community skills manifest JSON").addText(
+      (text) => text.setPlaceholder("https://raw.githubusercontent.com/.../skills.json").setValue(this.plugin.settings.customMarketplaceUrl || "").onChange(async (val) => {
+        this.plugin.settings.customMarketplaceUrl = val.trim();
+        await this.plugin.saveSettings();
+      })
+    );
   }
 };
 
 // src/ui/chat-view.ts
-var import_obsidian15 = require("obsidian");
+var import_obsidian17 = require("obsidian");
 
 // src/engine/providers/base.ts
 var LLMProvider = class {
@@ -712,7 +1107,7 @@ var SSEStreamParser = class {
 };
 
 // src/engine/providers/openrouter.ts
-var import_obsidian5 = require("obsidian");
+var import_obsidian7 = require("obsidian");
 var OpenRouterProvider = class extends LLMProvider {
   constructor() {
     super(...arguments);
@@ -820,7 +1215,7 @@ var OpenRouterProvider = class extends LLMProvider {
       if (signal?.aborted || err.name === "AbortError") {
         throw new Error("Generation stopped by user.");
       }
-      const reqRes = await (0, import_obsidian5.requestUrl)({
+      const reqRes = await (0, import_obsidian7.requestUrl)({
         url: endpoint,
         method: "POST",
         headers: {
@@ -840,7 +1235,7 @@ var OpenRouterProvider = class extends LLMProvider {
 };
 
 // src/engine/providers/openai.ts
-var import_obsidian6 = require("obsidian");
+var import_obsidian8 = require("obsidian");
 var OpenAIProvider = class extends LLMProvider {
   constructor() {
     super(...arguments);
@@ -946,7 +1341,7 @@ var OpenAIProvider = class extends LLMProvider {
       if (signal?.aborted || err.name === "AbortError") {
         throw new Error("Generation stopped by user.");
       }
-      const reqRes = await (0, import_obsidian6.requestUrl)({
+      const reqRes = await (0, import_obsidian8.requestUrl)({
         url: endpoint,
         method: "POST",
         headers: {
@@ -966,7 +1361,7 @@ var OpenAIProvider = class extends LLMProvider {
 };
 
 // src/engine/providers/anthropic.ts
-var import_obsidian7 = require("obsidian");
+var import_obsidian9 = require("obsidian");
 var AnthropicProvider = class extends LLMProvider {
   constructor() {
     super(...arguments);
@@ -1082,7 +1477,7 @@ var AnthropicProvider = class extends LLMProvider {
       if (signal?.aborted || err.name === "AbortError") {
         throw new Error("Generation stopped by user.");
       }
-      const reqRes = await (0, import_obsidian7.requestUrl)({
+      const reqRes = await (0, import_obsidian9.requestUrl)({
         url: endpoint,
         method: "POST",
         headers: {
@@ -1118,7 +1513,7 @@ var AnthropicProvider = class extends LLMProvider {
 };
 
 // src/engine/providers/ollama.ts
-var import_obsidian8 = require("obsidian");
+var import_obsidian10 = require("obsidian");
 var OllamaProvider = class extends LLMProvider {
   constructor() {
     super(...arguments);
@@ -1157,7 +1552,7 @@ var OllamaProvider = class extends LLMProvider {
     if (signal?.aborted) {
       throw new Error("Generation stopped by user.");
     }
-    const reqRes = await (0, import_obsidian8.requestUrl)({
+    const reqRes = await (0, import_obsidian10.requestUrl)({
       url: endpoint,
       method: "POST",
       headers,
@@ -1220,12 +1615,15 @@ var AgentHarness = class {
   /**
    * Runs the multi-step agent turn loop with AbortSignal support.
    */
-  async runTurn(history, onEvent, onConfirm, overrideProviderId, overrideModel, signal) {
+  async runTurn(history, onEvent, onConfirm, overrideProviderId, overrideModel, signal, extraSystemDirectives) {
     const { provider, config, apiKey } = this.getActiveProviderConfig(overrideProviderId);
     const model = overrideModel || this.settings.activeModel || config.models[0] || "anthropic/claude-3.7-sonnet";
     const messages = [...history];
     const tools = this.toolRegistry.getSchemas();
     const maxSteps = 25;
+    const effectiveSystemPrompt = extraSystemDirectives ? `${this.settings.systemPrompt}
+
+${extraSystemDirectives}` : this.settings.systemPrompt;
     let step = 0;
     let keepRunning = true;
     while (keepRunning && step < maxSteps) {
@@ -1238,7 +1636,7 @@ var AgentHarness = class {
         apiKey,
         config.baseUrl,
         model,
-        this.settings.systemPrompt,
+        effectiveSystemPrompt,
         messages,
         tools,
         (chunk) => {
@@ -1361,7 +1759,7 @@ var AgentTool = class {
 };
 
 // src/tools/vault/read-file.ts
-var import_obsidian9 = require("obsidian");
+var import_obsidian11 = require("obsidian");
 var VaultReadFileTool = class extends AgentTool {
   constructor() {
     super(...arguments);
@@ -1382,7 +1780,7 @@ var VaultReadFileTool = class extends AgentTool {
   async execute(args, app) {
     try {
       const file = app.vault.getAbstractFileByPath(args.path);
-      if (!file || !(file instanceof import_obsidian9.TFile)) {
+      if (!file || !(file instanceof import_obsidian11.TFile)) {
         return {
           success: false,
           output: "",
@@ -1460,7 +1858,7 @@ var VaultCreateFileTool = class extends AgentTool {
 };
 
 // src/tools/vault/patch-file.ts
-var import_obsidian10 = require("obsidian");
+var import_obsidian12 = require("obsidian");
 var VaultPatchFileTool = class extends AgentTool {
   constructor() {
     super(...arguments);
@@ -1490,7 +1888,7 @@ var VaultPatchFileTool = class extends AgentTool {
   async execute(args, app) {
     try {
       const file = app.vault.getAbstractFileByPath(args.path);
-      if (!file || !(file instanceof import_obsidian10.TFile)) {
+      if (!file || !(file instanceof import_obsidian12.TFile)) {
         return {
           success: false,
           output: "",
@@ -1521,7 +1919,7 @@ var VaultPatchFileTool = class extends AgentTool {
 };
 
 // src/tools/vault/list-dir.ts
-var import_obsidian11 = require("obsidian");
+var import_obsidian13 = require("obsidian");
 var VaultListDirTool = class extends AgentTool {
   constructor() {
     super(...arguments);
@@ -1543,7 +1941,7 @@ var VaultListDirTool = class extends AgentTool {
     try {
       const folderPath = (args.path || "").replace(/^\//, "");
       const folder = folderPath === "" ? app.vault.getRoot() : app.vault.getAbstractFileByPath(folderPath);
-      if (!folder || !(folder instanceof import_obsidian11.TFolder)) {
+      if (!folder || !(folder instanceof import_obsidian13.TFolder)) {
         return {
           success: false,
           output: "",
@@ -1553,7 +1951,7 @@ var VaultListDirTool = class extends AgentTool {
       const items = folder.children.map((child) => ({
         name: child.name,
         path: child.path,
-        type: child instanceof import_obsidian11.TFolder ? "folder" : "file"
+        type: child instanceof import_obsidian13.TFolder ? "folder" : "file"
       }));
       return {
         success: true,
@@ -1752,7 +2150,7 @@ var SessionManager = class {
 };
 
 // src/utils/mention-helper.ts
-var import_obsidian12 = require("obsidian");
+var import_obsidian14 = require("obsidian");
 var MentionHelper = class {
   /**
    * Returns all searchable files and folders in the Vault for @ autocomplete suggestions.
@@ -1764,7 +2162,7 @@ var MentionHelper = class {
     for (const item of allFiles) {
       if (item.path === "/" || item.path === "")
         continue;
-      const isFolder = item instanceof import_obsidian12.TFolder;
+      const isFolder = item instanceof import_obsidian14.TFolder;
       if (!queryLower || item.name.toLowerCase().includes(queryLower) || item.path.toLowerCase().includes(queryLower)) {
         items.push({
           name: item.name,
@@ -1794,7 +2192,7 @@ var MentionHelper = class {
     for (const match of matches) {
       const targetPath = match[1];
       const item = app.vault.getAbstractFileByPath(targetPath);
-      if (item instanceof import_obsidian12.TFile) {
+      if (item instanceof import_obsidian14.TFile) {
         try {
           const content = await app.vault.read(item);
           attachedBlocks.push(
@@ -1805,9 +2203,9 @@ ${content}
           );
         } catch (e) {
         }
-      } else if (item instanceof import_obsidian12.TFolder) {
+      } else if (item instanceof import_obsidian14.TFolder) {
         try {
-          const children = item.children.map((c) => `- ${c.name} (${c instanceof import_obsidian12.TFolder ? "folder" : "file"})`).join("\n");
+          const children = item.children.map((c) => `- ${c.name} (${c instanceof import_obsidian14.TFolder ? "folder" : "file"})`).join("\n");
           attachedBlocks.push(
             `[Attached Folder: @${item.path}]
 \`\`\`
@@ -1855,8 +2253,8 @@ function parseThoughts(raw) {
 }
 
 // src/ui/components/confirmation-modal.ts
-var import_obsidian13 = require("obsidian");
-var ConfirmationModal = class extends import_obsidian13.Modal {
+var import_obsidian15 = require("obsidian");
+var ConfirmationModal = class extends import_obsidian15.Modal {
   constructor(app, toolCall, onResult) {
     super(app);
     this.toolCall = toolCall;
@@ -1872,7 +2270,7 @@ var ConfirmationModal = class extends import_obsidian13.Modal {
     });
     const codeBlock = contentEl.createEl("pre");
     codeBlock.createEl("code", { text: this.toolCall.function.arguments });
-    new import_obsidian13.Setting(contentEl).addButton(
+    new import_obsidian15.Setting(contentEl).addButton(
       (btn) => btn.setButtonText("Deny").onClick(() => {
         this.onResult(false);
         this.close();
@@ -1891,8 +2289,8 @@ var ConfirmationModal = class extends import_obsidian13.Modal {
 };
 
 // src/ui/components/sessions-modal.ts
-var import_obsidian14 = require("obsidian");
-var SessionsModal = class extends import_obsidian14.Modal {
+var import_obsidian16 = require("obsidian");
+var SessionsModal = class extends import_obsidian16.Modal {
   constructor(app, sessions, currentSessionId, onSelect, onDelete, onNewSession) {
     super(app);
     this.sessions = [...sessions];
@@ -1909,7 +2307,7 @@ var SessionsModal = class extends import_obsidian14.Modal {
     contentEl.empty();
     contentEl.addClass("harness-modal-content");
     contentEl.createEl("h2", { text: "Chat Sessions" });
-    const topSetting = new import_obsidian14.Setting(contentEl).setName("New Conversation").setDesc("Start a fresh agent harness session");
+    const topSetting = new import_obsidian16.Setting(contentEl).setName("New Conversation").setDesc("Start a fresh agent harness session");
     topSetting.addButton((btn) => {
       btn.setButtonText("+ New Session");
       btn.setCta();
@@ -1961,7 +2359,7 @@ var SessionsModal = class extends import_obsidian14.Modal {
       actionsEl.style.display = "flex";
       actionsEl.style.gap = "4px";
       const delBtn = actionsEl.createEl("button", { cls: "harness-btn-icon-round" });
-      (0, import_obsidian14.setIcon)(delBtn, "trash");
+      (0, import_obsidian16.setIcon)(delBtn, "trash");
       delBtn.setAttribute("aria-label", "Delete session");
       delBtn.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -1978,7 +2376,7 @@ var SessionsModal = class extends import_obsidian14.Modal {
 
 // src/ui/chat-view.ts
 var HARNESS_VIEW_TYPE = "harness-chat-view";
-var HarnessChatView = class extends import_obsidian15.ItemView {
+var HarnessChatView = class extends import_obsidian17.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.isInputExpanded = false;
@@ -2027,27 +2425,33 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
     titleEl.style.alignItems = "center";
     titleEl.style.gap = "6px";
     const botIconEl = titleEl.createEl("span");
-    (0, import_obsidian15.setIcon)(botIconEl, "bot");
+    (0, import_obsidian17.setIcon)(botIconEl, "bot");
     titleEl.createEl("span", { text: "Harness Bot", cls: "harness-title" });
     const headerActionsEl = headerEl.createEl("div", { cls: "harness-chat-header-actions" });
     const newSessionBtn = headerActionsEl.createEl("button", { cls: "clickable-icon" });
     newSessionBtn.setAttribute("aria-label", "New Session");
-    (0, import_obsidian15.setIcon)(newSessionBtn, "plus");
+    (0, import_obsidian17.setIcon)(newSessionBtn, "plus");
     newSessionBtn.addEventListener("click", () => {
       this.createNewSession();
     });
     const sessionsBtn = headerActionsEl.createEl("button", { cls: "clickable-icon" });
     sessionsBtn.setAttribute("aria-label", "View Saved Sessions (/sessions)");
-    (0, import_obsidian15.setIcon)(sessionsBtn, "history");
+    (0, import_obsidian17.setIcon)(sessionsBtn, "history");
     sessionsBtn.addEventListener("click", () => {
       this.openSessionsModal();
     });
+    const skillsBtn = headerActionsEl.createEl("button", { cls: "clickable-icon" });
+    skillsBtn.setAttribute("aria-label", "Skills & Marketplace (/skills)");
+    (0, import_obsidian17.setIcon)(skillsBtn, "sparkles");
+    skillsBtn.addEventListener("click", () => {
+      new SkillsModal(this.app, this.plugin).open();
+    });
     const exportBtn = headerActionsEl.createEl("button", { cls: "clickable-icon" });
     exportBtn.setAttribute("aria-label", "Export Chat to Markdown");
-    (0, import_obsidian15.setIcon)(exportBtn, "upload");
+    (0, import_obsidian17.setIcon)(exportBtn, "upload");
     exportBtn.addEventListener("click", async () => {
       if (this.currentSession.messages.length === 0) {
-        new import_obsidian15.Notice("No chat history to export.");
+        new import_obsidian17.Notice("No chat history to export.");
         return;
       }
       try {
@@ -2055,14 +2459,14 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
           this.currentSession.messages,
           this.currentSession.model || this.plugin.settings.activeModel || "default"
         );
-        new import_obsidian15.Notice(`Chat exported to ${exportedPath}`);
+        new import_obsidian17.Notice(`Chat exported to ${exportedPath}`);
       } catch (e) {
-        new import_obsidian15.Notice(`Export failed: ${e.message}`);
+        new import_obsidian17.Notice(`Export failed: ${e.message}`);
       }
     });
     const clearBtn = headerActionsEl.createEl("button", { cls: "clickable-icon" });
     clearBtn.setAttribute("aria-label", "Clear Messages in Session");
-    (0, import_obsidian15.setIcon)(clearBtn, "trash");
+    (0, import_obsidian17.setIcon)(clearBtn, "trash");
     clearBtn.addEventListener("click", async () => {
       this.currentSession.messages = [];
       await this.saveSessionState();
@@ -2080,7 +2484,7 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
     this.expandBtnEl = textareaWrapperEl.createEl("button", { cls: "harness-expand-btn clickable-icon" });
     this.expandBtnEl.setAttribute("aria-label", "Expand to full view");
     this.expandBtnEl.style.display = "none";
-    (0, import_obsidian15.setIcon)(this.expandBtnEl, "maximize-2");
+    (0, import_obsidian17.setIcon)(this.expandBtnEl, "maximize-2");
     this.expandBtnEl.addEventListener("click", () => {
       this.toggleInputExpand();
     });
@@ -2099,7 +2503,7 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
         this.currentAbortController.abort();
         this.currentAbortController = null;
         this.setSendButtonState(false);
-        new import_obsidian15.Notice("Generation stopped.");
+        new import_obsidian17.Notice("Generation stopped.");
         return;
       }
       const text = this.inputTextAreaEl.value.trim();
@@ -2131,12 +2535,18 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
         this.resetTextareaHeight();
         exportBtn.click();
         return;
+      } else if (text === "/skills") {
+        this.inputTextAreaEl.value = "";
+        this.hideSuggest();
+        this.resetTextareaHeight();
+        new SkillsModal(this.app, this.plugin).open();
+        return;
       }
       const activeProv = this.plugin.settings.providers.find(
         (p) => p.id === this.plugin.settings.activeProviderId
       );
       if (!activeProv) {
-        new import_obsidian15.Notice("Please configure and select an AI provider in Settings first.");
+        new import_obsidian17.Notice("Please configure and select an AI provider in Settings first.");
         return;
       }
       this.inputTextAreaEl.value = "";
@@ -2145,12 +2555,27 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
       if (this.isInputExpanded) {
         this.toggleInputExpand();
       }
+      let activeSkillDirective = "";
+      let processedUserText = text;
+      const skillMatch = text.match(/^\/([a-zA-Z0-9-_]+)(?:\s+([\s\S]*))?$/);
+      if (skillMatch) {
+        const candidateId = skillMatch[1].toLowerCase();
+        const skill = this.plugin.skillManager?.getSkill(candidateId);
+        if (skill) {
+          activeSkillDirective = this.plugin.skillManager.getActiveSkillDirective(skill);
+          const restText = (skillMatch[2] || "").trim();
+          processedUserText = restText ? `[\u26A1 Skill: ${skill.name}]
+${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
+        }
+      }
+      const availableSkillsDirectives = this.plugin.skillManager?.generateSystemPromptDirectives() || "";
+      const extraSystemDirectives = [availableSkillsDirectives, activeSkillDirective].filter(Boolean).join("\n\n");
       this.currentAbortController = new AbortController();
       this.setSendButtonState(true);
       if (this.currentSession.messages.length === 0) {
-        this.currentSession.title = SessionManager.generateTitle(text);
+        this.currentSession.title = SessionManager.generateTitle(processedUserText);
       }
-      const resolvedContent = await MentionHelper.resolveMentions(this.app, text);
+      const resolvedContent = await MentionHelper.resolveMentions(this.app, processedUserText);
       const userMsg = { role: "user", content: resolvedContent };
       this.currentSession.messages.push(userMsg);
       this.currentSession.updatedAt = Date.now();
@@ -2193,7 +2618,8 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
           },
           this.plugin.settings.activeProviderId,
           this.currentSession.model || this.plugin.settings.activeModel,
-          this.currentAbortController.signal
+          this.currentAbortController.signal,
+          extraSystemDirectives
         );
         this.currentSession.messages = updatedHistory;
         this.currentSession.updatedAt = Date.now();
@@ -2202,7 +2628,7 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
         if (err.message && err.message.includes("stopped")) {
           textContentEl.setText(textContentEl.innerText + " [Stopped]");
         } else {
-          new import_obsidian15.Notice(`Agent error: ${err.message}`);
+          new import_obsidian17.Notice(`Agent error: ${err.message}`);
           textContentEl.setText(`Error: ${err.message}`);
         }
       } finally {
@@ -2260,7 +2686,7 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
     const summaryEl = detailsEl.createEl("summary", { cls: "harness-collapsible-summary" });
     const leftEl = summaryEl.createEl("div", { cls: "harness-collapsible-summary-left" });
     const iconSpan = leftEl.createEl("span");
-    (0, import_obsidian15.setIcon)(iconSpan, "sparkles");
+    (0, import_obsidian17.setIcon)(iconSpan, "sparkles");
     leftEl.createEl("span", { text: "Reasoning / \u0420\u0430\u0441\u0441\u0443\u0436\u0434\u0435\u043D\u0438\u044F" });
     summaryEl.createEl("span", { text: "View", cls: "harness-collapsible-badge" });
     const bodyEl = detailsEl.createEl("div", { cls: "harness-collapsible-body harness-thinking-text" });
@@ -2283,7 +2709,7 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
     const summaryEl = detailsEl.createEl("summary", { cls: "harness-collapsible-summary" });
     const leftEl = summaryEl.createEl("div", { cls: "harness-collapsible-summary-left" });
     const iconSpan = leftEl.createEl("span");
-    (0, import_obsidian15.setIcon)(iconSpan, "wrench");
+    (0, import_obsidian17.setIcon)(iconSpan, "wrench");
     leftEl.createEl("span", { text: `Tool: ${toolName}` });
     summaryEl.createEl("span", { text: "Args", cls: "harness-collapsible-badge" });
     const bodyEl = detailsEl.createEl("div", { cls: "harness-collapsible-body" });
@@ -2297,7 +2723,7 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
     const summaryEl = detailsEl.createEl("summary", { cls: "harness-collapsible-summary" });
     const leftEl = summaryEl.createEl("div", { cls: "harness-collapsible-summary-left" });
     const iconSpan = leftEl.createEl("span");
-    (0, import_obsidian15.setIcon)(iconSpan, "file-text");
+    (0, import_obsidian17.setIcon)(iconSpan, "file-text");
     leftEl.createEl("span", { text: `Output: ${toolName}` });
     summaryEl.createEl("span", { text: "Result", cls: "harness-collapsible-badge" });
     const bodyEl = detailsEl.createEl("div", { cls: "harness-collapsible-body" });
@@ -2324,13 +2750,13 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
     this.isInputExpanded = !this.isInputExpanded;
     if (this.isInputExpanded) {
       this.inputAreaEl.addClass("is-expanded");
-      (0, import_obsidian15.setIcon)(this.expandBtnEl, "minimize-2");
+      (0, import_obsidian17.setIcon)(this.expandBtnEl, "minimize-2");
       this.expandBtnEl.setAttribute("aria-label", "Collapse view");
       this.expandBtnEl.style.display = "flex";
       this.inputTextAreaEl.focus();
     } else {
       this.inputAreaEl.removeClass("is-expanded");
-      (0, import_obsidian15.setIcon)(this.expandBtnEl, "maximize-2");
+      (0, import_obsidian17.setIcon)(this.expandBtnEl, "maximize-2");
       this.expandBtnEl.setAttribute("aria-label", "Expand to full view");
       this.autoResizeTextarea();
       this.inputTextAreaEl.focus();
@@ -2341,12 +2767,12 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
       return;
     this.sendButtonEl.empty();
     if (isGenerating) {
-      (0, import_obsidian15.setIcon)(this.sendButtonEl, "square");
+      (0, import_obsidian17.setIcon)(this.sendButtonEl, "square");
       this.sendButtonEl.addClass("mod-warning");
       this.sendButtonEl.removeClass("mod-cta");
       this.sendButtonEl.setAttribute("aria-label", "Stop generation");
     } else {
-      (0, import_obsidian15.setIcon)(this.sendButtonEl, "send");
+      (0, import_obsidian17.setIcon)(this.sendButtonEl, "send");
       this.sendButtonEl.addClass("mod-cta");
       this.sendButtonEl.removeClass("mod-warning");
       this.sendButtonEl.setAttribute("aria-label", "Send message");
@@ -2412,6 +2838,16 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
         }
       },
       {
+        cmd: "/skills",
+        desc: "Open Skills Manager & Marketplace",
+        action: () => {
+          this.inputTextAreaEl.value = "";
+          this.hideSuggest();
+          this.resetTextareaHeight();
+          new SkillsModal(this.app, this.plugin).open();
+        }
+      },
+      {
         cmd: "/export",
         desc: "Export chat to Markdown note",
         action: () => {
@@ -2425,6 +2861,19 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
         }
       }
     ];
+    const activeSkills = this.plugin.skillManager?.getActiveSkills() || [];
+    for (const skill of activeSkills) {
+      commands.push({
+        cmd: `/${skill.id}`,
+        desc: `[Skill] ${skill.name}${skill.description ? ` - ${skill.description}` : ""}`,
+        action: () => {
+          this.inputTextAreaEl.value = `/${skill.id} `;
+          this.hideSuggest();
+          this.autoResizeTextarea();
+          this.inputTextAreaEl.focus();
+        }
+      });
+    }
     const filtered = commands.filter((c) => c.cmd.toLowerCase().includes(query) || c.desc.toLowerCase().includes(query));
     if (filtered.length === 0) {
       this.hideSuggest();
@@ -2469,7 +2918,7 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
       if (index === 0)
         itemEl.addClass("is-selected");
       const iconSpan = itemEl.createEl("span", { cls: "harness-suggest-icon" });
-      (0, import_obsidian15.setIcon)(iconSpan, item.isFolder ? "folder" : "file-text");
+      (0, import_obsidian17.setIcon)(iconSpan, item.isFolder ? "folder" : "file-text");
       itemEl.createEl("span", { text: ` ${item.path}` });
       itemEl.addEventListener("click", onSelect);
     });
@@ -2506,7 +2955,7 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
     this.saveSessionState();
     this.renderMessages();
     this.refreshModelDropdown();
-    new import_obsidian15.Notice("Started new chat session");
+    new import_obsidian17.Notice("Started new chat session");
   }
   openSessionsModal() {
     new SessionsModal(
@@ -2663,14 +3112,494 @@ var HarnessChatView = class extends import_obsidian15.ItemView {
   }
 };
 
+// src/skills/skill-manager.ts
+var import_obsidian19 = require("obsidian");
+
+// src/skills/git-resolver.ts
+var import_obsidian18 = require("obsidian");
+
+// src/skills/frontmatter.ts
+function parseSkillContent(rawContent, fallbackId) {
+  const trimmed = rawContent.trim();
+  const frontmatterRegex = /^---\s*[\r\n]+([\s\S]*?)[\r\n]+---\s*[\r\n]*([\s\S]*)$/;
+  const match = trimmed.match(frontmatterRegex);
+  if (!match) {
+    return {
+      name: formatFallbackName(fallbackId),
+      description: "Custom skill",
+      body: trimmed
+    };
+  }
+  const yamlBlock = match[1];
+  const body = match[2].trim();
+  const parsed = parseSimpleYaml(yamlBlock);
+  return {
+    name: typeof parsed.name === "string" ? parsed.name : formatFallbackName(fallbackId),
+    description: typeof parsed.description === "string" ? parsed.description : "",
+    author: typeof parsed.author === "string" ? parsed.author : void 0,
+    tags: Array.isArray(parsed.tags) ? parsed.tags : void 0,
+    version: typeof parsed.version === "string" ? parsed.version : void 0,
+    homepage: typeof parsed.homepage === "string" ? parsed.homepage : void 0,
+    body
+  };
+}
+function parseSimpleYaml(yamlStr) {
+  const result = {};
+  const lines = yamlStr.split(/\r?\n/);
+  let currentKey = null;
+  let currentArray = null;
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#"))
+      continue;
+    if (line.startsWith("- ") && currentKey) {
+      const item = line.substring(2).trim().replace(/^['"](.*)['"]$/, "$1");
+      if (!currentArray) {
+        currentArray = [];
+        result[currentKey] = currentArray;
+      }
+      currentArray.push(item);
+      continue;
+    }
+    const colonIdx = line.indexOf(":");
+    if (colonIdx === -1)
+      continue;
+    const key = line.substring(0, colonIdx).trim();
+    const value = line.substring(colonIdx + 1).trim();
+    currentKey = key;
+    currentArray = null;
+    if (!value) {
+      continue;
+    }
+    if (value.startsWith("[") && value.endsWith("]")) {
+      const inner = value.slice(1, -1).trim();
+      if (!inner) {
+        result[key] = [];
+      } else {
+        result[key] = inner.split(",").map((s) => s.trim().replace(/^['"](.*)['"]$/, "$1")).filter(Boolean);
+      }
+    } else {
+      result[key] = value.replace(/^['"](.*)['"]$/, "$1");
+    }
+  }
+  return result;
+}
+function formatFallbackName(id) {
+  return id.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+function compareSemver(v1, v2) {
+  if (!v1 && !v2)
+    return 0;
+  if (!v1)
+    return -1;
+  if (!v2)
+    return 1;
+  const clean1 = v1.replace(/^v/, "").split(".").map((n) => parseInt(n, 10) || 0);
+  const clean2 = v2.replace(/^v/, "").split(".").map((n) => parseInt(n, 10) || 0);
+  const len = Math.max(clean1.length, clean2.length);
+  for (let i = 0; i < len; i++) {
+    const num1 = clean1[i] || 0;
+    const num2 = clean2[i] || 0;
+    if (num1 > num2)
+      return 1;
+    if (num1 < num2)
+      return -1;
+  }
+  return 0;
+}
+
+// src/skills/git-resolver.ts
+var SkillGitResolver = class {
+  /**
+   * Resolves a Git URL or raw markdown URL into a complete SkillMetadata object.
+   */
+  static async resolveFromUrl(inputUrl) {
+    let targetUrl = inputUrl.trim();
+    if (!targetUrl) {
+      throw new Error("Please provide a valid GitHub repository or skill URL.");
+    }
+    if (!targetUrl.startsWith("http://") && !targetUrl.startsWith("https://")) {
+      if (targetUrl.includes("/")) {
+        targetUrl = `https://github.com/${targetUrl}`;
+      } else {
+        throw new Error(`Invalid URL format: "${inputUrl}". Expected https://github.com/... or owner/repo`);
+      }
+    }
+    const rawCandidates = this.generateCandidateUrls(targetUrl);
+    let lastError = null;
+    let fetchedContent = "";
+    let successfulUrl = "";
+    for (const candUrl of rawCandidates) {
+      try {
+        const res = await (0, import_obsidian18.requestUrl)({ url: candUrl, method: "GET" });
+        if (res.status === 200 && res.text && res.text.trim().length > 0) {
+          fetchedContent = res.text;
+          successfulUrl = candUrl;
+          break;
+        }
+      } catch (err) {
+        lastError = err;
+      }
+    }
+    if (!fetchedContent) {
+      throw new Error(
+        `Failed to fetch SKILL.md from "${inputUrl}". Please check repository path and branch name. (${lastError?.message || "404 Not Found"})`
+      );
+    }
+    const fallbackId = this.extractIdFromUrl(inputUrl);
+    const parsed = parseSkillContent(fetchedContent, fallbackId);
+    const homepage = parsed.homepage || (targetUrl.includes("github.com") ? targetUrl.replace(/\/raw\..*$/, "") : void 0);
+    const author = parsed.author || this.extractAuthorFromUrl(inputUrl);
+    return {
+      id: fallbackId,
+      name: parsed.name || fallbackId,
+      description: parsed.description || "Imported Skill",
+      author,
+      tags: parsed.tags,
+      version: parsed.version || "1.0.0",
+      homepage,
+      sourceType: "installed",
+      sourceUrl: targetUrl,
+      enabled: true,
+      content: parsed.body || fetchedContent,
+      updatedAt: Date.now()
+    };
+  }
+  /**
+   * Generates candidate raw URLs to probe for SKILL.md.
+   */
+  static generateCandidateUrls(url) {
+    const candidates = [];
+    if (url.includes("raw.githubusercontent.com") || url.endsWith(".md")) {
+      candidates.push(url);
+      return candidates;
+    }
+    const blobMatch = url.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)$/);
+    if (blobMatch) {
+      const [, owner, repo, branch, path] = blobMatch;
+      candidates.push(`https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${path}`);
+      return candidates;
+    }
+    const treeMatch = url.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/tree\/([^/]+)\/?(.*)$/);
+    if (treeMatch) {
+      const [, owner, repo, branch, path] = treeMatch;
+      const cleanPath = path ? path.replace(/\/$/, "") : "";
+      if (cleanPath.endsWith(".md")) {
+        candidates.push(`https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${cleanPath}`);
+      } else {
+        candidates.push(`https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${cleanPath}/SKILL.md`);
+        candidates.push(`https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${cleanPath}/skill.md`);
+      }
+      return candidates;
+    }
+    const repoMatch = url.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/?$/);
+    if (repoMatch) {
+      const [, owner, repo] = repoMatch;
+      const cleanRepo = repo.replace(/\.git$/, "");
+      const branches = ["main", "master"];
+      const standardPaths = [
+        "SKILL.md",
+        "skill.md",
+        "skills/SKILL.md",
+        ".agents/skills/SKILL.md",
+        ".skills/SKILL.md"
+      ];
+      for (const branch of branches) {
+        for (const p of standardPaths) {
+          candidates.push(`https://raw.githubusercontent.com/${owner}/${cleanRepo}/${branch}/${p}`);
+        }
+      }
+      return candidates;
+    }
+    candidates.push(url);
+    if (!url.endsWith("/SKILL.md")) {
+      candidates.push(`${url.replace(/\/$/, "")}/SKILL.md`);
+    }
+    return candidates;
+  }
+  static extractIdFromUrl(url) {
+    const cleaned = url.replace(/\/+$/, "").replace(/\/SKILL\.md$/i, "");
+    const parts = cleaned.split("/");
+    const lastPart = parts[parts.length - 1] || "custom-skill";
+    return lastPart.toLowerCase().replace(/[^a-z0-9-_]/g, "-");
+  }
+  static extractAuthorFromUrl(url) {
+    const ghMatch = url.match(/github\.com\/([^/]+)/);
+    if (ghMatch)
+      return ghMatch[1];
+    const rawMatch = url.match(/raw\.githubusercontent\.com\/([^/]+)/);
+    if (rawMatch)
+      return rawMatch[1];
+    return void 0;
+  }
+};
+
+// src/skills/vault-scanner.ts
+var FOLDER_PRIORITIES = {
+  ".agents/skills": 100,
+  ".skills": 80,
+  ".claude/skills": 60,
+  ".gemini/skills": 40,
+  "skills": 20
+};
+var VaultSkillsScanner = class {
+  constructor(app) {
+    this.app = app;
+  }
+  /**
+   * Scans the active Obsidian Vault for standard skill directories.
+   * Handles deduplication, symlinks, folder priority, and SemVer conflict resolution.
+   */
+  async scanVaultSkills() {
+    const allFiles = this.app.vault.getFiles();
+    const candidateFiles = allFiles.filter((f) => this.isSkillFile(f.path));
+    const skillsMap = /* @__PURE__ */ new Map();
+    const seenContents = /* @__PURE__ */ new Set();
+    for (const file of candidateFiles) {
+      try {
+        const rawContent = await this.app.vault.read(file);
+        const trimmed = rawContent.trim();
+        if (!trimmed)
+          continue;
+        const contentHash = this.simpleHash(trimmed);
+        if (seenContents.has(contentHash)) {
+          continue;
+        }
+        const fallbackId = this.extractIdFromPath(file.path);
+        const parsed = parseSkillContent(trimmed, fallbackId);
+        const skillId = this.normalizeSkillId(parsed.name || fallbackId);
+        const folderPriority = this.getFolderPriority(file.path);
+        const candidateSkill = {
+          id: skillId,
+          name: parsed.name || fallbackId,
+          description: parsed.description || "Local Vault Skill",
+          author: parsed.author || "Local Vault",
+          tags: parsed.tags,
+          version: parsed.version || "1.0.0",
+          homepage: parsed.homepage,
+          sourceType: "local_vault",
+          localPath: file.path,
+          enabled: true,
+          content: parsed.body || trimmed,
+          updatedAt: file.stat.mtime || Date.now()
+        };
+        if (!skillsMap.has(skillId)) {
+          skillsMap.set(skillId, { skill: candidateSkill, priority: folderPriority });
+          seenContents.add(contentHash);
+        } else {
+          const existing = skillsMap.get(skillId);
+          const versionDiff = compareSemver(candidateSkill.version, existing.skill.version);
+          if (versionDiff > 0) {
+            skillsMap.set(skillId, { skill: candidateSkill, priority: folderPriority });
+            seenContents.add(contentHash);
+          } else if (versionDiff === 0 && folderPriority > existing.priority) {
+            skillsMap.set(skillId, { skill: candidateSkill, priority: folderPriority });
+            seenContents.add(contentHash);
+          }
+        }
+      } catch (err) {
+        console.warn(`[oh-bot] Failed to parse vault skill at ${file.path}:`, err);
+      }
+    }
+    return Array.from(skillsMap.values()).map((v) => v.skill);
+  }
+  isSkillFile(filePath) {
+    const lower = filePath.toLowerCase();
+    const isMd = lower.endsWith(".md");
+    if (!isMd)
+      return false;
+    const isSkillName = lower.endsWith("/skill.md") || lower.endsWith(".skill.md") || lower === "skill.md";
+    if (!isSkillName)
+      return false;
+    return lower.startsWith(".agents/skills/") || lower.startsWith(".skills/") || lower.startsWith(".claude/skills/") || lower.startsWith(".gemini/skills/") || lower.startsWith("skills/");
+  }
+  extractIdFromPath(filePath) {
+    const parts = filePath.split("/");
+    if (parts.length >= 2) {
+      const parent = parts[parts.length - 2];
+      if (parent && !parent.startsWith(".")) {
+        return parent.toLowerCase().replace(/[^a-z0-9-_]/g, "-");
+      }
+    }
+    const filename = parts[parts.length - 1].replace(/\.(skill\.)?md$/i, "");
+    return filename.toLowerCase().replace(/[^a-z0-9-_]/g, "-");
+  }
+  normalizeSkillId(nameOrId) {
+    return nameOrId.toLowerCase().trim().replace(/\s+/g, "-").replace(/[^a-z0-9-_]/g, "");
+  }
+  getFolderPriority(filePath) {
+    const lower = filePath.toLowerCase();
+    for (const [folder, priority] of Object.entries(FOLDER_PRIORITIES)) {
+      if (lower.startsWith(folder.toLowerCase() + "/")) {
+        return priority;
+      }
+    }
+    return 10;
+  }
+  simpleHash(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = (hash << 5) - hash + str.charCodeAt(i);
+      hash |= 0;
+    }
+    return hash.toString(36);
+  }
+};
+
+// src/skills/skill-manager.ts
+var SkillManager = class {
+  constructor(app, settings, saveSettingsCallback) {
+    this.localSkills = [];
+    this.app = app;
+    this.settings = settings;
+    this.saveSettingsCallback = saveSettingsCallback;
+    this.vaultScanner = new VaultSkillsScanner(app);
+  }
+  async init() {
+    if (!this.settings.installedSkills) {
+      this.settings.installedSkills = [];
+    }
+    if (this.settings.scanVaultSkills !== false) {
+      await this.refreshLocalSkills();
+    }
+  }
+  /**
+   * Scans Vault folders for local skills.
+   */
+  async refreshLocalSkills() {
+    if (this.settings.scanVaultSkills === false) {
+      this.localSkills = [];
+      return;
+    }
+    try {
+      this.localSkills = await this.vaultScanner.scanVaultSkills();
+    } catch (err) {
+      console.warn("[oh-bot] Error scanning vault skills:", err);
+    }
+  }
+  /**
+   * Returns all skills (Vault local skills take priority over installed with same ID).
+   */
+  getAllSkills() {
+    const map = /* @__PURE__ */ new Map();
+    for (const skill of this.settings.installedSkills || []) {
+      map.set(skill.id, skill);
+    }
+    for (const skill of this.localSkills) {
+      map.set(skill.id, skill);
+    }
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }
+  /**
+   * Returns all enabled skills.
+   */
+  getActiveSkills() {
+    return this.getAllSkills().filter((s) => s.enabled);
+  }
+  /**
+   * Finds a skill by ID.
+   */
+  getSkill(id) {
+    const normalized = id.toLowerCase().trim();
+    return this.getAllSkills().find((s) => s.id === normalized);
+  }
+  /**
+   * Installs a skill from any Git or markdown URL.
+   */
+  async installFromUrl(url) {
+    const resolved = await SkillGitResolver.resolveFromUrl(url);
+    if (!this.settings.installedSkills) {
+      this.settings.installedSkills = [];
+    }
+    this.settings.installedSkills = this.settings.installedSkills.filter((s) => s.id !== resolved.id);
+    this.settings.installedSkills.push(resolved);
+    await this.saveSettingsCallback();
+    new import_obsidian19.Notice(`Skill "${resolved.name}" successfully installed!`);
+    return resolved;
+  }
+  /**
+   * Installs a skill from marketplace item.
+   */
+  async installFromMarketplace(item) {
+    return this.installFromUrl(item.downloadUrl);
+  }
+  /**
+   * Uninstalls an installed skill.
+   */
+  async uninstallSkill(id) {
+    if (!this.settings.installedSkills)
+      return;
+    this.settings.installedSkills = this.settings.installedSkills.filter((s) => s.id !== id);
+    await this.saveSettingsCallback();
+    new import_obsidian19.Notice(`Skill uninstalled.`);
+  }
+  /**
+   * Toggles skill enabled status.
+   */
+  async toggleSkill(id, enabled) {
+    const installed = this.settings.installedSkills?.find((s) => s.id === id);
+    if (installed) {
+      installed.enabled = enabled;
+      await this.saveSettingsCallback();
+      return;
+    }
+    const local = this.localSkills.find((s) => s.id === id);
+    if (local) {
+      local.enabled = enabled;
+    }
+  }
+  /**
+   * Updates an installed Git skill to the latest version.
+   */
+  async updateSkillFromGit(id) {
+    const existing = this.settings.installedSkills?.find((s) => s.id === id);
+    if (!existing || !existing.sourceUrl) {
+      throw new Error("Skill does not have a valid Git source URL to update from.");
+    }
+    return this.installFromUrl(existing.sourceUrl);
+  }
+  /**
+   * Generates a compact index of available skills for the system prompt.
+   */
+  generateSystemPromptDirectives() {
+    const active = this.getActiveSkills();
+    if (active.length === 0)
+      return "";
+    const lines = [
+      "\n\n[AVAILABLE SKILLS]",
+      "You have access to specialized methodologies and skills. Adhere strictly to their instructions when applicable:"
+    ];
+    for (const skill of active) {
+      lines.push(`- /${skill.id}: ${skill.name} - ${skill.description}`);
+    }
+    lines.push("[END OF AVAILABLE SKILLS]");
+    return lines.join("\n");
+  }
+  /**
+   * Formats active skill instructions for turn execution.
+   */
+  getActiveSkillDirective(skill) {
+    return `
+
+[SYSTEM DIRECTIVE: ACTIVE SKILL "${skill.name}"]
+${skill.content}
+[END OF ACTIVE SKILL INSTRUCTIONS]
+`;
+  }
+};
+
 // src/main.ts
-var HarnessPlugin = class extends import_obsidian16.Plugin {
+var HarnessPlugin = class extends import_obsidian20.Plugin {
   constructor() {
     super(...arguments);
     this.settings = DEFAULT_SETTINGS;
   }
   async onload() {
     await this.loadSettings();
+    this.skillManager = new SkillManager(this.app, this.settings, async () => {
+      await this.saveSettings();
+    });
+    await this.skillManager.init();
     this.registerView(HARNESS_VIEW_TYPE, (leaf) => new HarnessChatView(leaf, this));
     this.addRibbonIcon("bot", "Open Obsidian Harness Bot", () => {
       this.activateView();
@@ -2680,6 +3609,13 @@ var HarnessPlugin = class extends import_obsidian16.Plugin {
       name: "Open Obsidian Harness Bot",
       callback: () => {
         this.activateView();
+      }
+    });
+    this.addCommand({
+      id: "open-harness-skills-modal",
+      name: "Open Skills & Marketplace (/skills)",
+      callback: () => {
+        new SkillsModal(this.app, this).open();
       }
     });
     this.addSettingTab(new HarnessSettingTab(this.app, this));

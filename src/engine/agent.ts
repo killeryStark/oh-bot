@@ -67,13 +67,17 @@ export class AgentHarness {
     onConfirm?: ConfirmationCallback,
     overrideProviderId?: string,
     overrideModel?: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    extraSystemDirectives?: string
   ): Promise<LLMMessage[]> {
     const { provider, config, apiKey } = this.getActiveProviderConfig(overrideProviderId);
     const model = overrideModel || this.settings.activeModel || config.models[0] || 'anthropic/claude-3.7-sonnet';
     const messages: LLMMessage[] = [...history];
     const tools = this.toolRegistry.getSchemas();
     const maxSteps = 25; // Sensible internal step limit (pi-agent harness style)
+    const effectiveSystemPrompt = extraSystemDirectives
+      ? `${this.settings.systemPrompt}\n\n${extraSystemDirectives}`
+      : this.settings.systemPrompt;
 
     let step = 0;
     let keepRunning = true;
@@ -90,7 +94,7 @@ export class AgentHarness {
         apiKey,
         config.baseUrl,
         model,
-        this.settings.systemPrompt,
+        effectiveSystemPrompt,
         messages,
         tools,
         (chunk) => {

@@ -5,6 +5,7 @@ import { AddProviderModal } from './components/add-provider-modal';
 import { EditModelsModal } from './components/edit-models-modal';
 import { fetchAvailableModels } from '../utils/model-fetcher';
 import { SecretManager } from '../utils/secrets';
+import { SkillsModal } from './skills-modal';
 
 export class HarnessSettingTab extends PluginSettingTab {
   plugin: HarnessPlugin;
@@ -280,30 +281,47 @@ export class HarnessSettingTab extends PluginSettingTab {
           })
       );
 
-    // System Prompt Setting with Fullwidth and Auto-Expansion
-    const promptSetting = new Setting(containerEl)
-      .setName('System Prompt')
-      .setDesc('Base instructions for the Agent Harness');
+    containerEl.createEl('h3', { text: 'Skills & Marketplace' });
 
-    promptSetting.setClass('harness-fullwidth-setting');
+    // Open Skills Modal Setting
+    new Setting(containerEl)
+      .setName('Manage Skills & Marketplace')
+      .setDesc('Install skills from GitHub, browse the marketplace, or manage local vault skills')
+      .addButton((btn) =>
+        btn
+          .setButtonText('Open Skills Manager')
+          .setCta()
+          .onClick(() => {
+            new SkillsModal(this.app, this.plugin).open();
+          })
+      );
 
-    promptSetting.addTextArea((text) => {
-      text.inputEl.addClass('harness-fullwidth-textarea');
-      text.setValue(this.plugin.settings.systemPrompt);
+    // Auto-scan Vault Skills
+    new Setting(containerEl)
+      .setName('Auto-scan Vault Folders')
+      .setDesc('Scan .agents/skills/, .skills/, .claude/skills/, .gemini/skills/ in Vault for local skills')
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.scanVaultSkills !== false)
+          .onChange(async (val) => {
+            this.plugin.settings.scanVaultSkills = val;
+            await this.plugin.saveSettings();
+            await this.plugin.skillManager.refreshLocalSkills();
+          })
+      );
 
-      const autoResize = () => {
-        text.inputEl.style.height = 'auto';
-        text.inputEl.style.height = Math.max(140, text.inputEl.scrollHeight + 8) + 'px';
-      };
-
-      setTimeout(autoResize, 20);
-      text.inputEl.addEventListener('input', autoResize);
-
-      text.onChange(async (value) => {
-        this.plugin.settings.systemPrompt = value;
-        await this.plugin.saveSettings();
-        autoResize();
-      });
-    });
+    // Custom Marketplace URL
+    new Setting(containerEl)
+      .setName('Custom Marketplace Manifest URL')
+      .setDesc('Optional URL to load custom community skills manifest JSON')
+      .addText((text) =>
+        text
+          .setPlaceholder('https://raw.githubusercontent.com/.../skills.json')
+          .setValue(this.plugin.settings.customMarketplaceUrl || '')
+          .onChange(async (val) => {
+            this.plugin.settings.customMarketplaceUrl = val.trim();
+            await this.plugin.saveSettings();
+          })
+      );
   }
 }
