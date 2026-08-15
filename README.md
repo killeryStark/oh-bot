@@ -62,6 +62,28 @@ Obsidian Harness Bot includes a first-class skills management engine compatible 
 
 ---
 
+## Model Context Protocol (MCP) Servers
+
+Obsidian Harness Bot includes a full **web-based MCP client** that connects to remote MCP servers over HTTP — no `stdio`, no Node.js, fully compatible with iOS, Android, and Desktop.
+
+### Highlights
+
+- 🌐 **Remote Streamable HTTP & SSE**: Connects to any MCP server that exposes an HTTP POST / Server-Sent Events endpoint (e.g. `https://ai.todoist.net/mcp`).
+- 📦 **MCP Catalog**: One-click install from a curated catalog of popular MCP services (Todoist, Web Search, etc.) via the `/mcp` command or Settings.
+- 🔐 **Obsidian SecretStorage Integration**: API tokens are stored through Obsidian's official `SecretComponent` / `app.secretStorage` API — the same mechanism used for model provider keys. Tokens never leak into `data.json`.
+- 🛡️ **CORS-Free on Mobile**: All HTTP calls use Obsidian's native `requestUrl` API, bypassing WebView CORS restrictions on iOS and Android.
+- ⚡ **Robust SSE JSON Parser**: Many MCP servers (including Todoist) return responses wrapped in SSE format (`event: message\ndata: {...}`) with unescaped control characters in large instruction payloads. The built-in `parseJsonSafely` parser handles all of this transparently.
+- 🔧 **Auth Methods**: Bearer Token, Custom Header (`X-API-Key`), OAuth 2.1 (PKCE), or no auth for public endpoints.
+
+### Usage
+
+1. Open `/mcp` command or go to **Settings → MCP Servers → Open MCP Servers**.
+2. Click **"Browse Catalog"** to install a pre-configured server, or **"Add Custom Server"** to enter any remote MCP endpoint URL.
+3. Paste your API token — it will be saved securely in Obsidian's Secret Storage.
+4. The agent automatically discovers available tools and can invoke them during conversations.
+
+---
+
 ## Installation
 
 ### Via BRAT (Obsidian 42 BRAT)
