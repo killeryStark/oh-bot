@@ -1,6 +1,6 @@
 import { ItemView, WorkspaceLeaf, Notice, setIcon, MarkdownRenderer } from 'obsidian';
 import type HarnessPlugin from '../main';
-import { ChatSession, LLMMessage, ToolCall } from '../types';
+import { AgentConfig, ChatSession, LLMMessage, ToolCall } from '../types';
 import { AgentHarness } from '../engine/agent';
 import { ToolRegistry } from '../tools/registry';
 import { MarkdownExporter } from '../utils/markdown-exporter';
@@ -35,6 +35,9 @@ export class HarnessChatView extends ItemView {
   private sendButtonEl!: HTMLButtonElement;
   private searchableModelSelect!: SearchableModelSelect;
   private suggestPopupEl!: HTMLElement;
+  private agentSelectEl?: HTMLSelectElement;
+  private agentIconEl?: HTMLElement;
+  private workspaceBadgeEl?: HTMLElement;
 
   private isInputExpanded = false;
   private activeSuggestType: 'none' | 'slash' | 'mention' = 'none';
@@ -62,13 +65,17 @@ export class HarnessChatView extends ItemView {
     if (!existing) {
       existing = SessionManager.createNewSession(
         this.plugin.settings.activeProviderId || 'openrouter',
-        this.plugin.settings.activeModel || ''
+        this.plugin.settings.activeModel || '',
+        this.plugin.settings.activeAgentId || 'main'
       );
       this.plugin.settings.sessions.unshift(existing);
       this.plugin.settings.currentSessionId = existing.id;
     }
 
     this.currentSession = existing;
+    if (!this.currentSession.activeAgentId) {
+      this.currentSession.activeAgentId = this.plugin.settings.activeAgentId || 'main';
+    }
   }
 
   getViewType(): string {
@@ -83,6 +90,58 @@ export class HarnessChatView extends ItemView {
     return 'bot';
   }
 
+  public refreshAgentDropdown(): void {
+    if (!this.agentSelectEl) return;
+    this.agentSelectEl.empty();
+
+    const agents = this.plugin.agentManager ? this.plugin.agentManager.getAllAgents() : [];
+
+    if (agents.length === 0) {
+      this.agentSelectEl.createEl('option', {
+        value: 'main',
+        text: '🤖 Main Agent',
+      });
+    } else {
+      for (const agent of agents) {
+        this.agentSelectEl.createEl('option', {
+          value: agent.id,
+          text: agent.isDefaultMain || agent.id === 'main' ? `🤖 ${agent.name}` : `👤 ${agent.name}`,
+        });
+      }
+    }
+
+    const currentActiveId = this.currentSession?.activeAgentId || this.plugin.settings.activeAgentId || 'main';
+    const found = agents.find((a) => a.id === currentActiveId);
+    if (found) {
+      this.agentSelectEl.value = found.id;
+    } else if (agents.length > 0) {
+      this.agentSelectEl.value = agents[0].id;
+    } else {
+      this.agentSelectEl.value = 'main';
+    }
+
+    const activeAgent = this.plugin.agentManager ? this.plugin.agentManager.getActiveAgent(this.agentSelectEl.value) : undefined;
+    if (this.agentIconEl) {
+      setIcon(this.agentIconEl, (!activeAgent || activeAgent.isDefaultMain || activeAgent.id === 'main') ? 'bot' : 'user');
+    }
+
+    this.updateWorkspaceBadge(activeAgent);
+  }
+
+  private updateWorkspaceBadge(agent?: AgentConfig): void {
+    if (!this.workspaceBadgeEl) return;
+    if (agent && agent.workspacePath && agent.workspacePath.trim().length > 0) {
+      const cleanPath = agent.workspacePath.trim();
+      this.workspaceBadgeEl.setText(`📁 ${cleanPath}`);
+      this.workspaceBadgeEl.setAttribute('title', `Workspace Scope: ${cleanPath}`);
+      this.workspaceBadgeEl.style.display = 'inline-flex';
+    } else {
+      this.workspaceBadgeEl.setText('');
+      this.workspaceBadgeEl.removeAttribute('title');
+      this.workspaceBadgeEl.style.display = 'none';
+    }
+  }
+
   async onOpen(): Promise<void> {
     const container = this.containerEl.children[1] as HTMLElement;
     container.empty();
@@ -91,12 +150,39 @@ export class HarnessChatView extends ItemView {
     // Header
     const headerEl = container.createEl('div', { cls: 'harness-chat-header' });
     const titleEl = headerEl.createEl('div', { cls: 'harness-title-container' });
-    titleEl.style.display = 'flex';
-    titleEl.style.alignItems = 'center';
-    titleEl.style.gap = '6px';
-    const botIconEl = titleEl.createEl('span');
-    setIcon(botIconEl, 'bot');
-    titleEl.createEl('span', { text: 'Harness Bot', cls: 'harness-title' });
+
+    // Agent selector dropdown
+    const agentSelectContainer = titleEl.createEl('div', { cls: 'harness-agent-select-container' });
+    this.agentIconEl = agentSelectContainer.createEl('span', { cls: 'harness-agent-icon' });
+    setIcon(this.agentIconEl, 'bot');
+
+    this.agentSelectEl = agentSelectContainer.createEl('select', { cls: 'dropdown harness-agent-select' });
+    this.agentSelectEl.setAttribute('aria-label', 'Select Active Agent');
+
+    this.agentSelectEl.addEventListener('change', async () => {
+      const val = this.agentSelectEl?.value || 'main';
+      const selectedAgent = this.plugin.agentManager ? this.plugin.agentManager.getAgent(val) : undefined;
+      this.currentSession.activeAgentId = selectedAgent ? selectedAgent.id : 'main';
+      this.plugin.settings.activeAgentId = this.currentSession.activeAgentId;
+
+      if (this.agentIconEl) {
+        setIcon(this.agentIconEl, (!selectedAgent || selectedAgent.isDefaultMain || selectedAgent.id === 'main') ? 'bot' : 'user');
+      }
+
+      if (selectedAgent?.model) {
+        this.currentSession.model = selectedAgent.model;
+        this.refreshModelDropdown();
+      }
+
+      this.updateWorkspaceBadge(selectedAgent);
+      await this.saveSessionState();
+    });
+
+    // Workspace Scope Badge
+    this.workspaceBadgeEl = titleEl.createEl('span', { cls: 'harness-workspace-badge' });
+    this.workspaceBadgeEl.style.display = 'none';
+
+    this.refreshAgentDropdown();
 
     const headerActionsEl = headerEl.createEl('div', { cls: 'harness-chat-header-actions' });
 
@@ -266,6 +352,28 @@ export class HarnessChatView extends ItemView {
         this.resetTextareaHeight();
         new McpModal(this.app, this.plugin).open();
         return;
+      } else if (text === '/agents' || text === '/agent' || text.startsWith('/agents ') || text.startsWith('/agent ')) {
+        const agentQuery = text.replace(/^\/agents?\s*/, '').trim();
+        this.inputTextAreaEl.value = '';
+        this.hideSuggest();
+        this.resetTextareaHeight();
+        if (agentQuery && this.plugin.agentManager) {
+          const targetAgent = this.plugin.agentManager.getAgent(agentQuery);
+          if (targetAgent) {
+            this.currentSession.activeAgentId = targetAgent.id;
+            this.plugin.settings.activeAgentId = targetAgent.id;
+            if (targetAgent.model) {
+              this.currentSession.model = targetAgent.model;
+              this.refreshModelDropdown();
+            }
+            this.refreshAgentDropdown();
+            await this.saveSessionState();
+            new Notice(`Switched to agent: ${targetAgent.name}`);
+            return;
+          }
+        }
+        this.openAgentsSettings();
+        return;
       }
 
       const activeProv = this.plugin.settings.providers.find(
@@ -320,6 +428,18 @@ export class HarnessChatView extends ItemView {
       await this.saveSessionState();
       this.renderMessages();
 
+      const activeAgent = this.plugin.agentManager
+        ? this.plugin.agentManager.getActiveAgent(this.currentSession.activeAgentId)
+        : {
+            id: 'main',
+            name: 'Main Agent',
+            description: '',
+            systemPrompt: '',
+            isDefaultMain: true,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          };
+
       // Streaming assistant placeholder container
       const streamingMsgEl = this.messagesContainerEl.createEl('div', {
         cls: 'harness-message harness-message-assistant',
@@ -327,8 +447,9 @@ export class HarnessChatView extends ItemView {
       const streamHeaderEl = streamingMsgEl.createEl('div', {
         cls: 'harness-message-header',
       });
+      const currentModel = this.currentSession.model || this.plugin.settings.activeModel;
       streamHeaderEl.createSpan({
-        text: `Harness Bot (${this.currentSession.model || this.plugin.settings.activeModel})`,
+        text: `${activeAgent.name} (${currentModel})`,
         cls: 'harness-message-header-title',
       });
 
@@ -374,7 +495,8 @@ export class HarnessChatView extends ItemView {
           this.plugin.settings.activeProviderId,
           this.currentSession.model || this.plugin.settings.activeModel,
           this.currentAbortController.signal,
-          extraSystemDirectives
+          extraSystemDirectives,
+          activeAgent
         );
 
         this.currentSession.messages = updatedHistory;
@@ -694,6 +816,26 @@ export class HarnessChatView extends ItemView {
         },
       },
       {
+        cmd: '/agents',
+        desc: 'Manage custom agents & subagents in Settings',
+        action: () => {
+          this.inputTextAreaEl.value = '';
+          this.hideSuggest();
+          this.resetTextareaHeight();
+          this.openAgentsSettings();
+        },
+      },
+      {
+        cmd: '/agent',
+        desc: 'Manage custom agents & subagents in Settings',
+        action: () => {
+          this.inputTextAreaEl.value = '';
+          this.hideSuggest();
+          this.resetTextareaHeight();
+          this.openAgentsSettings();
+        },
+      },
+      {
         cmd: '/clear',
         desc: 'Clear messages in current session',
         action: () => {
@@ -840,10 +982,39 @@ export class HarnessChatView extends ItemView {
     }
   }
 
+  private openAgentsSettings(): void {
+    try {
+      const setting = (this.app as any).setting;
+      if (setting && typeof setting.open === 'function') {
+        setting.open();
+        if (this.plugin.manifest?.id && typeof setting.openTabById === 'function') {
+          setting.openTabById(this.plugin.manifest.id);
+        }
+      } else {
+        new Notice('Please open Settings -> Obsidian Harness Bot to manage agents.');
+      }
+    } catch (e) {
+      new Notice('Please open Settings -> Obsidian Harness Bot to manage agents.');
+    }
+  }
+
+  public async switchSession(session: ChatSession): Promise<void> {
+    this.currentSession = session;
+    this.plugin.settings.currentSessionId = session.id;
+    if (!this.currentSession.activeAgentId) {
+      this.currentSession.activeAgentId = this.plugin.settings.activeAgentId || 'main';
+    }
+    await this.saveSessionState();
+    await this.renderMessages();
+    this.refreshModelDropdown();
+    this.refreshAgentDropdown();
+  }
+
   private createNewSession() {
     const newSession = SessionManager.createNewSession(
       this.plugin.settings.activeProviderId || 'openrouter',
-      this.plugin.settings.activeModel || ''
+      this.plugin.settings.activeModel || '',
+      this.plugin.settings.activeAgentId || 'main'
     );
     this.plugin.settings.sessions.unshift(newSession);
     this.plugin.settings.currentSessionId = newSession.id;
@@ -851,6 +1022,7 @@ export class HarnessChatView extends ItemView {
     this.saveSessionState();
     this.renderMessages();
     this.refreshModelDropdown();
+    this.refreshAgentDropdown();
     new Notice('Started new chat session');
   }
 
@@ -862,11 +1034,7 @@ export class HarnessChatView extends ItemView {
       (selectedId) => {
         const found = this.plugin.settings.sessions.find((s) => s.id === selectedId);
         if (found) {
-          this.currentSession = found;
-          this.plugin.settings.currentSessionId = found.id;
-          this.saveSessionState();
-          this.renderMessages();
-          this.refreshModelDropdown();
+          this.switchSession(found);
         }
       },
       (deletedId) => {
@@ -968,11 +1136,7 @@ export class HarnessChatView extends ItemView {
           });
 
           itemBtn.addEventListener('click', async () => {
-            this.currentSession = prev;
-            this.plugin.settings.currentSessionId = prev.id;
-            await this.saveSessionState();
-            await this.renderMessages();
-            this.refreshModelDropdown();
+            await this.switchSession(prev);
           });
         }
       }
@@ -1003,8 +1167,12 @@ export class HarnessChatView extends ItemView {
       } else if (msg.role === 'assistant') {
         const msgEl = this.messagesContainerEl.createEl('div', { cls: 'harness-message harness-message-assistant' });
         const headerEl = msgEl.createEl('div', { cls: 'harness-message-header' });
+        const activeAgent = this.plugin.agentManager
+          ? this.plugin.agentManager.getActiveAgent(this.currentSession.activeAgentId)
+          : undefined;
+        const agentDisplayName = msg.name || activeAgent?.name || 'Harness Bot';
         headerEl.createSpan({
-          text: `Harness Bot (${this.currentSession.model || this.plugin.settings.activeModel})`,
+          text: `${agentDisplayName} (${this.currentSession.model || this.plugin.settings.activeModel})`,
           cls: 'harness-message-header-title',
         });
 

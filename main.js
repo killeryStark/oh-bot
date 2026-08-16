@@ -20194,7 +20194,7 @@ __export(main_exports, {
   default: () => HarnessPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian33 = require("obsidian");
+var import_obsidian36 = require("obsidian");
 
 // src/types.ts
 var DEFAULT_PROVIDERS = [
@@ -20273,18 +20273,19 @@ var DEFAULT_PROVIDERS = [
     enabled: true
   }
 ];
-var DEFAULT_SETTINGS = {
-  providers: DEFAULT_PROVIDERS,
-  activeProviderId: "",
-  activeModel: "",
-  systemPrompt: `You are an autonomous AI Agent inside Obsidian running on Desktop and Mobile.
+var DEFAULT_MAIN_SYSTEM_PROMPT = `You are an autonomous AI Agent inside Obsidian running on Desktop and Mobile.
 You have access to a rich set of built-in tools to fulfill the user's request step-by-step:
 1. Vault Operations: Read, create, patch, list, and search notes and directories in the vault.
 2. Web Research: Search the web (web_search) and fetch clean web page markdown (fetch_web_page) for up-to-date facts and articles.
 3. PDF Document Generation: Create beautifully styled, publication-ready PDF documents and reports (generate_pdf) directly into the vault with themes ('anthropic-report', 'academic', 'minimal').
 4. Skills & Extensibility: Create and run specialized workflow skills and remote MCP tools.
 
-Always think step-by-step, use tools autonomously to verify or retrieve information, and provide clear, well-structured markdown responses.`,
+Always think step-by-step, use tools autonomously to verify or retrieve information, and provide clear, well-structured markdown responses.`;
+var DEFAULT_SETTINGS = {
+  providers: DEFAULT_PROVIDERS,
+  activeProviderId: "",
+  activeModel: "",
+  systemPrompt: DEFAULT_MAIN_SYSTEM_PROMPT,
   safetyMode: "strict",
   sessions: [],
   currentSessionId: "",
@@ -20295,11 +20296,26 @@ Always think step-by-step, use tools autonomously to verify or retrieve informat
   searchProvider: "duckduckgo",
   searxngUrl: "http://localhost:8080",
   tavilyApiKeySecretName: "oh_bot_secret_tavily",
-  defaultPdfFolder: "Documents/Generated"
+  defaultPdfFolder: "Documents/Generated",
+  agents: [
+    {
+      id: "main",
+      name: "Main Agent",
+      description: "Default autonomous agent with full vault access and orchestration capabilities.",
+      systemPrompt: DEFAULT_MAIN_SYSTEM_PROMPT,
+      workspacePath: "",
+      agentMdFile: "AGENT.md",
+      isDefaultMain: true,
+      allowedTools: ["*"],
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    }
+  ],
+  activeAgentId: "main"
 };
 
 // src/ui/settings-tab.ts
-var import_obsidian10 = require("obsidian");
+var import_obsidian11 = require("obsidian");
 
 // src/ui/components/add-provider-modal.ts
 var import_obsidian2 = require("obsidian");
@@ -20671,6 +20687,16 @@ var BUILTIN_MARKETPLACE_SKILLS = [
     downloadUrl: "https://raw.githubusercontent.com/killeryStark/oh-bot/main/marketplace/skills/markdown-stylist/SKILL.md",
     version: "1.0.0",
     tags: ["formatting", "markdown", "typography"]
+  },
+  {
+    id: "subagent-management",
+    name: "Subagent & Multi-Agent Management",
+    description: "\u0421\u043E\u0437\u0434\u0430\u043D\u0438\u0435, \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0430 \u0438 \u043A\u043E\u043E\u0440\u0434\u0438\u043D\u0430\u0446\u0438\u044F \u0441\u043F\u0435\u0446\u0438\u0430\u043B\u0438\u0437\u0438\u0440\u043E\u0432\u0430\u043D\u043D\u044B\u0445 \u0441\u0443\u0431\u0430\u0433\u0435\u043D\u0442\u043E\u0432 \u0441 \u0438\u0437\u043E\u043B\u0438\u0440\u043E\u0432\u0430\u043D\u043D\u044B\u043C\u0438 \u0440\u0430\u0431\u043E\u0447\u0438\u043C\u0438 \u043F\u0430\u043F\u043A\u0430\u043C\u0438 (AGENT.md) \u0438 \u0434\u0435\u043B\u0435\u0433\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u0437\u0430\u0434\u0430\u0447 \u0447\u0435\u0440\u0435\u0437 invoke_subagent. \u0418\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439\u0442\u0435 \u0432\u0441\u044F\u043A\u0438\u0439 \u0440\u0430\u0437, \u043A\u043E\u0433\u0434\u0430 \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044E \u043D\u0443\u0436\u043D\u043E \u043E\u0440\u0433\u0430\u043D\u0438\u0437\u043E\u0432\u0430\u0442\u044C \u043C\u043D\u043E\u0433\u043E\u0430\u0433\u0435\u043D\u0442\u043D\u0443\u044E \u0441\u0438\u0441\u0442\u0435\u043C\u0443, \u0441\u043E\u0437\u0434\u0430\u0442\u044C \u043D\u043E\u0432\u043E\u0433\u043E \u0430\u0433\u0435\u043D\u0442\u0430-\u043F\u043E\u043C\u043E\u0449\u043D\u0438\u043A\u0430, \u043D\u0430\u0441\u0442\u0440\u043E\u0438\u0442\u044C \u0440\u0430\u0431\u043E\u0447\u0443\u044E \u043E\u0431\u043B\u0430\u0441\u0442\u044C \u0438\u043B\u0438 \u0434\u0435\u043B\u0435\u0433\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0441\u043B\u043E\u0436\u043D\u0443\u044E \u0437\u0430\u0434\u0430\u0447\u0443.",
+    author: "Obsidian Harness Contributors",
+    homepage: "https://github.com/killeryStark/oh-bot",
+    downloadUrl: "https://raw.githubusercontent.com/killeryStark/oh-bot/main/marketplace/skills/subagent-management/SKILL.md",
+    version: "1.0.0",
+    tags: ["agents", "subagents", "orchestration", "multi-agent", "workflow"]
   }
 ];
 var MarketplaceRegistry = class {
@@ -22039,8 +22065,336 @@ var SearchableModelSelect = class {
   }
 };
 
+// src/ui/agent-edit-modal.ts
+var import_obsidian10 = require("obsidian");
+var AgentEditModal = class extends import_obsidian10.Modal {
+  constructor(app, plugin, agent, onSaved) {
+    super(app);
+    this.plugin = plugin;
+    this.agent = agent;
+    this.onSaved = onSaved;
+    this.id = agent?.id || "";
+    this.name = agent?.name || "";
+    this.description = agent?.description || "";
+    this.systemPrompt = agent?.systemPrompt ?? (agent ? "" : `You are a specialized subagent focused on specific tasks in this workspace.
+Analyze objectives carefully, use available tools, and produce clear, concise outputs.`);
+    this.workspacePath = agent?.workspacePath || "";
+    this.providerId = agent?.providerId || "";
+    this.model = agent?.model || "";
+    this.allowedTools = agent?.allowedTools ? [...agent.allowedTools] : ["*"];
+    this.autoSlugId = !agent;
+  }
+  slugify(text2) {
+    return text2.toLowerCase().trim().replace(/[\s\W-]+/g, "-").replace(/^-+|-+$/g, "");
+  }
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.addClass("harness-modal-content");
+    contentEl.addClass("harness-agent-edit-modal");
+    const titleText = this.agent ? `Edit Agent: ${this.agent.name}` : "Create New Agent";
+    contentEl.createEl("h2", { text: titleText });
+    let idInputTextComponent = null;
+    new import_obsidian10.Setting(contentEl).setName("Agent Name").setDesc("Display name for this agent (e.g. Research Analyst, Code Reviewer)").addText((text2) => {
+      text2.setPlaceholder("e.g. Research Analyst").setValue(this.name).onChange((val) => {
+        this.name = val;
+        if (this.autoSlugId && !this.agent?.isDefaultMain && idInputTextComponent) {
+          this.id = this.slugify(val);
+          idInputTextComponent.setValue(this.id);
+        }
+      });
+    });
+    const idSetting = new import_obsidian10.Setting(contentEl).setName("Agent ID").setDesc(
+      this.agent?.isDefaultMain ? "Default main agent ID cannot be changed" : "Unique slug identifier used in tool calls and subagent delegation"
+    );
+    idSetting.addText((text2) => {
+      idInputTextComponent = text2;
+      text2.setPlaceholder("e.g. research-analyst").setValue(this.id);
+      if (this.agent?.isDefaultMain) {
+        text2.setDisabled(true);
+        text2.inputEl.setAttribute("readonly", "true");
+      } else {
+        text2.onChange((val) => {
+          this.id = val.trim();
+          this.autoSlugId = false;
+        });
+      }
+    });
+    new import_obsidian10.Setting(contentEl).setName("Description").setDesc("Role, specialty, and purpose of this agent").addTextArea((text2) => {
+      text2.setPlaceholder("e.g. Gathers notes, synthesizes insights, and produces analytical research summaries").setValue(this.description).onChange((val) => {
+        this.description = val;
+      });
+      text2.inputEl.rows = 2;
+      text2.inputEl.style.width = "100%";
+    });
+    const promptSetting = new import_obsidian10.Setting(contentEl).setName("System Prompt").setDesc("Base instructions, behaviors, constraints, and workflow directives");
+    promptSetting.addTextArea((text2) => {
+      text2.setPlaceholder("Enter system instructions...").setValue(this.systemPrompt).onChange((val) => {
+        this.systemPrompt = val;
+      });
+      text2.inputEl.style.fontFamily = "var(--font-monospace)";
+      text2.inputEl.style.minHeight = "120px";
+      text2.inputEl.style.width = "100%";
+    });
+    const wsSetting = new import_obsidian10.Setting(contentEl).setName("Workspace Path").setDesc("Folder in vault where this agent operates (e.g. Projects/Research). Leave empty for full vault access.");
+    wsSetting.addText((text2) => {
+      text2.setPlaceholder("Projects/Research").setValue(this.workspacePath).onChange((val) => {
+        this.workspacePath = val.trim();
+      });
+    });
+    wsSetting.addButton((btn) => {
+      btn.setButtonText("Scaffold Folder & AGENT.md");
+      btn.setTooltip("Create workspace folder and AGENT.md instructions file in vault");
+      (0, import_obsidian10.setIcon)(btn.buttonEl, "folder-plus");
+      btn.onClick(async () => {
+        if (!this.workspacePath.trim()) {
+          new import_obsidian10.Notice("Please enter a workspace path first.");
+          return;
+        }
+        try {
+          const res = await this.plugin.agentManager.scaffoldWorkspace(
+            this.workspacePath,
+            void 0,
+            this.name || void 0
+          );
+          new import_obsidian10.Notice(`Workspace and AGENT.md created! (${res.agentMdPath})`);
+        } catch (err2) {
+          new import_obsidian10.Notice(`Failed to scaffold workspace: ${err2?.message || err2}`);
+        }
+      });
+    });
+    contentEl.createEl("h3", { text: "LLM Overrides (Optional)" });
+    let modelSelectEl = null;
+    const providerSetting = new import_obsidian10.Setting(contentEl).setName("LLM Provider Override").setDesc("Select dedicated provider or inherit from chat session");
+    providerSetting.addDropdown((dropdown) => {
+      dropdown.addOption("", "Inherit from Chat/Session (Default)");
+      for (const prov of this.plugin.settings.providers) {
+        dropdown.addOption(prov.id, prov.name);
+      }
+      dropdown.setValue(this.providerId);
+      dropdown.onChange((val) => {
+        this.providerId = val;
+        this.updateModelDropdown(modelSelectEl);
+      });
+    });
+    const modelSetting = new import_obsidian10.Setting(contentEl).setName("LLM Model Override").setDesc("Select model for chosen provider or inherit default");
+    modelSetting.addDropdown((dropdown) => {
+      modelSelectEl = dropdown.selectEl;
+      this.populateModelOptions(dropdown.selectEl);
+      dropdown.setValue(this.model);
+      dropdown.onChange((val) => {
+        this.model = val;
+      });
+    });
+    contentEl.createEl("h3", { text: "Tool Permissions" });
+    const toolsContainer = contentEl.createEl("div", { cls: "harness-tools-permission-section" });
+    toolsContainer.style.marginBottom = "16px";
+    this.renderToolPermissions(toolsContainer);
+    const buttonsSetting = new import_obsidian10.Setting(contentEl);
+    if (!this.agent?.isDefaultMain && this.agent?.id) {
+      buttonsSetting.addButton((btn) => {
+        btn.setButtonText("Delete Agent");
+        btn.setWarning();
+        (0, import_obsidian10.setIcon)(btn.buttonEl, "trash");
+        btn.onClick(async () => {
+          if (confirm(`Are you sure you want to delete agent "${this.name || this.id}"?`)) {
+            const deleted = await this.plugin.agentManager.deleteAgent(this.id);
+            if (deleted) {
+              new import_obsidian10.Notice(`Deleted agent "${this.name || this.id}".`);
+              if (this.agent && this.onSaved) {
+                this.onSaved(this.agent);
+              }
+              this.close();
+            } else {
+              new import_obsidian10.Notice("Could not delete agent.");
+            }
+          }
+        });
+      });
+    }
+    buttonsSetting.addButton((btn) => {
+      btn.setButtonText("Cancel");
+      btn.onClick(() => {
+        this.close();
+      });
+    });
+    buttonsSetting.addButton((btn) => {
+      btn.setButtonText("Save Agent");
+      btn.setCta();
+      (0, import_obsidian10.setIcon)(btn.buttonEl, "check");
+      btn.onClick(async () => {
+        await this.handleSave();
+      });
+    });
+  }
+  populateModelOptions(selectEl) {
+    selectEl.empty();
+    const defaultOpt = selectEl.createEl("option", {
+      value: "",
+      text: "Inherit from Chat/Session (Default)"
+    });
+    defaultOpt.selected = this.model === "";
+    let models = [];
+    if (this.providerId) {
+      const prov = this.plugin.settings.providers.find((p3) => p3.id === this.providerId);
+      if (prov) {
+        models = prov.models;
+      }
+    } else {
+      const activeProv = this.plugin.settings.providers.find(
+        (p3) => p3.id === this.plugin.settings.activeProviderId
+      );
+      if (activeProv) {
+        models = activeProv.models;
+      } else {
+        models = Array.from(new Set(this.plugin.settings.providers.flatMap((p3) => p3.models)));
+      }
+    }
+    for (const m4 of models) {
+      const opt = selectEl.createEl("option", { value: m4, text: m4 });
+      if (m4 === this.model) {
+        opt.selected = true;
+      }
+    }
+    if (this.model && !models.includes(this.model)) {
+      const opt = selectEl.createEl("option", { value: this.model, text: `${this.model} (Custom)` });
+      opt.selected = true;
+    }
+  }
+  updateModelDropdown(selectEl) {
+    if (!selectEl)
+      return;
+    this.populateModelOptions(selectEl);
+    this.model = selectEl.value;
+  }
+  renderToolPermissions(container) {
+    container.empty();
+    const isWildcard = this.allowedTools.includes("*");
+    new import_obsidian10.Setting(container).setName("All Tools (*)").setDesc("Grant full unrestricted access to all standard and custom tools").addToggle((toggle) => {
+      toggle.setValue(isWildcard).onChange((checked) => {
+        if (checked) {
+          this.allowedTools = ["*"];
+        } else {
+          this.allowedTools = ["vault", "web", "pdf", "skills", "mcp"];
+        }
+        this.renderToolPermissions(container);
+      });
+    });
+    if (!isWildcard) {
+      const categories = [
+        {
+          id: "vault",
+          name: "Vault Operations",
+          desc: "Read, create, modify, patch, list, and search files inside the vault"
+        },
+        {
+          id: "web",
+          name: "Web Search & Research",
+          desc: "Search the web (web_search) and fetch markdown web pages (fetch_web_page)"
+        },
+        {
+          id: "pdf",
+          name: "PDF Document Generation",
+          desc: "Generate styled PDF reports and documents (generate_pdf)"
+        },
+        {
+          id: "skills",
+          name: "Skills & Workflows",
+          desc: "Create, inspect, and run specialized workflow skills (create_skill, read_skill, list_skills)"
+        },
+        {
+          id: "mcp",
+          name: "MCP External Tools",
+          desc: "Access connected Model Context Protocol server tools (mcp__*)"
+        },
+        {
+          id: "invoke_subagent",
+          name: "Subagent Delegation",
+          desc: "Allow this agent to invoke and orchestrate child subagents (invoke_subagent)"
+        }
+      ];
+      const categoryGrid = container.createEl("div", { cls: "harness-tool-categories-grid" });
+      categoryGrid.style.display = "grid";
+      categoryGrid.style.gridTemplateColumns = "repeat(auto-fit, minmax(240px, 1fr))";
+      categoryGrid.style.gap = "8px";
+      categoryGrid.style.marginTop = "8px";
+      for (const cat of categories) {
+        const itemEl = categoryGrid.createEl("label", { cls: "harness-tool-category-item" });
+        itemEl.style.display = "flex";
+        itemEl.style.alignItems = "flex-start";
+        itemEl.style.gap = "8px";
+        itemEl.style.padding = "8px 10px";
+        itemEl.style.borderRadius = "6px";
+        itemEl.style.border = "1px solid var(--background-modifier-border)";
+        itemEl.style.backgroundColor = "var(--background-secondary)";
+        itemEl.style.cursor = "pointer";
+        const checkbox = itemEl.createEl("input", { type: "checkbox" });
+        checkbox.checked = this.allowedTools.includes(cat.id);
+        checkbox.style.marginTop = "3px";
+        const textWrapper = itemEl.createEl("div");
+        const labelTitle = textWrapper.createEl("div", { text: cat.name });
+        labelTitle.style.fontWeight = "500";
+        labelTitle.style.fontSize = "0.9em";
+        const labelDesc = textWrapper.createEl("div", { text: cat.desc });
+        labelDesc.style.fontSize = "0.78em";
+        labelDesc.style.color = "var(--text-muted)";
+        labelDesc.style.lineHeight = "1.3";
+        checkbox.addEventListener("change", () => {
+          if (checkbox.checked) {
+            if (!this.allowedTools.includes(cat.id)) {
+              this.allowedTools.push(cat.id);
+            }
+          } else {
+            this.allowedTools = this.allowedTools.filter((t3) => t3 !== cat.id);
+          }
+        });
+      }
+    }
+  }
+  async handleSave() {
+    const name = this.name.trim();
+    if (!name) {
+      new import_obsidian10.Notice("Agent Name cannot be empty.");
+      return;
+    }
+    let id = this.id.trim();
+    if (!id) {
+      id = this.slugify(name);
+    }
+    if (!id) {
+      new import_obsidian10.Notice("Agent ID cannot be empty.");
+      return;
+    }
+    try {
+      const toolsToSave = this.allowedTools.length === 0 ? ["*"] : this.allowedTools;
+      const savedAgent = await this.plugin.agentManager.createOrUpdateAgent({
+        id,
+        name,
+        description: this.description.trim(),
+        systemPrompt: this.systemPrompt.trim(),
+        workspacePath: this.workspacePath.trim(),
+        providerId: this.providerId || void 0,
+        model: this.model || void 0,
+        allowedTools: toolsToSave,
+        isDefaultMain: this.agent?.isDefaultMain
+      });
+      new import_obsidian10.Notice(`Agent "${savedAgent.name}" saved!`);
+      if (this.onSaved) {
+        this.onSaved(savedAgent);
+      }
+      this.close();
+    } catch (err2) {
+      new import_obsidian10.Notice(`Failed to save agent: ${err2?.message || err2}`);
+    }
+  }
+  onClose() {
+    const { contentEl } = this;
+    contentEl.empty();
+  }
+};
+
 // src/ui/settings-tab.ts
-var HarnessSettingTab = class extends import_obsidian10.PluginSettingTab {
+var HarnessSettingTab = class extends import_obsidian11.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.activeModelSelects = [];
@@ -22073,7 +22427,7 @@ var HarnessSettingTab = class extends import_obsidian10.PluginSettingTab {
     containerEl.empty();
     containerEl.addClass("harness-settings-container");
     containerEl.createEl("h2", { text: "Obsidian Harness Bot Settings" });
-    new import_obsidian10.Setting(containerEl).setName("Default Active Provider").setDesc("Select the default AI provider for agent operations").addDropdown((dropdown) => {
+    new import_obsidian11.Setting(containerEl).setName("Default Active Provider").setDesc("Select the default AI provider for agent operations").addDropdown((dropdown) => {
       dropdown.addOption("", "(Not configured)");
       for (const prov of this.plugin.settings.providers) {
         const hasKey = prov.type === "ollama" || this.secretManager.hasSecret(prov.apiKeySecretName);
@@ -22096,7 +22450,7 @@ var HarnessSettingTab = class extends import_obsidian10.PluginSettingTab {
     const currentActiveProvider = this.plugin.settings.providers.find(
       (p3) => p3.id === this.plugin.settings.activeProviderId
     );
-    const modelSetting = new import_obsidian10.Setting(containerEl).setName("Default Active Model").setDesc(currentActiveProvider ? `Select model for ${currentActiveProvider.name}` : "Select an active provider first");
+    const modelSetting = new import_obsidian11.Setting(containerEl).setName("Default Active Model").setDesc(currentActiveProvider ? `Select model for ${currentActiveProvider.name}` : "Select an active provider first");
     const availableModels = currentActiveProvider ? currentActiveProvider.models : [];
     let selectedModel = "";
     if (availableModels.length > 0) {
@@ -22119,7 +22473,7 @@ var HarnessSettingTab = class extends import_obsidian10.PluginSettingTab {
     });
     this.activeModelSelects.push(defaultModelSelect);
     containerEl.createEl("h3", { text: "Provider Configuration" });
-    const providerSelectSetting = new import_obsidian10.Setting(containerEl).setName("Select Provider to Configure").setDesc("Choose a provider to configure its API key, base URL, and model list").addDropdown((dropdown) => {
+    const providerSelectSetting = new import_obsidian11.Setting(containerEl).setName("Select Provider to Configure").setDesc("Choose a provider to configure its API key, base URL, and model list").addDropdown((dropdown) => {
       for (const prov of this.plugin.settings.providers) {
         dropdown.addOption(prov.id, prov.name);
       }
@@ -22158,14 +22512,14 @@ var HarnessSettingTab = class extends import_obsidian10.PluginSettingTab {
       providerCardEl.style.marginBottom = "16px";
       providerCardEl.style.backgroundColor = "var(--background-secondary)";
       providerCardEl.createEl("h4", { text: `Configuration: ${configProvider.name}` });
-      new import_obsidian10.Setting(providerCardEl).setName("Base URL").setDesc("API Endpoint URL").addText(
+      new import_obsidian11.Setting(providerCardEl).setName("Base URL").setDesc("API Endpoint URL").addText(
         (text2) => text2.setValue(configProvider.baseUrl).onChange(async (val) => {
           configProvider.baseUrl = val.trim();
           await this.saveSettings();
         })
       );
       const hasKey = this.secretManager.hasSecret(configProvider.apiKeySecretName);
-      const keySetting = new import_obsidian10.Setting(providerCardEl).setName("API Key").setDesc(hasKey ? "Key is configured in SecretStorage" : "Enter API Key to store securely");
+      const keySetting = new import_obsidian11.Setting(providerCardEl).setName("API Key").setDesc(hasKey ? "Key is configured in SecretStorage" : "Enter API Key to store securely");
       keySetting.addText((text2) => {
         text2.inputEl.type = "password";
         text2.setPlaceholder(hasKey ? "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" : "Enter API Key");
@@ -22178,7 +22532,7 @@ var HarnessSettingTab = class extends import_obsidian10.PluginSettingTab {
               this.plugin.settings.activeModel = configProvider.models[0] || "";
             }
             await this.saveSettings();
-            new import_obsidian10.Notice(`API Key saved for ${configProvider.name}`);
+            new import_obsidian11.Notice(`API Key saved for ${configProvider.name}`);
           }
         });
       });
@@ -22190,12 +22544,12 @@ var HarnessSettingTab = class extends import_obsidian10.PluginSettingTab {
           btn.setWarning();
           btn.onClick(async () => {
             this.secretManager.setSecret(configProvider.apiKeySecretName, "");
-            new import_obsidian10.Notice(`API Key cleared for ${configProvider.name}`);
+            new import_obsidian11.Notice(`API Key cleared for ${configProvider.name}`);
             this.display();
           });
         });
       }
-      const modelsSetting = new import_obsidian10.Setting(providerCardEl).setName("Available Models").setDesc(`${configProvider.models.length} model(s) configured`);
+      const modelsSetting = new import_obsidian11.Setting(providerCardEl).setName("Available Models").setDesc(`${configProvider.models.length} model(s) configured`);
       const providerModelSelect = new SearchableModelSelect(modelsSetting.controlEl, {
         models: configProvider.models,
         selectedModel: configProvider.models[0] || "",
@@ -22209,10 +22563,10 @@ var HarnessSettingTab = class extends import_obsidian10.PluginSettingTab {
         btn.setTooltip("Fetch models from endpoint");
         btn.buttonEl.setAttribute("aria-label", "Fetch models from endpoint");
         btn.buttonEl.setAttribute("title", "Fetch models from endpoint");
-        (0, import_obsidian10.setIcon)(btn.buttonEl, "refresh-cw");
+        (0, import_obsidian11.setIcon)(btn.buttonEl, "refresh-cw");
         btn.onClick(async () => {
           const apiKey = this.secretManager.getSecret(configProvider.apiKeySecretName) || "";
-          new import_obsidian10.Notice(`Fetching models for ${configProvider.name}...`);
+          new import_obsidian11.Notice(`Fetching models for ${configProvider.name}...`);
           const fetched = await fetchAvailableModels(configProvider.baseUrl, apiKey);
           if (fetched.length > 0) {
             configProvider.models = fetched;
@@ -22220,10 +22574,10 @@ var HarnessSettingTab = class extends import_obsidian10.PluginSettingTab {
               this.plugin.settings.activeModel = fetched[0];
             }
             await this.saveSettings();
-            new import_obsidian10.Notice(`Updated ${configProvider.name} with ${fetched.length} models!`);
+            new import_obsidian11.Notice(`Updated ${configProvider.name} with ${fetched.length} models!`);
             this.display();
           } else {
-            new import_obsidian10.Notice("Could not fetch models automatically from endpoint.");
+            new import_obsidian11.Notice("Could not fetch models automatically from endpoint.");
           }
         });
       });
@@ -22232,7 +22586,7 @@ var HarnessSettingTab = class extends import_obsidian10.PluginSettingTab {
         btn.setTooltip("Edit models list");
         btn.buttonEl.setAttribute("aria-label", "Edit models list");
         btn.buttonEl.setAttribute("title", "Edit models list");
-        (0, import_obsidian10.setIcon)(btn.buttonEl, "pencil");
+        (0, import_obsidian11.setIcon)(btn.buttonEl, "pencil");
         btn.onClick(() => {
           new EditModelsModal(this.app, configProvider, async (updatedModels) => {
             configProvider.models = updatedModels;
@@ -22247,12 +22601,12 @@ var HarnessSettingTab = class extends import_obsidian10.PluginSettingTab {
         });
       });
       if (configProvider.isCustom) {
-        const deleteSetting = new import_obsidian10.Setting(providerCardEl).setName("Delete Provider").setDesc("Remove this custom provider from settings");
+        const deleteSetting = new import_obsidian11.Setting(providerCardEl).setName("Delete Provider").setDesc("Remove this custom provider from settings");
         deleteSetting.addButton((btn) => {
           btn.setButtonText("Delete Provider");
           btn.buttonEl.setAttribute("aria-label", "Delete provider");
           btn.buttonEl.setAttribute("title", "Delete provider");
-          (0, import_obsidian10.setIcon)(btn.buttonEl, "trash");
+          (0, import_obsidian11.setIcon)(btn.buttonEl, "trash");
           btn.setWarning();
           btn.onClick(async () => {
             this.plugin.settings.providers = this.plugin.settings.providers.filter(
@@ -22264,21 +22618,152 @@ var HarnessSettingTab = class extends import_obsidian10.PluginSettingTab {
               this.plugin.settings.activeModel = "";
             }
             await this.saveSettings();
-            new import_obsidian10.Notice(`Deleted provider "${configProvider.name}".`);
+            new import_obsidian11.Notice(`Deleted provider "${configProvider.name}".`);
             this.display();
           });
         });
       }
     }
     containerEl.createEl("h3", { text: "General & Safety" });
-    new import_obsidian10.Setting(containerEl).setName("Vault Modification Safety Mode").setDesc("Strict mode prompts for user confirmation before writing or modifying any Vault file").addDropdown(
+    new import_obsidian11.Setting(containerEl).setName("Vault Modification Safety Mode").setDesc("Strict mode prompts for user confirmation before writing or modifying any Vault file").addDropdown(
       (dropdown) => dropdown.addOption("strict", "Strict (Prompt before file edits)").addOption("auto", "Auto (Auto-approve file edits)").setValue(this.plugin.settings.safetyMode).onChange(async (value) => {
         this.plugin.settings.safetyMode = value;
         await this.saveSettings();
       })
     );
+    containerEl.createEl("h3", { text: "Agents & Subagents (Multi-Agent System)" });
+    const agentsHeaderSetting = new import_obsidian11.Setting(containerEl).setName("Configured Agents").setDesc(
+      "Autonomous primary agents and specialized subagents with scoped workspaces, custom system prompts, and tool permissions."
+    ).addButton((btn) => {
+      btn.setButtonText("+ Add New Agent");
+      btn.setCta();
+      (0, import_obsidian11.setIcon)(btn.buttonEl, "plus");
+      btn.buttonEl.setAttribute("aria-label", "Add new agent");
+      btn.buttonEl.setAttribute("title", "Add new agent");
+      btn.onClick(() => {
+        new AgentEditModal(this.app, this.plugin, void 0, () => this.display()).open();
+      });
+    });
+    const agents = this.plugin.settings.agents || [];
+    const agentsListContainer = containerEl.createEl("div", { cls: "harness-agents-list" });
+    agentsListContainer.style.display = "flex";
+    agentsListContainer.style.flexDirection = "column";
+    agentsListContainer.style.gap = "10px";
+    agentsListContainer.style.marginBottom = "20px";
+    if (agents.length === 0) {
+      const emptyEl = agentsListContainer.createEl("div", {
+        cls: "harness-agents-empty",
+        text: 'No agents configured. Click "+ Add New Agent" to create one.'
+      });
+      emptyEl.style.padding = "12px";
+      emptyEl.style.color = "var(--text-muted)";
+      emptyEl.style.fontStyle = "italic";
+    }
+    for (const agent of agents) {
+      const cardEl = agentsListContainer.createEl("div", { cls: "harness-agent-card" });
+      cardEl.style.border = "1px solid var(--background-modifier-border)";
+      cardEl.style.borderRadius = "8px";
+      cardEl.style.padding = "12px 14px";
+      cardEl.style.backgroundColor = "var(--background-secondary)";
+      cardEl.style.display = "flex";
+      cardEl.style.flexDirection = "column";
+      cardEl.style.gap = "8px";
+      const cardHeader = cardEl.createEl("div", { cls: "harness-agent-card-header" });
+      cardHeader.style.display = "flex";
+      cardHeader.style.justifyContent = "space-between";
+      cardHeader.style.alignItems = "center";
+      cardHeader.style.gap = "8px";
+      const titleWrapper = cardHeader.createEl("div", { cls: "harness-agent-title-wrapper" });
+      titleWrapper.style.display = "flex";
+      titleWrapper.style.alignItems = "center";
+      titleWrapper.style.gap = "8px";
+      const iconSpan = titleWrapper.createEl("span", {
+        text: agent.isDefaultMain ? "\u{1F916}" : "\u{1F464}"
+      });
+      iconSpan.style.fontSize = "1.2em";
+      const nameEl = titleWrapper.createEl("span", {
+        text: agent.name
+      });
+      nameEl.style.fontWeight = "600";
+      nameEl.style.fontSize = "1.05em";
+      const idEl = titleWrapper.createEl("span", {
+        text: `(${agent.id})`
+      });
+      idEl.style.fontSize = "0.85em";
+      idEl.style.color = "var(--text-muted)";
+      if (agent.isDefaultMain) {
+        const badge = titleWrapper.createEl("span", {
+          cls: "harness-badge harness-badge-main",
+          text: "Default Main"
+        });
+        badge.style.fontSize = "0.75em";
+        badge.style.padding = "2px 6px";
+        badge.style.borderRadius = "4px";
+        badge.style.backgroundColor = "var(--interactive-accent)";
+        badge.style.color = "var(--text-on-accent)";
+        badge.style.fontWeight = "500";
+      }
+      const actionsWrapper = cardHeader.createEl("div", { cls: "harness-agent-card-actions" });
+      actionsWrapper.style.display = "flex";
+      actionsWrapper.style.gap = "6px";
+      actionsWrapper.style.alignItems = "center";
+      const editBtn = actionsWrapper.createEl("button", {
+        cls: "clickable-icon harness-btn-icon-round"
+      });
+      editBtn.setAttribute("aria-label", `Edit agent ${agent.name}`);
+      editBtn.setAttribute("title", `Edit agent ${agent.name}`);
+      (0, import_obsidian11.setIcon)(editBtn, "pencil");
+      editBtn.addEventListener("click", () => {
+        new AgentEditModal(this.app, this.plugin, agent, () => this.display()).open();
+      });
+      if (!agent.isDefaultMain) {
+        const deleteBtn = actionsWrapper.createEl("button", {
+          cls: "clickable-icon harness-btn-icon-round is-destructive"
+        });
+        deleteBtn.setAttribute("aria-label", `Delete agent ${agent.name}`);
+        deleteBtn.setAttribute("title", `Delete agent ${agent.name}`);
+        (0, import_obsidian11.setIcon)(deleteBtn, "trash");
+        deleteBtn.addEventListener("click", async () => {
+          if (confirm(`Are you sure you want to delete agent "${agent.name}"?`)) {
+            const deleted = await this.plugin.agentManager.deleteAgent(agent.id);
+            if (deleted) {
+              new import_obsidian11.Notice(`Deleted agent "${agent.name}".`);
+              this.display();
+            } else {
+              new import_obsidian11.Notice("Could not delete agent.");
+            }
+          }
+        });
+      }
+      if (agent.description) {
+        const descEl = cardEl.createEl("div", {
+          cls: "harness-agent-desc",
+          text: agent.description
+        });
+        descEl.style.fontSize = "0.88em";
+        descEl.style.color = "var(--text-normal)";
+        descEl.style.lineHeight = "1.4";
+      }
+      const badgesRow = cardEl.createEl("div", { cls: "harness-agent-badges-row" });
+      badgesRow.style.display = "flex";
+      badgesRow.style.flexWrap = "wrap";
+      badgesRow.style.gap = "6px";
+      badgesRow.style.fontSize = "0.8em";
+      const createBadge = (text2) => {
+        const b2 = badgesRow.createEl("span", { cls: "harness-agent-badge", text: text2 });
+        b2.style.padding = "2px 8px";
+        b2.style.borderRadius = "4px";
+        b2.style.backgroundColor = "var(--background-primary)";
+        b2.style.border = "1px solid var(--background-modifier-border)";
+        b2.style.color = "var(--text-muted)";
+        return b2;
+      };
+      createBadge(`\u{1F4C1} Workspace: ${agent.workspacePath || "Full Vault"}`);
+      createBadge(`\u{1F9E0} Model: ${agent.model || "Inherit"}`);
+      createBadge(`\u{1F6E0} Allowed Tools: ${agent.allowedTools?.join(", ") || "*"}`);
+    }
     containerEl.createEl("h3", { text: "Web Search & Document Tools" });
-    new import_obsidian10.Setting(containerEl).setName("Search Provider").setDesc("Select the web search provider used by the web_search tool").addDropdown((dropdown) => {
+    new import_obsidian11.Setting(containerEl).setName("Search Provider").setDesc("Select the web search provider used by the web_search tool").addDropdown((dropdown) => {
       dropdown.addOption("duckduckgo", "DuckDuckGo (Free / Zero-Config)").addOption("searxng", "SearXNG (Self-Hosted / Custom URL)").addOption("tavily", "Tavily Search (API Key)").setValue(this.plugin.settings.searchProvider || "duckduckgo").onChange(async (val) => {
         this.plugin.settings.searchProvider = val;
         await this.saveSettings();
@@ -22286,7 +22771,7 @@ var HarnessSettingTab = class extends import_obsidian10.PluginSettingTab {
       });
     });
     if (this.plugin.settings.searchProvider === "searxng") {
-      new import_obsidian10.Setting(containerEl).setName("SearXNG URL").setDesc("Base URL of your SearXNG instance (e.g. http://localhost:8080 or https://searx.example.com)").addText((text2) => {
+      new import_obsidian11.Setting(containerEl).setName("SearXNG URL").setDesc("Base URL of your SearXNG instance (e.g. http://localhost:8080 or https://searx.example.com)").addText((text2) => {
         text2.setPlaceholder("http://localhost:8080").setValue(this.plugin.settings.searxngUrl || "").onChange(async (val) => {
           this.plugin.settings.searxngUrl = val.trim();
           await this.saveSettings();
@@ -22296,7 +22781,7 @@ var HarnessSettingTab = class extends import_obsidian10.PluginSettingTab {
     if (this.plugin.settings.searchProvider === "tavily") {
       const tavilySecretName = this.plugin.settings.tavilyApiKeySecretName || "oh_bot_secret_tavily";
       const hasTavilyKey = this.secretManager.hasSecret(tavilySecretName);
-      const tavilySetting = new import_obsidian10.Setting(containerEl).setName("Tavily API Key").setDesc(
+      const tavilySetting = new import_obsidian11.Setting(containerEl).setName("Tavily API Key").setDesc(
         hasTavilyKey ? "Key is configured in SecretStorage" : "Enter Tavily API Key to store securely"
       );
       tavilySetting.addText((text2) => {
@@ -22307,7 +22792,7 @@ var HarnessSettingTab = class extends import_obsidian10.PluginSettingTab {
           if (trimmed) {
             this.secretManager.setSecret(tavilySecretName, trimmed);
             await this.saveSettings();
-            new import_obsidian10.Notice("Tavily API Key saved");
+            new import_obsidian11.Notice("Tavily API Key saved");
           }
         });
       });
@@ -22319,21 +22804,21 @@ var HarnessSettingTab = class extends import_obsidian10.PluginSettingTab {
           btn.setWarning();
           btn.onClick(async () => {
             this.secretManager.setSecret(tavilySecretName, "");
-            new import_obsidian10.Notice("Tavily API Key cleared");
+            new import_obsidian11.Notice("Tavily API Key cleared");
             await this.saveSettings();
             this.display();
           });
         });
       }
     }
-    new import_obsidian10.Setting(containerEl).setName("Default PDF Folder").setDesc("Default folder path in the vault for generated PDF documents").addText((text2) => {
+    new import_obsidian11.Setting(containerEl).setName("Default PDF Folder").setDesc("Default folder path in the vault for generated PDF documents").addText((text2) => {
       text2.setPlaceholder("Documents/Generated").setValue(this.plugin.settings.defaultPdfFolder || "").onChange(async (val) => {
         this.plugin.settings.defaultPdfFolder = val.trim();
         await this.saveSettings();
       });
     });
     containerEl.createEl("h3", { text: "Skills & Marketplace" });
-    new import_obsidian10.Setting(containerEl).setName("Manage Skills & Marketplace").setDesc("Install skills from GitHub, browse the marketplace, or manage local vault skills").addButton((btn) => {
+    new import_obsidian11.Setting(containerEl).setName("Manage Skills & Marketplace").setDesc("Install skills from GitHub, browse the marketplace, or manage local vault skills").addButton((btn) => {
       btn.setButtonText("Open Skills Manager");
       btn.buttonEl.setAttribute("aria-label", "Open Skills Manager");
       btn.buttonEl.setAttribute("title", "Open Skills Manager");
@@ -22342,14 +22827,14 @@ var HarnessSettingTab = class extends import_obsidian10.PluginSettingTab {
         new SkillsModal(this.app, this.plugin).open();
       });
     });
-    new import_obsidian10.Setting(containerEl).setName("Auto-scan Vault Folders").setDesc("Scan .agents/skills/, .skills/, .claude/skills/, .gemini/skills/ in Vault for local skills").addToggle(
+    new import_obsidian11.Setting(containerEl).setName("Auto-scan Vault Folders").setDesc("Scan .agents/skills/, .skills/, .claude/skills/, .gemini/skills/ in Vault for local skills").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.scanVaultSkills !== false).onChange(async (val) => {
         this.plugin.settings.scanVaultSkills = val;
         await this.saveSettings();
         await this.plugin.skillManager.refreshLocalSkills();
       })
     );
-    new import_obsidian10.Setting(containerEl).setName("Custom Marketplace Manifest URL").setDesc("Optional URL to load custom community skills manifest JSON").addText(
+    new import_obsidian11.Setting(containerEl).setName("Custom Marketplace Manifest URL").setDesc("Optional URL to load custom community skills manifest JSON").addText(
       (text2) => text2.setPlaceholder("https://raw.githubusercontent.com/.../skills.json").setValue(this.plugin.settings.customMarketplaceUrl || "").onChange(async (val) => {
         this.plugin.settings.customMarketplaceUrl = val.trim();
         await this.saveSettings();
@@ -22358,7 +22843,7 @@ var HarnessSettingTab = class extends import_obsidian10.PluginSettingTab {
     containerEl.createEl("h3", { text: "Model Context Protocol (MCP) Servers" });
     const mcpServers = this.plugin.mcpManager?.getAllServers() || [];
     const enabledMcpCount = mcpServers.filter((s3) => s3.enabled).length;
-    new import_obsidian10.Setting(containerEl).setName("Manage MCP Servers & Integrations").setDesc(`${enabledMcpCount} of ${mcpServers.length} servers active. Connect remote tools like Todoist, web search, and custom APIs.`).addButton((btn) => {
+    new import_obsidian11.Setting(containerEl).setName("Manage MCP Servers & Integrations").setDesc(`${enabledMcpCount} of ${mcpServers.length} servers active. Connect remote tools like Todoist, web search, and custom APIs.`).addButton((btn) => {
       btn.setButtonText("Open MCP Servers (/mcp)");
       btn.buttonEl.setAttribute("aria-label", "Open MCP servers");
       btn.buttonEl.setAttribute("title", "Open MCP servers");
@@ -22371,7 +22856,7 @@ var HarnessSettingTab = class extends import_obsidian10.PluginSettingTab {
 };
 
 // src/ui/chat-view.ts
-var import_obsidian27 = require("obsidian");
+var import_obsidian29 = require("obsidian");
 
 // src/engine/providers/base.ts
 var LLMProvider = class {
@@ -22451,7 +22936,7 @@ var SSEStreamParser = class {
 };
 
 // src/engine/providers/openrouter.ts
-var import_obsidian11 = require("obsidian");
+var import_obsidian12 = require("obsidian");
 var OpenRouterProvider = class extends LLMProvider {
   constructor() {
     super(...arguments);
@@ -22559,7 +23044,7 @@ var OpenRouterProvider = class extends LLMProvider {
       if (signal?.aborted || err2.name === "AbortError") {
         throw new Error("Generation stopped by user.");
       }
-      const reqRes = await (0, import_obsidian11.requestUrl)({
+      const reqRes = await (0, import_obsidian12.requestUrl)({
         url: endpoint,
         method: "POST",
         headers: {
@@ -22579,7 +23064,7 @@ var OpenRouterProvider = class extends LLMProvider {
 };
 
 // src/engine/providers/openai.ts
-var import_obsidian12 = require("obsidian");
+var import_obsidian13 = require("obsidian");
 var OpenAIProvider = class extends LLMProvider {
   constructor() {
     super(...arguments);
@@ -22685,7 +23170,7 @@ var OpenAIProvider = class extends LLMProvider {
       if (signal?.aborted || err2.name === "AbortError") {
         throw new Error("Generation stopped by user.");
       }
-      const reqRes = await (0, import_obsidian12.requestUrl)({
+      const reqRes = await (0, import_obsidian13.requestUrl)({
         url: endpoint,
         method: "POST",
         headers: {
@@ -22705,7 +23190,7 @@ var OpenAIProvider = class extends LLMProvider {
 };
 
 // src/engine/providers/anthropic.ts
-var import_obsidian13 = require("obsidian");
+var import_obsidian14 = require("obsidian");
 var AnthropicProvider = class extends LLMProvider {
   constructor() {
     super(...arguments);
@@ -22821,7 +23306,7 @@ var AnthropicProvider = class extends LLMProvider {
       if (signal?.aborted || err2.name === "AbortError") {
         throw new Error("Generation stopped by user.");
       }
-      const reqRes = await (0, import_obsidian13.requestUrl)({
+      const reqRes = await (0, import_obsidian14.requestUrl)({
         url: endpoint,
         method: "POST",
         headers: {
@@ -22857,7 +23342,7 @@ var AnthropicProvider = class extends LLMProvider {
 };
 
 // src/engine/providers/ollama.ts
-var import_obsidian14 = require("obsidian");
+var import_obsidian15 = require("obsidian");
 var OllamaProvider = class extends LLMProvider {
   constructor() {
     super(...arguments);
@@ -22896,7 +23381,7 @@ var OllamaProvider = class extends LLMProvider {
     if (signal?.aborted) {
       throw new Error("Generation stopped by user.");
     }
-    const reqRes = await (0, import_obsidian14.requestUrl)({
+    const reqRes = await (0, import_obsidian15.requestUrl)({
       url: endpoint,
       method: "POST",
       headers,
@@ -22922,21 +23407,302 @@ var OllamaProvider = class extends LLMProvider {
   }
 };
 
+// src/tools/scoped-registry.ts
+var import_obsidian16 = require("obsidian");
+var ScopedToolRegistry = class {
+  constructor(baseRegistry, agent, app) {
+    this.baseRegistry = baseRegistry;
+    this.agent = agent;
+    this.app = app;
+    const raw = (this.agent.workspacePath || "").trim();
+    if (!raw || raw === "." || raw === "/") {
+      this.workspacePath = "";
+    } else {
+      this.workspacePath = (0, import_obsidian16.normalizePath)(raw).replace(/^\/+/, "").replace(/\/+$/, "");
+    }
+  }
+  /**
+   * Checks if a given Vault path is inside the scoped workspace folder.
+   * If workspacePath is empty/undefined, returns true (unrestricted vault access).
+   */
+  isPathWithinWorkspace(rawPath) {
+    if (!this.workspacePath) {
+      return true;
+    }
+    if (!rawPath || typeof rawPath !== "string") {
+      return false;
+    }
+    if (rawPath.includes("..")) {
+      return false;
+    }
+    const normalizedPath = (0, import_obsidian16.normalizePath)(rawPath).replace(/^\/+/, "").replace(/\/+$/, "");
+    if (normalizedPath.includes("..")) {
+      return false;
+    }
+    return normalizedPath === this.workspacePath || normalizedPath.startsWith(this.workspacePath + "/");
+  }
+  /**
+   * Checks if a specific tool is permitted for this agent based on its configuration.
+   */
+  isToolAllowed(toolName) {
+    const allowed = this.agent.allowedTools;
+    const isSubagent = !this.agent.isDefaultMain;
+    if (toolName === "invoke_subagent" && isSubagent) {
+      if (!allowed || !Array.isArray(allowed)) {
+        return false;
+      }
+      return allowed.includes("invoke_subagent") || allowed.includes("subagent");
+    }
+    if (!allowed || allowed.length === 0 || allowed.includes("*")) {
+      return true;
+    }
+    if (allowed.includes(toolName)) {
+      return true;
+    }
+    const vaultTools = [
+      "vault_read_file",
+      "read_file",
+      "vault_create_file",
+      "create_file",
+      "vault_patch_file",
+      "patch_file",
+      "vault_list_dir",
+      "list_dir",
+      "vault_search_notes",
+      "search_notes"
+    ];
+    if (allowed.includes("vault")) {
+      if (vaultTools.includes(toolName) || toolName.startsWith("vault_")) {
+        return true;
+      }
+    }
+    if ((toolName === "vault_read_file" || toolName === "read_file") && (allowed.includes("read_file") || allowed.includes("vault_read_file"))) {
+      return true;
+    }
+    if ((toolName === "vault_create_file" || toolName === "create_file") && (allowed.includes("create_file") || allowed.includes("vault_create_file"))) {
+      return true;
+    }
+    if ((toolName === "vault_patch_file" || toolName === "patch_file") && (allowed.includes("patch_file") || allowed.includes("vault_patch_file"))) {
+      return true;
+    }
+    if ((toolName === "vault_list_dir" || toolName === "list_dir") && (allowed.includes("list_dir") || allowed.includes("vault_list_dir"))) {
+      return true;
+    }
+    if ((toolName === "vault_search_notes" || toolName === "search_notes") && (allowed.includes("search_notes") || allowed.includes("vault_search_notes"))) {
+      return true;
+    }
+    if (allowed.includes("web") || allowed.includes("web_search")) {
+      if (toolName === "web_search" || toolName === "fetch_web_page") {
+        return true;
+      }
+    }
+    if (allowed.includes("pdf") || allowed.includes("generate_pdf")) {
+      if (toolName === "generate_pdf") {
+        return true;
+      }
+    }
+    if (allowed.includes("skills") || allowed.includes("skill")) {
+      if (toolName === "create_skill" || toolName === "read_skill" || toolName === "list_skills") {
+        return true;
+      }
+    }
+    if (allowed.includes("mcp")) {
+      if (toolName.startsWith("mcp__")) {
+        return true;
+      }
+    }
+    return false;
+  }
+  /**
+   * Returns tool schemas allowed for this agent, enriched with workspace scope descriptions if sandboxed.
+   */
+  getSchemas() {
+    const schemas = this.baseRegistry.getSchemas();
+    const filtered = schemas.filter((schema) => this.isToolAllowed(schema.name));
+    if (!this.workspacePath) {
+      return filtered;
+    }
+    return filtered.map((schema) => {
+      const cloned = JSON.parse(JSON.stringify(schema));
+      const name = cloned.name;
+      if (name === "vault_read_file" || name === "read_file" || name === "vault_create_file" || name === "create_file" || name === "vault_patch_file" || name === "patch_file") {
+        cloned.description = `${cloned.description} [Scoped to workspace: "${this.workspacePath}"]`;
+        if (cloned.parameters?.properties?.path) {
+          cloned.parameters.properties.path.description = `${cloned.parameters.properties.path.description || ""} (Must reside within workspace "${this.workspacePath}")`.trim();
+        }
+      } else if (name === "vault_list_dir" || name === "list_dir") {
+        cloned.description = `${cloned.description} [Scoped to workspace: "${this.workspacePath}"]`;
+        if (cloned.parameters?.properties?.path) {
+          cloned.parameters.properties.path.description = `Relative path of directory within workspace "${this.workspacePath}" (defaults to workspace root if empty or ".")`;
+        }
+        if (cloned.parameters?.properties?.dir_path) {
+          cloned.parameters.properties.dir_path.description = `Relative path of directory within workspace "${this.workspacePath}" (defaults to workspace root if empty or ".")`;
+        }
+      } else if (name === "vault_search_notes" || name === "search_notes") {
+        cloned.description = `${cloned.description} [Scoped to notes within workspace: "${this.workspacePath}"]`;
+      } else if (name === "generate_pdf") {
+        cloned.description = `${cloned.description} [Scoped to workspace: "${this.workspacePath}"]`;
+        if (cloned.parameters?.properties?.filePath) {
+          cloned.parameters.properties.filePath.description = `${cloned.parameters.properties.filePath.description || ""} (Must reside within workspace "${this.workspacePath}")`.trim();
+        }
+      }
+      return cloned;
+    });
+  }
+  /**
+   * Returns tool instance if allowed, or undefined if filtered out.
+   */
+  getTool(name) {
+    if (!this.isToolAllowed(name)) {
+      return void 0;
+    }
+    return this.baseRegistry.getTool(name);
+  }
+  /**
+   * Executes a tool with sandboxing and workspace permission enforcement.
+   */
+  async executeTool(name, args, app) {
+    const safeArgs = args || {};
+    if (!this.isToolAllowed(name)) {
+      return {
+        success: false,
+        output: "",
+        error: `Tool "${name}" is not permitted for agent "${this.agent.name}".`
+      };
+    }
+    if (this.workspacePath) {
+      const isFileTool = name === "vault_read_file" || name === "read_file" || name === "vault_create_file" || name === "create_file" || name === "vault_patch_file" || name === "patch_file";
+      if (isFileTool) {
+        const targetPath = safeArgs.path;
+        if (!targetPath || !this.isPathWithinWorkspace(targetPath)) {
+          return {
+            success: false,
+            output: "",
+            error: `Access denied: path "${targetPath}" is outside the assigned workspace "${this.workspacePath}".`
+          };
+        }
+      }
+      if (name === "generate_pdf") {
+        const targetPath = safeArgs.filePath;
+        if (!targetPath || typeof targetPath !== "string") {
+          return {
+            success: false,
+            output: "",
+            error: 'Missing required parameter: "filePath" is required.'
+          };
+        }
+        if (!this.isPathWithinWorkspace(targetPath)) {
+          const candidate = `${this.workspacePath}/${targetPath.replace(/^\/+/, "")}`;
+          if (this.isPathWithinWorkspace(candidate)) {
+            safeArgs.filePath = candidate;
+          } else {
+            return {
+              success: false,
+              output: "",
+              error: `Access denied: filePath "${targetPath}" is outside the assigned workspace "${this.workspacePath}".`
+            };
+          }
+        }
+      }
+      const isListDir = name === "vault_list_dir" || name === "list_dir";
+      if (isListDir) {
+        const rawTarget = safeArgs.dir_path !== void 0 ? safeArgs.dir_path : safeArgs.path;
+        if (!rawTarget || rawTarget === "." || rawTarget === "/" || rawTarget === "") {
+          safeArgs.dir_path = this.workspacePath;
+          safeArgs.path = this.workspacePath;
+        } else {
+          if (!this.isPathWithinWorkspace(rawTarget)) {
+            return {
+              success: false,
+              output: "",
+              error: `Access denied: dir_path "${rawTarget}" is outside the assigned workspace "${this.workspacePath}".`
+            };
+          }
+          safeArgs.dir_path = rawTarget;
+          safeArgs.path = rawTarget;
+        }
+      }
+      const isSearchNotes = name === "vault_search_notes" || name === "search_notes";
+      if (isSearchNotes) {
+        const result = await this.baseRegistry.executeTool(name, safeArgs, app);
+        if (result.success && result.output) {
+          try {
+            const parsed = JSON.parse(result.output);
+            if (Array.isArray(parsed)) {
+              const filtered = parsed.filter((item) => {
+                if (!item)
+                  return false;
+                const itemPath = item.path || (typeof item === "string" ? item : void 0);
+                return itemPath ? this.isPathWithinWorkspace(itemPath) : false;
+              });
+              return {
+                ...result,
+                output: JSON.stringify(filtered, null, 2)
+              };
+            }
+          } catch {
+          }
+        }
+        return result;
+      }
+    }
+    return await this.baseRegistry.executeTool(name, safeArgs, app);
+  }
+  setSettings(settings) {
+    this.baseRegistry.setSettings(settings);
+  }
+  setSkillManager(skillManager) {
+    this.baseRegistry.setSkillManager(skillManager);
+  }
+  setMcpManager(mcpManager) {
+    this.baseRegistry.setMcpManager(mcpManager);
+  }
+  setAgentManager(agentManager) {
+    this.baseRegistry.setAgentManager(agentManager);
+  }
+  setSubagentRunner(runner) {
+    this.baseRegistry.setSubagentRunner(runner);
+  }
+  getAgent() {
+    return this.agent;
+  }
+  getWorkspacePath() {
+    return this.workspacePath;
+  }
+  getBaseRegistry() {
+    return this.baseRegistry;
+  }
+};
+
 // src/engine/agent.ts
 var AgentHarness = class {
-  constructor(app, settings, toolRegistry) {
+  constructor(app, settings, toolRegistry, agentManager) {
     this.providers = /* @__PURE__ */ new Map();
     this.app = app;
     this.settings = settings;
     this.secretManager = new SecretManager(app);
     this.toolRegistry = toolRegistry;
     this.toolRegistry.setSettings(settings);
+    this.agentManager = agentManager;
     this.providers.set("openrouter", new OpenRouterProvider());
     this.providers.set("openai", new OpenAIProvider());
     this.providers.set("gemini", new OpenAIProvider());
     this.providers.set("custom-openai", new OpenAIProvider());
     this.providers.set("anthropic", new AnthropicProvider());
     this.providers.set("ollama", new OllamaProvider());
+    this.toolRegistry.setSubagentRunner(this.runSubagent.bind(this));
+    if (this.agentManager) {
+      this.toolRegistry.setAgentManager(this.agentManager);
+    }
+  }
+  setAgentManager(agentManager) {
+    this.agentManager = agentManager;
+    this.toolRegistry.setAgentManager(agentManager);
+    this.toolRegistry.setSubagentRunner(this.runSubagent.bind(this));
+  }
+  setSettings(settings) {
+    this.settings = settings;
+    this.toolRegistry.setSettings(settings);
   }
   getActiveProviderConfig(providerId) {
     const targetId = providerId || this.settings.activeProviderId || "openrouter";
@@ -22958,129 +23724,213 @@ var AgentHarness = class {
     return { provider, config, apiKey };
   }
   /**
-   * Runs the multi-step agent turn loop with AbortSignal support.
+   * Executes a specialized subagent task turn in isolation, scoping tools and workspace,
+   * while bubbling execution events to the caller and UI.
    */
-  async runTurn(history, onEvent, onConfirm, overrideProviderId, overrideModel, signal, extraSystemDirectives) {
-    const { provider, config, apiKey } = this.getActiveProviderConfig(overrideProviderId);
+  async runSubagent(agent, taskPrompt, onEvent, signal) {
+    const taskId = `subtask_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const subagentContext = {
+      agentId: agent.id,
+      agentName: agent.name,
+      taskId,
+      workspacePath: agent.workspacePath
+    };
+    const forwardEvent = (event) => {
+      const wrappedEvent = {
+        ...event,
+        subagentContext: event.subagentContext || subagentContext
+      };
+      if (onEvent) {
+        onEvent(wrappedEvent);
+      } else if (this.activeOnEvent) {
+        this.activeOnEvent(wrappedEvent);
+      }
+    };
+    try {
+      const initialMessages = [
+        {
+          role: "user",
+          content: taskPrompt
+        }
+      ];
+      const updatedHistory = await this.runTurn(
+        initialMessages,
+        forwardEvent,
+        void 0,
+        // subagent turn confirmation handled within workspace sandbox
+        agent.providerId,
+        agent.model,
+        signal,
+        void 0,
+        agent,
+        subagentContext
+      );
+      const lastAssistant = [...updatedHistory].reverse().find((m4) => m4.role === "assistant");
+      const content = lastAssistant?.content;
+      const output = typeof content === "string" ? content : Array.isArray(content) ? JSON.stringify(content) : "";
+      return {
+        success: true,
+        output: output || ""
+      };
+    } catch (err2) {
+      const errorMessage = err2?.message || String(err2);
+      forwardEvent({
+        type: "error",
+        step: 0,
+        error: errorMessage,
+        subagentContext
+      });
+      return {
+        success: false,
+        output: "",
+        error: errorMessage
+      };
+    }
+  }
+  /**
+   * Runs the multi-step agent turn loop with AbortSignal and subagent context support.
+   */
+  async runTurn(history, onEvent, onConfirm, overrideProviderId, overrideModel, signal, extraSystemDirectives, agentConfig, subagentContext) {
+    const targetProviderId = overrideProviderId || agentConfig?.providerId || this.settings.activeProviderId;
+    const { provider, config, apiKey } = this.getActiveProviderConfig(targetProviderId);
     this.toolRegistry.setSettings(this.settings);
-    const model = overrideModel || this.settings.activeModel || config.models[0] || "anthropic/claude-3.7-sonnet";
+    const model = overrideModel || agentConfig?.model || this.settings.activeModel || config.models[0] || "anthropic/claude-3.7-sonnet";
     const messages2 = [...history];
-    const tools = this.toolRegistry.getSchemas();
+    const registry = agentConfig ? new ScopedToolRegistry(this.toolRegistry, agentConfig, this.app) : this.toolRegistry;
+    const tools = registry.getSchemas();
     const maxSteps = 25;
-    const effectiveSystemPrompt = extraSystemDirectives ? `${this.settings.systemPrompt}
+    let baseSystemPrompt = this.settings.systemPrompt || DEFAULT_MAIN_SYSTEM_PROMPT;
+    if (agentConfig) {
+      if (this.agentManager) {
+        baseSystemPrompt = await this.agentManager.resolveEffectiveSystemPrompt(agentConfig);
+      } else {
+        baseSystemPrompt = agentConfig.systemPrompt || this.settings.systemPrompt || DEFAULT_MAIN_SYSTEM_PROMPT;
+      }
+    }
+    const effectiveSystemPrompt = extraSystemDirectives ? `${baseSystemPrompt}
 
-${extraSystemDirectives}` : this.settings.systemPrompt;
+${extraSystemDirectives}` : baseSystemPrompt;
+    const emitEvent = (event) => {
+      const finalEvent = subagentContext ? { ...event, subagentContext: event.subagentContext || subagentContext } : event;
+      onEvent(finalEvent);
+    };
+    const previousActiveOnEvent = this.activeOnEvent;
+    this.activeOnEvent = emitEvent;
     let step = 0;
     let keepRunning = true;
-    while (keepRunning && step < maxSteps) {
-      if (signal?.aborted) {
-        throw new Error("Generation stopped by user.");
-      }
-      step++;
-      let streamContent = "";
-      const response = await provider.chatCompletion(
-        apiKey,
-        config.baseUrl,
-        model,
-        effectiveSystemPrompt,
-        messages2,
-        tools,
-        (chunk) => {
-          if (signal?.aborted)
-            return;
-          streamContent += chunk;
-          onEvent({
-            type: "chunk",
-            step,
-            content: streamContent
-          });
-        },
-        signal
-      );
-      if (signal?.aborted) {
-        throw new Error("Generation stopped by user.");
-      }
-      const assistantMessage = {
-        role: "assistant",
-        content: response.content || "",
-        tool_calls: response.toolCalls
-      };
-      messages2.push(assistantMessage);
-      if (response.toolCalls && response.toolCalls.length > 0) {
-        for (const toolCall of response.toolCalls) {
-          if (signal?.aborted)
-            break;
-          onEvent({
-            type: "tool_call",
-            step,
-            toolCall
-          });
-          const toolInstance = this.toolRegistry.getTool(toolCall.function.name);
-          if (toolInstance?.isMutation && this.settings.safetyMode === "strict") {
-            onEvent({
-              type: "awaiting_confirmation",
+    try {
+      while (keepRunning && step < maxSteps) {
+        if (signal?.aborted) {
+          throw new Error("Generation stopped by user.");
+        }
+        step++;
+        let streamContent = "";
+        const response = await provider.chatCompletion(
+          apiKey,
+          config.baseUrl,
+          model,
+          effectiveSystemPrompt,
+          messages2,
+          tools,
+          (chunk) => {
+            if (signal?.aborted)
+              return;
+            streamContent += chunk;
+            emitEvent({
+              type: "chunk",
+              step,
+              content: streamContent
+            });
+          },
+          signal
+        );
+        if (signal?.aborted) {
+          throw new Error("Generation stopped by user.");
+        }
+        const assistantMessage = {
+          role: "assistant",
+          content: response.content || "",
+          tool_calls: response.toolCalls
+        };
+        messages2.push(assistantMessage);
+        if (response.toolCalls && response.toolCalls.length > 0) {
+          for (const toolCall of response.toolCalls) {
+            if (signal?.aborted)
+              break;
+            emitEvent({
+              type: "tool_call",
               step,
               toolCall
             });
-            if (onConfirm) {
-              const approved = await onConfirm(toolCall);
-              if (!approved) {
-                const cancelledResult = {
-                  success: false,
-                  output: "",
-                  error: "User denied file modification permission for this tool execution."
-                };
-                messages2.push({
-                  role: "tool",
-                  tool_call_id: toolCall.id,
-                  name: toolCall.function.name,
-                  content: JSON.stringify(cancelledResult)
-                });
-                onEvent({
-                  type: "tool_result",
-                  step,
-                  toolResult: { toolCallId: toolCall.id, result: cancelledResult }
-                });
-                continue;
+            const toolInstance = registry.getTool(toolCall.function.name);
+            if (toolInstance?.isMutation && this.settings.safetyMode === "strict") {
+              emitEvent({
+                type: "awaiting_confirmation",
+                step,
+                toolCall
+              });
+              if (onConfirm) {
+                const approved = await onConfirm(toolCall);
+                if (!approved) {
+                  const cancelledResult = {
+                    success: false,
+                    output: "",
+                    error: "User denied file modification permission for this tool execution."
+                  };
+                  messages2.push({
+                    role: "tool",
+                    tool_call_id: toolCall.id,
+                    name: toolCall.function.name,
+                    content: JSON.stringify(cancelledResult)
+                  });
+                  emitEvent({
+                    type: "tool_result",
+                    step,
+                    toolResult: { toolCallId: toolCall.id, result: cancelledResult }
+                  });
+                  continue;
+                }
               }
             }
+            let parsedArgs = {};
+            try {
+              parsedArgs = JSON.parse(toolCall.function.arguments || "{}");
+            } catch (e2) {
+              parsedArgs = {};
+            }
+            const result = await registry.executeTool(toolCall.function.name, parsedArgs, this.app);
+            messages2.push({
+              role: "tool",
+              tool_call_id: toolCall.id,
+              name: toolCall.function.name,
+              content: result.success ? result.output : `Error: ${result.error}`
+            });
+            emitEvent({
+              type: "tool_result",
+              step,
+              toolResult: { toolCallId: toolCall.id, result }
+            });
           }
-          let parsedArgs = {};
-          try {
-            parsedArgs = JSON.parse(toolCall.function.arguments || "{}");
-          } catch (e2) {
-            parsedArgs = {};
-          }
-          const result = await this.toolRegistry.executeTool(toolCall.function.name, parsedArgs, this.app);
-          messages2.push({
-            role: "tool",
-            tool_call_id: toolCall.id,
-            name: toolCall.function.name,
-            content: result.success ? result.output : `Error: ${result.error}`
-          });
-          onEvent({
-            type: "tool_result",
+        } else {
+          keepRunning = false;
+          emitEvent({
+            type: "finish",
             step,
-            toolResult: { toolCallId: toolCall.id, result }
+            content: response.content
           });
         }
-      } else {
-        keepRunning = false;
-        onEvent({
+      }
+      if (step >= maxSteps) {
+        emitEvent({
           type: "finish",
           step,
-          content: response.content
+          content: `[Agent reached maximum step limit (${maxSteps})].`
         });
       }
+      return messages2;
+    } finally {
+      this.activeOnEvent = previousActiveOnEvent;
     }
-    if (step >= maxSteps) {
-      onEvent({
-        type: "finish",
-        step,
-        content: `[Agent reached maximum step limit (${maxSteps})].`
-      });
-    }
-    return messages2;
   }
 };
 
@@ -23105,7 +23955,7 @@ var AgentTool = class {
 };
 
 // src/tools/vault/read-file.ts
-var import_obsidian15 = require("obsidian");
+var import_obsidian17 = require("obsidian");
 var VaultReadFileTool = class extends AgentTool {
   constructor() {
     super(...arguments);
@@ -23126,7 +23976,7 @@ var VaultReadFileTool = class extends AgentTool {
   async execute(args, app) {
     try {
       const file = app.vault.getAbstractFileByPath(args.path);
-      if (!file || !(file instanceof import_obsidian15.TFile)) {
+      if (!file || !(file instanceof import_obsidian17.TFile)) {
         return {
           success: false,
           output: "",
@@ -23204,7 +24054,7 @@ var VaultCreateFileTool = class extends AgentTool {
 };
 
 // src/tools/vault/patch-file.ts
-var import_obsidian16 = require("obsidian");
+var import_obsidian18 = require("obsidian");
 var VaultPatchFileTool = class extends AgentTool {
   constructor() {
     super(...arguments);
@@ -23234,7 +24084,7 @@ var VaultPatchFileTool = class extends AgentTool {
   async execute(args, app) {
     try {
       const file = app.vault.getAbstractFileByPath(args.path);
-      if (!file || !(file instanceof import_obsidian16.TFile)) {
+      if (!file || !(file instanceof import_obsidian18.TFile)) {
         return {
           success: false,
           output: "",
@@ -23265,7 +24115,7 @@ var VaultPatchFileTool = class extends AgentTool {
 };
 
 // src/tools/vault/list-dir.ts
-var import_obsidian17 = require("obsidian");
+var import_obsidian19 = require("obsidian");
 var VaultListDirTool = class extends AgentTool {
   constructor() {
     super(...arguments);
@@ -23287,7 +24137,7 @@ var VaultListDirTool = class extends AgentTool {
     try {
       const folderPath = (args.path || "").replace(/^\//, "");
       const folder = folderPath === "" ? app.vault.getRoot() : app.vault.getAbstractFileByPath(folderPath);
-      if (!folder || !(folder instanceof import_obsidian17.TFolder)) {
+      if (!folder || !(folder instanceof import_obsidian19.TFolder)) {
         return {
           success: false,
           output: "",
@@ -23297,7 +24147,7 @@ var VaultListDirTool = class extends AgentTool {
       const items = folder.children.map((child) => ({
         name: child.name,
         path: child.path,
-        type: child instanceof import_obsidian17.TFolder ? "folder" : "file"
+        type: child instanceof import_obsidian19.TFolder ? "folder" : "file"
       }));
       return {
         success: true,
@@ -23356,7 +24206,7 @@ var VaultSearchNotesTool = class extends AgentTool {
 };
 
 // src/tools/skills/create-skill.ts
-var import_obsidian18 = require("obsidian");
+var import_obsidian20 = require("obsidian");
 var CreateSkillTool = class extends AgentTool {
   constructor(skillManager) {
     super();
@@ -23434,7 +24284,7 @@ var CreateSkillTool = class extends AgentTool {
         author: typeof author === "string" ? author : void 0,
         version: typeof version === "string" ? version : void 0
       });
-      new import_obsidian18.Notice(`Skill "${saved.name}" (/${saved.id}) created!`);
+      new import_obsidian20.Notice(`Skill "${saved.name}" (/${saved.id}) created!`);
       return {
         success: true,
         output: `Successfully created and registered skill "${saved.name}" (ID: ${saved.id}, version: ${saved.version || "1.0.0"}).
@@ -23551,7 +24401,7 @@ var ListSkillsTool = class extends AgentTool {
 };
 
 // src/tools/web/adapters/duckduckgo.ts
-var import_obsidian19 = require("obsidian");
+var import_obsidian21 = require("obsidian");
 function decodeDuckDuckGoUrl(rawUrl) {
   if (!rawUrl)
     return "";
@@ -23597,7 +24447,7 @@ var DuckDuckGoAdapter = class {
       "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
     };
     try {
-      const res = await (0, import_obsidian19.requestUrl)({
+      const res = await (0, import_obsidian21.requestUrl)({
         url: "https://html.duckduckgo.com/html/",
         method: "POST",
         headers,
@@ -23606,7 +24456,7 @@ var DuckDuckGoAdapter = class {
       html2 = res.text;
     } catch (postError) {
       try {
-        const getRes = await (0, import_obsidian19.requestUrl)({
+        const getRes = await (0, import_obsidian21.requestUrl)({
           url: `https://html.duckduckgo.com/html/?q=${encodeURIComponent(trimmedQuery)}`,
           method: "GET",
           headers: {
@@ -23672,7 +24522,7 @@ var DuckDuckGoAdapter = class {
 };
 
 // src/tools/web/adapters/searxng.ts
-var import_obsidian20 = require("obsidian");
+var import_obsidian22 = require("obsidian");
 var SearXNGAdapter = class {
   constructor(searxngUrl = "http://localhost:8080") {
     this.searxngUrl = searxngUrl;
@@ -23689,7 +24539,7 @@ var SearXNGAdapter = class {
     const endpoint = `${baseUrl}/search?q=${encodeURIComponent(trimmedQuery)}&format=json`;
     let data;
     try {
-      const res = await (0, import_obsidian20.requestUrl)({
+      const res = await (0, import_obsidian22.requestUrl)({
         url: endpoint,
         method: "GET",
         headers: {
@@ -23722,7 +24572,7 @@ var SearXNGAdapter = class {
 };
 
 // src/tools/web/adapters/tavily.ts
-var import_obsidian21 = require("obsidian");
+var import_obsidian23 = require("obsidian");
 var TavilyAdapter = class {
   constructor(apiKey) {
     this.apiKey = apiKey;
@@ -23741,7 +24591,7 @@ var TavilyAdapter = class {
     const maxResults = Math.max(1, Math.min(limit || 5, 20));
     let data;
     try {
-      const res = await (0, import_obsidian21.requestUrl)({
+      const res = await (0, import_obsidian23.requestUrl)({
         url: "https://api.tavily.com/search",
         method: "POST",
         headers: {
@@ -23909,7 +24759,7 @@ ${formattedResults}`
 };
 
 // src/tools/web/reader.ts
-var import_obsidian22 = require("obsidian");
+var import_obsidian24 = require("obsidian");
 var NOISY_SELECTORS = [
   "script",
   "style",
@@ -24022,7 +24872,7 @@ var WebContentReader = class _WebContentReader {
     };
     let html2 = "";
     try {
-      const res = await (0, import_obsidian22.requestUrl)({
+      const res = await (0, import_obsidian24.requestUrl)({
         url: trimmedUrl,
         method: "GET",
         headers
@@ -24530,7 +25380,7 @@ ${result.content}`;
 };
 
 // src/tools/pdf/generator.ts
-var import_obsidian23 = require("obsidian");
+var import_obsidian25 = require("obsidian");
 
 // node_modules/jspdf/dist/jspdf.es.min.js
 init_typeof();
@@ -39419,11 +40269,11 @@ async function renderContentToElement(app, content, targetEl) {
     targetEl.innerHTML = content;
     return;
   }
-  if (app && import_obsidian23.MarkdownRenderer && typeof import_obsidian23.MarkdownRenderer.render === "function") {
-    const comp = new import_obsidian23.Component();
+  if (app && import_obsidian25.MarkdownRenderer && typeof import_obsidian25.MarkdownRenderer.render === "function") {
+    const comp = new import_obsidian25.Component();
     comp.load();
     try {
-      await import_obsidian23.MarkdownRenderer.render(app, content, targetEl, "", comp);
+      await import_obsidian25.MarkdownRenderer.render(app, content, targetEl, "", comp);
     } catch (err2) {
       console.warn("MarkdownRenderer failed, falling back to innerHTML:", err2);
       targetEl.innerHTML = content;
@@ -39550,9 +40400,9 @@ async function generatePdf(options, app) {
     await ensureParentFoldersExist(app, normalizedPath);
     const existing = app.vault.getAbstractFileByPath(normalizedPath);
     if (existing) {
-      if (existing instanceof import_obsidian23.TFile || "stat" in existing && !existing.children) {
+      if (existing instanceof import_obsidian25.TFile || "stat" in existing && !existing.children) {
         await app.vault.modifyBinary(existing, arrayBuffer);
-      } else if (existing instanceof import_obsidian23.TFolder) {
+      } else if (existing instanceof import_obsidian25.TFolder) {
         throw new Error(`A folder already exists at path: ${normalizedPath}`);
       } else {
         await app.vault.modifyBinary(existing, arrayBuffer);
@@ -39667,6 +40517,325 @@ var GeneratePdfTool = class extends AgentTool {
   }
 };
 
+// src/tools/agents/invoke-subagent.ts
+var InvokeSubagentTool = class extends AgentTool {
+  constructor(agentManager, subagentRunner) {
+    super();
+    this.name = "invoke_subagent";
+    this.description = "Delegate a focused task or sub-project to a specialized agent profile. The subagent runs in its isolated workspace sandbox with its own instructions and returns a comprehensive report.";
+    this.isMutation = false;
+    this.parameters = {
+      type: "object",
+      properties: {
+        agent_id: {
+          type: "string",
+          description: "The unique ID or name of the agent to invoke (e.g., 'researcher', 'finance-analyst')."
+        },
+        task: {
+          type: "string",
+          description: "The specific task instructions and goals for the subagent to complete."
+        },
+        context: {
+          type: "string",
+          description: "Optional additional background data or notes for the subagent."
+        }
+      },
+      required: ["agent_id", "task"]
+    };
+    this.agentManager = agentManager;
+    this.subagentRunner = subagentRunner;
+  }
+  setAgentManager(agentManager) {
+    this.agentManager = agentManager;
+  }
+  setSubagentRunner(runner) {
+    this.subagentRunner = runner;
+  }
+  async execute(args, app) {
+    const agentId = (args?.agent_id || "").trim();
+    const task = (args?.task || "").trim();
+    const context = (args?.context || "").trim();
+    if (!agentId) {
+      return {
+        success: false,
+        output: "",
+        error: 'Missing required parameter: "agent_id" is required.'
+      };
+    }
+    if (!task) {
+      return {
+        success: false,
+        output: "",
+        error: 'Missing required parameter: "task" is required.'
+      };
+    }
+    if (!this.agentManager) {
+      return {
+        success: false,
+        output: "",
+        error: "AgentManager is not attached to InvokeSubagentTool."
+      };
+    }
+    if (!this.subagentRunner) {
+      return {
+        success: false,
+        output: "",
+        error: "SubagentRunner is not attached to InvokeSubagentTool."
+      };
+    }
+    const agent = this.agentManager.getAgent(agentId);
+    if (!agent) {
+      const allAgents = this.agentManager.getAllAgents();
+      const availableList = allAgents.length > 0 ? allAgents.map((a3) => `"${a3.id}" (${a3.name})`).join(", ") : "None";
+      return {
+        success: false,
+        output: "",
+        error: `Agent "${agentId}" not found. Available agents: ${availableList}`
+      };
+    }
+    let fullPrompt = task;
+    if (context) {
+      fullPrompt = `${task}
+
+## Context
+${context}`;
+    }
+    try {
+      const result = await this.subagentRunner(agent, fullPrompt);
+      if (!result.success) {
+        return {
+          success: false,
+          output: result.output || "",
+          error: result.error || `Subagent "${agent.name}" failed to complete task.`
+        };
+      }
+      return {
+        success: true,
+        output: result.output
+      };
+    } catch (err2) {
+      return {
+        success: false,
+        output: "",
+        error: `Error executing subagent "${agent.name}": ${err2?.message || String(err2)}`
+      };
+    }
+  }
+};
+
+// src/tools/agents/manage-agents.ts
+var ManageAgentsTool = class extends AgentTool {
+  constructor(agentManager) {
+    super();
+    this.name = "manage_agents";
+    this.description = "Create, update, delete, or list custom agent profiles in Obsidian Harness Bot.";
+    this.isMutation = true;
+    this.parameters = {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: ["create", "update", "delete", "list"],
+          description: "The management action to perform."
+        },
+        id: {
+          type: "string",
+          description: "Unique agent identifier (e.g. 'code-architect'). Required for create/update/delete."
+        },
+        name: {
+          type: "string",
+          description: "Human-readable name of the agent."
+        },
+        description: {
+          type: "string",
+          description: "Description of what this agent specializes in."
+        },
+        systemPrompt: {
+          type: "string",
+          description: "Custom system prompt for the agent."
+        },
+        workspacePath: {
+          type: "string",
+          description: "Vault folder path to restrict the agent to (e.g. 'Projects/Codebase')."
+        },
+        agentMdContent: {
+          type: "string",
+          description: "Initial content for AGENT.md to create inside workspacePath."
+        },
+        providerId: {
+          type: "string",
+          description: "Optional LLM provider ID override."
+        },
+        model: {
+          type: "string",
+          description: "Optional model name override."
+        },
+        allowedTools: {
+          type: "array",
+          items: { type: "string" },
+          description: "List of allowed tool names or categories."
+        }
+      },
+      required: ["action"]
+    };
+    this.agentManager = agentManager;
+  }
+  setAgentManager(agentManager) {
+    this.agentManager = agentManager;
+  }
+  async execute(args, app) {
+    if (!this.agentManager) {
+      return {
+        success: false,
+        output: "",
+        error: "AgentManager is not attached to ManageAgentsTool."
+      };
+    }
+    const action = (args?.action || "").trim().toLowerCase();
+    if (!action) {
+      return {
+        success: false,
+        output: "",
+        error: 'Missing required parameter: "action" (must be "create", "update", "delete", or "list").'
+      };
+    }
+    switch (action) {
+      case "list": {
+        const agents = this.agentManager.getAllAgents();
+        const formatted = agents.map((a3) => ({
+          id: a3.id,
+          name: a3.name,
+          description: a3.description,
+          workspacePath: a3.workspacePath || "(entire vault)",
+          isDefaultMain: a3.isDefaultMain || false,
+          providerId: a3.providerId || "(inherited)",
+          model: a3.model || "(inherited)",
+          allowedTools: a3.allowedTools && a3.allowedTools.length > 0 ? a3.allowedTools : ["*"]
+        }));
+        return {
+          success: true,
+          output: JSON.stringify(formatted, null, 2)
+        };
+      }
+      case "delete": {
+        const id = (args?.id || "").trim();
+        if (!id) {
+          return {
+            success: false,
+            output: "",
+            error: 'Missing required parameter: "id" is required for deleting an agent.'
+          };
+        }
+        const agent = this.agentManager.getAgent(id);
+        if (!agent) {
+          return {
+            success: false,
+            output: "",
+            error: `Agent with id "${id}" not found.`
+          };
+        }
+        if (agent.isDefaultMain || agent.id === "main") {
+          return {
+            success: false,
+            output: "",
+            error: "Cannot delete the default Main agent."
+          };
+        }
+        const deleted = await this.agentManager.deleteAgent(agent.id);
+        if (!deleted) {
+          return {
+            success: false,
+            output: "",
+            error: `Failed to delete agent "${id}".`
+          };
+        }
+        return {
+          success: true,
+          output: `Successfully deleted agent "${agent.name}" (ID: ${agent.id}).`
+        };
+      }
+      case "create":
+      case "update": {
+        const id = (args?.id || "").trim();
+        if (!id) {
+          return {
+            success: false,
+            output: "",
+            error: `Missing required parameter: "id" is required to ${action} an agent.`
+          };
+        }
+        const existing = this.agentManager.getAgent(id);
+        const name = (args?.name || "").trim() || (existing ? existing.name : id);
+        let scaffoldResult;
+        const workspacePath = args?.workspacePath !== void 0 ? (args.workspacePath || "").trim() : existing?.workspacePath;
+        if (workspacePath && workspacePath.length > 0) {
+          try {
+            scaffoldResult = await this.agentManager.scaffoldWorkspace(
+              workspacePath,
+              args?.agentMdContent,
+              name
+            );
+          } catch (err2) {
+            return {
+              success: false,
+              output: "",
+              error: `Failed to scaffold workspace at "${workspacePath}": ${err2?.message || String(err2)}`
+            };
+          }
+        }
+        const agentData = {
+          id,
+          name
+        };
+        if (args?.description !== void 0) {
+          agentData.description = String(args.description);
+        }
+        if (args?.systemPrompt !== void 0) {
+          agentData.systemPrompt = String(args.systemPrompt);
+        }
+        if (args?.workspacePath !== void 0) {
+          agentData.workspacePath = String(args.workspacePath).trim();
+        }
+        if (args?.providerId !== void 0) {
+          agentData.providerId = String(args.providerId).trim();
+        }
+        if (args?.model !== void 0) {
+          agentData.model = String(args.model).trim();
+        }
+        if (args?.allowedTools !== void 0) {
+          agentData.allowedTools = Array.isArray(args.allowedTools) ? args.allowedTools : [String(args.allowedTools)];
+        }
+        try {
+          const saved = await this.agentManager.createOrUpdateAgent(agentData);
+          let outputMsg = `Successfully ${existing ? "updated" : "created"} agent "${saved.name}" (ID: ${saved.id}).`;
+          if (saved.workspacePath) {
+            outputMsg += ` Workspace: "${saved.workspacePath}".`;
+          }
+          if (scaffoldResult?.fileCreated) {
+            outputMsg += ` Created instruction template at "${scaffoldResult.agentMdPath}".`;
+          }
+          return {
+            success: true,
+            output: outputMsg
+          };
+        } catch (err2) {
+          return {
+            success: false,
+            output: "",
+            error: `Failed to save agent "${id}": ${err2?.message || String(err2)}`
+          };
+        }
+      }
+      default:
+        return {
+          success: false,
+          output: "",
+          error: `Invalid action "${action}". Allowed actions are: create, update, delete, list.`
+        };
+    }
+  }
+};
+
 // src/tools/mcp/bridge-tool.ts
 var McpBridgeTool = class {
   constructor(serverId, serverName, toolSchema, mcpManager) {
@@ -39713,7 +40882,7 @@ var McpBridgeTool = class {
 
 // src/tools/registry.ts
 var ToolRegistry = class {
-  constructor(skillManager, mcpManager, settings) {
+  constructor(skillManager, mcpManager, settings, agentManager) {
     this.tools = /* @__PURE__ */ new Map();
     this.createSkillTool = new CreateSkillTool();
     this.readSkillTool = new ReadSkillTool();
@@ -39721,6 +40890,8 @@ var ToolRegistry = class {
     this.webSearchTool = new WebSearchTool();
     this.fetchWebPageTool = new FetchWebPageTool();
     this.generatePdfTool = new GeneratePdfTool();
+    this.invokeSubagentTool = new InvokeSubagentTool();
+    this.manageAgentsTool = new ManageAgentsTool();
     this.registerTool(new VaultReadFileTool());
     this.registerTool(new VaultCreateFileTool());
     this.registerTool(new VaultPatchFileTool());
@@ -39732,6 +40903,8 @@ var ToolRegistry = class {
     this.registerTool(this.webSearchTool);
     this.registerTool(this.fetchWebPageTool);
     this.registerTool(this.generatePdfTool);
+    this.registerTool(this.invokeSubagentTool);
+    this.registerTool(this.manageAgentsTool);
     if (skillManager) {
       this.setSkillManager(skillManager);
     }
@@ -39740,6 +40913,9 @@ var ToolRegistry = class {
     }
     if (settings) {
       this.setSettings(settings);
+    }
+    if (agentManager) {
+      this.setAgentManager(agentManager);
     }
   }
   setSkillManager(skillManager) {
@@ -39753,6 +40929,14 @@ var ToolRegistry = class {
   setSettings(settings) {
     this.webSearchTool.setSettings(settings);
     this.generatePdfTool.setSettings(settings);
+  }
+  setAgentManager(agentManager) {
+    this.agentManager = agentManager;
+    this.invokeSubagentTool.setAgentManager(agentManager);
+    this.manageAgentsTool.setAgentManager(agentManager);
+  }
+  setSubagentRunner(runner) {
+    this.invokeSubagentTool.setSubagentRunner(runner);
   }
   registerTool(tool) {
     this.tools.set(tool.name, tool);
@@ -39941,7 +41125,7 @@ var SessionManager = class {
   /**
    * Creates a new empty session object.
    */
-  static createNewSession(providerId, model) {
+  static createNewSession(providerId, model, activeAgentId = "main") {
     const id = `session_${Date.now()}`;
     return {
       id,
@@ -39950,13 +41134,14 @@ var SessionManager = class {
       updatedAt: Date.now(),
       messages: [],
       providerId,
-      model
+      model,
+      activeAgentId
     };
   }
 };
 
 // src/utils/mention-helper.ts
-var import_obsidian24 = require("obsidian");
+var import_obsidian26 = require("obsidian");
 var MentionHelper = class {
   /**
    * Returns all searchable files and folders in the Vault for @ autocomplete suggestions.
@@ -39968,7 +41153,7 @@ var MentionHelper = class {
     for (const item of allFiles) {
       if (item.path === "/" || item.path === "")
         continue;
-      const isFolder = item instanceof import_obsidian24.TFolder;
+      const isFolder = item instanceof import_obsidian26.TFolder;
       if (!queryLower || item.name.toLowerCase().includes(queryLower) || item.path.toLowerCase().includes(queryLower)) {
         items.push({
           name: item.name,
@@ -39998,7 +41183,7 @@ var MentionHelper = class {
     for (const match of matches) {
       const targetPath = match[1];
       const item = app.vault.getAbstractFileByPath(targetPath);
-      if (item instanceof import_obsidian24.TFile) {
+      if (item instanceof import_obsidian26.TFile) {
         try {
           const content = await app.vault.read(item);
           attachedBlocks.push(
@@ -40009,9 +41194,9 @@ ${content}
           );
         } catch (e2) {
         }
-      } else if (item instanceof import_obsidian24.TFolder) {
+      } else if (item instanceof import_obsidian26.TFolder) {
         try {
-          const children = item.children.map((c4) => `- ${c4.name} (${c4 instanceof import_obsidian24.TFolder ? "folder" : "file"})`).join("\n");
+          const children = item.children.map((c4) => `- ${c4.name} (${c4 instanceof import_obsidian26.TFolder ? "folder" : "file"})`).join("\n");
           attachedBlocks.push(
             `[Attached Folder: @${item.path}]
 \`\`\`
@@ -40032,8 +41217,8 @@ ${attachedBlocks.join("\n\n")}`;
 };
 
 // src/ui/components/confirmation-modal.ts
-var import_obsidian25 = require("obsidian");
-var ConfirmationModal = class extends import_obsidian25.Modal {
+var import_obsidian27 = require("obsidian");
+var ConfirmationModal = class extends import_obsidian27.Modal {
   constructor(app, toolCall, onResult) {
     super(app);
     this.toolCall = toolCall;
@@ -40049,7 +41234,7 @@ var ConfirmationModal = class extends import_obsidian25.Modal {
     });
     const codeBlock = contentEl.createEl("pre");
     codeBlock.createEl("code", { text: this.toolCall.function.arguments });
-    new import_obsidian25.Setting(contentEl).addButton(
+    new import_obsidian27.Setting(contentEl).addButton(
       (btn) => btn.setButtonText("Deny").onClick(() => {
         this.onResult(false);
         this.close();
@@ -40068,8 +41253,8 @@ var ConfirmationModal = class extends import_obsidian25.Modal {
 };
 
 // src/ui/components/sessions-modal.ts
-var import_obsidian26 = require("obsidian");
-var SessionsModal = class extends import_obsidian26.Modal {
+var import_obsidian28 = require("obsidian");
+var SessionsModal = class extends import_obsidian28.Modal {
   constructor(app, sessions, currentSessionId, onSelect, onDelete, onNewSession) {
     super(app);
     this.sessions = [...sessions];
@@ -40086,7 +41271,7 @@ var SessionsModal = class extends import_obsidian26.Modal {
     contentEl.empty();
     contentEl.addClass("harness-modal-content");
     contentEl.createEl("h2", { text: "Chat Sessions" });
-    const topSetting = new import_obsidian26.Setting(contentEl).setName("New Conversation").setDesc("Start a fresh agent harness session");
+    const topSetting = new import_obsidian28.Setting(contentEl).setName("New Conversation").setDesc("Start a fresh agent harness session");
     topSetting.addButton((btn) => {
       btn.setButtonText("+ New Session");
       btn.setCta();
@@ -40150,7 +41335,7 @@ var SessionsModal = class extends import_obsidian26.Modal {
       actionsEl.style.display = "flex";
       actionsEl.style.gap = "4px";
       const delBtn = actionsEl.createEl("button", { cls: "harness-btn-icon-round" });
-      (0, import_obsidian26.setIcon)(delBtn, "trash");
+      (0, import_obsidian28.setIcon)(delBtn, "trash");
       delBtn.setAttribute("aria-label", "Delete session");
       delBtn.setAttribute("title", "Delete session");
       delBtn.addEventListener("click", (e2) => {
@@ -40168,7 +41353,7 @@ var SessionsModal = class extends import_obsidian26.Modal {
 
 // src/ui/chat-view.ts
 var HARNESS_VIEW_TYPE = "harness-chat-view";
-var HarnessChatView = class extends import_obsidian27.ItemView {
+var HarnessChatView = class extends import_obsidian29.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.isInputExpanded = false;
@@ -40178,7 +41363,7 @@ var HarnessChatView = class extends import_obsidian27.ItemView {
     this.currentAbortController = null;
     this.plugin = plugin;
     this.toolRegistry = this.plugin.toolRegistry || new ToolRegistry(this.plugin.skillManager, this.plugin.mcpManager, this.plugin.settings);
-    this.agentHarness = new AgentHarness(this.app, this.plugin.settings, this.toolRegistry);
+    this.agentHarness = new AgentHarness(this.app, this.plugin.settings, this.toolRegistry, this.plugin.agentManager);
     this.exporter = new MarkdownExporter(this.app);
     this.initSession();
   }
@@ -40191,12 +41376,16 @@ var HarnessChatView = class extends import_obsidian27.ItemView {
     if (!existing) {
       existing = SessionManager.createNewSession(
         this.plugin.settings.activeProviderId || "openrouter",
-        this.plugin.settings.activeModel || ""
+        this.plugin.settings.activeModel || "",
+        this.plugin.settings.activeAgentId || "main"
       );
       this.plugin.settings.sessions.unshift(existing);
       this.plugin.settings.currentSessionId = existing.id;
     }
     this.currentSession = existing;
+    if (!this.currentSession.activeAgentId) {
+      this.currentSession.activeAgentId = this.plugin.settings.activeAgentId || "main";
+    }
   }
   getViewType() {
     return HARNESS_VIEW_TYPE;
@@ -40207,54 +41396,118 @@ var HarnessChatView = class extends import_obsidian27.ItemView {
   getIcon() {
     return "bot";
   }
+  refreshAgentDropdown() {
+    if (!this.agentSelectEl)
+      return;
+    this.agentSelectEl.empty();
+    const agents = this.plugin.agentManager ? this.plugin.agentManager.getAllAgents() : [];
+    if (agents.length === 0) {
+      this.agentSelectEl.createEl("option", {
+        value: "main",
+        text: "\u{1F916} Main Agent"
+      });
+    } else {
+      for (const agent of agents) {
+        this.agentSelectEl.createEl("option", {
+          value: agent.id,
+          text: agent.isDefaultMain || agent.id === "main" ? `\u{1F916} ${agent.name}` : `\u{1F464} ${agent.name}`
+        });
+      }
+    }
+    const currentActiveId = this.currentSession?.activeAgentId || this.plugin.settings.activeAgentId || "main";
+    const found = agents.find((a3) => a3.id === currentActiveId);
+    if (found) {
+      this.agentSelectEl.value = found.id;
+    } else if (agents.length > 0) {
+      this.agentSelectEl.value = agents[0].id;
+    } else {
+      this.agentSelectEl.value = "main";
+    }
+    const activeAgent = this.plugin.agentManager ? this.plugin.agentManager.getActiveAgent(this.agentSelectEl.value) : void 0;
+    if (this.agentIconEl) {
+      (0, import_obsidian29.setIcon)(this.agentIconEl, !activeAgent || activeAgent.isDefaultMain || activeAgent.id === "main" ? "bot" : "user");
+    }
+    this.updateWorkspaceBadge(activeAgent);
+  }
+  updateWorkspaceBadge(agent) {
+    if (!this.workspaceBadgeEl)
+      return;
+    if (agent && agent.workspacePath && agent.workspacePath.trim().length > 0) {
+      const cleanPath = agent.workspacePath.trim();
+      this.workspaceBadgeEl.setText(`\u{1F4C1} ${cleanPath}`);
+      this.workspaceBadgeEl.setAttribute("title", `Workspace Scope: ${cleanPath}`);
+      this.workspaceBadgeEl.style.display = "inline-flex";
+    } else {
+      this.workspaceBadgeEl.setText("");
+      this.workspaceBadgeEl.removeAttribute("title");
+      this.workspaceBadgeEl.style.display = "none";
+    }
+  }
   async onOpen() {
     const container = this.containerEl.children[1];
     container.empty();
     container.addClass("harness-chat-container");
     const headerEl = container.createEl("div", { cls: "harness-chat-header" });
     const titleEl = headerEl.createEl("div", { cls: "harness-title-container" });
-    titleEl.style.display = "flex";
-    titleEl.style.alignItems = "center";
-    titleEl.style.gap = "6px";
-    const botIconEl = titleEl.createEl("span");
-    (0, import_obsidian27.setIcon)(botIconEl, "bot");
-    titleEl.createEl("span", { text: "Harness Bot", cls: "harness-title" });
+    const agentSelectContainer = titleEl.createEl("div", { cls: "harness-agent-select-container" });
+    this.agentIconEl = agentSelectContainer.createEl("span", { cls: "harness-agent-icon" });
+    (0, import_obsidian29.setIcon)(this.agentIconEl, "bot");
+    this.agentSelectEl = agentSelectContainer.createEl("select", { cls: "dropdown harness-agent-select" });
+    this.agentSelectEl.setAttribute("aria-label", "Select Active Agent");
+    this.agentSelectEl.addEventListener("change", async () => {
+      const val = this.agentSelectEl?.value || "main";
+      const selectedAgent = this.plugin.agentManager ? this.plugin.agentManager.getAgent(val) : void 0;
+      this.currentSession.activeAgentId = selectedAgent ? selectedAgent.id : "main";
+      this.plugin.settings.activeAgentId = this.currentSession.activeAgentId;
+      if (this.agentIconEl) {
+        (0, import_obsidian29.setIcon)(this.agentIconEl, !selectedAgent || selectedAgent.isDefaultMain || selectedAgent.id === "main" ? "bot" : "user");
+      }
+      if (selectedAgent?.model) {
+        this.currentSession.model = selectedAgent.model;
+        this.refreshModelDropdown();
+      }
+      this.updateWorkspaceBadge(selectedAgent);
+      await this.saveSessionState();
+    });
+    this.workspaceBadgeEl = titleEl.createEl("span", { cls: "harness-workspace-badge" });
+    this.workspaceBadgeEl.style.display = "none";
+    this.refreshAgentDropdown();
     const headerActionsEl = headerEl.createEl("div", { cls: "harness-chat-header-actions" });
     const newSessionBtn = headerActionsEl.createEl("button", { cls: "clickable-icon" });
     newSessionBtn.setAttribute("aria-label", "New Session");
     newSessionBtn.setAttribute("title", "New Session");
-    (0, import_obsidian27.setIcon)(newSessionBtn, "plus");
+    (0, import_obsidian29.setIcon)(newSessionBtn, "plus");
     newSessionBtn.addEventListener("click", () => {
       this.createNewSession();
     });
     const sessionsBtn = headerActionsEl.createEl("button", { cls: "clickable-icon" });
     sessionsBtn.setAttribute("aria-label", "View Saved Sessions (/sessions)");
     sessionsBtn.setAttribute("title", "View Saved Sessions (/sessions)");
-    (0, import_obsidian27.setIcon)(sessionsBtn, "history");
+    (0, import_obsidian29.setIcon)(sessionsBtn, "history");
     sessionsBtn.addEventListener("click", () => {
       this.openSessionsModal();
     });
     const skillsBtn = headerActionsEl.createEl("button", { cls: "clickable-icon" });
     skillsBtn.setAttribute("aria-label", "Manage Skills (/skills)");
     skillsBtn.setAttribute("title", "Manage Skills (/skills)");
-    (0, import_obsidian27.setIcon)(skillsBtn, "zap");
+    (0, import_obsidian29.setIcon)(skillsBtn, "zap");
     skillsBtn.addEventListener("click", () => {
       new SkillsModal(this.app, this.plugin).open();
     });
     const mcpBtn = headerActionsEl.createEl("button", { cls: "clickable-icon" });
     mcpBtn.setAttribute("aria-label", "Manage MCP Servers (/mcp)");
     mcpBtn.setAttribute("title", "Manage MCP Servers (/mcp)");
-    (0, import_obsidian27.setIcon)(mcpBtn, "server");
+    (0, import_obsidian29.setIcon)(mcpBtn, "server");
     mcpBtn.addEventListener("click", () => {
       new McpModal(this.app, this.plugin).open();
     });
     const exportBtn = headerActionsEl.createEl("button", { cls: "clickable-icon" });
     exportBtn.setAttribute("aria-label", "Export Chat to Markdown (/export)");
     exportBtn.setAttribute("title", "Export Chat to Markdown (/export)");
-    (0, import_obsidian27.setIcon)(exportBtn, "upload");
+    (0, import_obsidian29.setIcon)(exportBtn, "upload");
     exportBtn.addEventListener("click", async () => {
       if (this.currentSession.messages.length === 0) {
-        new import_obsidian27.Notice("No chat history to export.");
+        new import_obsidian29.Notice("No chat history to export.");
         return;
       }
       try {
@@ -40262,15 +41515,15 @@ var HarnessChatView = class extends import_obsidian27.ItemView {
           this.currentSession.messages,
           this.currentSession.model || this.plugin.settings.activeModel || "default"
         );
-        new import_obsidian27.Notice(`Chat exported to ${exportedPath}`);
+        new import_obsidian29.Notice(`Chat exported to ${exportedPath}`);
       } catch (e2) {
-        new import_obsidian27.Notice(`Export failed: ${e2.message}`);
+        new import_obsidian29.Notice(`Export failed: ${e2.message}`);
       }
     });
     const clearBtn = headerActionsEl.createEl("button", { cls: "clickable-icon" });
     clearBtn.setAttribute("aria-label", "Clear Messages in Session (/clear)");
     clearBtn.setAttribute("title", "Clear Messages in Session (/clear)");
-    (0, import_obsidian27.setIcon)(clearBtn, "trash");
+    (0, import_obsidian29.setIcon)(clearBtn, "trash");
     clearBtn.addEventListener("click", async () => {
       this.currentSession.messages = [];
       await this.saveSessionState();
@@ -40290,7 +41543,7 @@ var HarnessChatView = class extends import_obsidian27.ItemView {
     this.expandBtnEl.setAttribute("aria-label", "Expand to full view");
     this.expandBtnEl.setAttribute("title", "Expand to full view");
     this.expandBtnEl.style.display = "none";
-    (0, import_obsidian27.setIcon)(this.expandBtnEl, "maximize-2");
+    (0, import_obsidian29.setIcon)(this.expandBtnEl, "maximize-2");
     this.expandBtnEl.addEventListener("click", () => {
       this.toggleInputExpand();
     });
@@ -40312,7 +41565,7 @@ var HarnessChatView = class extends import_obsidian27.ItemView {
         this.currentAbortController.abort();
         this.currentAbortController = null;
         this.setSendButtonState(false);
-        new import_obsidian27.Notice("Generation stopped.");
+        new import_obsidian29.Notice("Generation stopped.");
         return;
       }
       const text2 = this.inputTextAreaEl.value.trim();
@@ -40356,12 +41609,34 @@ var HarnessChatView = class extends import_obsidian27.ItemView {
         this.resetTextareaHeight();
         new McpModal(this.app, this.plugin).open();
         return;
+      } else if (text2 === "/agents" || text2 === "/agent" || text2.startsWith("/agents ") || text2.startsWith("/agent ")) {
+        const agentQuery = text2.replace(/^\/agents?\s*/, "").trim();
+        this.inputTextAreaEl.value = "";
+        this.hideSuggest();
+        this.resetTextareaHeight();
+        if (agentQuery && this.plugin.agentManager) {
+          const targetAgent = this.plugin.agentManager.getAgent(agentQuery);
+          if (targetAgent) {
+            this.currentSession.activeAgentId = targetAgent.id;
+            this.plugin.settings.activeAgentId = targetAgent.id;
+            if (targetAgent.model) {
+              this.currentSession.model = targetAgent.model;
+              this.refreshModelDropdown();
+            }
+            this.refreshAgentDropdown();
+            await this.saveSessionState();
+            new import_obsidian29.Notice(`Switched to agent: ${targetAgent.name}`);
+            return;
+          }
+        }
+        this.openAgentsSettings();
+        return;
       }
       const activeProv = this.plugin.settings.providers.find(
         (p3) => p3.id === this.plugin.settings.activeProviderId
       );
       if (!activeProv) {
-        new import_obsidian27.Notice("Please configure and select an AI provider in Settings first.");
+        new import_obsidian29.Notice("Please configure and select an AI provider in Settings first.");
         return;
       }
       this.inputTextAreaEl.value = "";
@@ -40396,20 +41671,30 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
       this.currentSession.updatedAt = Date.now();
       await this.saveSessionState();
       this.renderMessages();
+      const activeAgent = this.plugin.agentManager ? this.plugin.agentManager.getActiveAgent(this.currentSession.activeAgentId) : {
+        id: "main",
+        name: "Main Agent",
+        description: "",
+        systemPrompt: "",
+        isDefaultMain: true,
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      };
       const streamingMsgEl = this.messagesContainerEl.createEl("div", {
         cls: "harness-message harness-message-assistant"
       });
       const streamHeaderEl = streamingMsgEl.createEl("div", {
         cls: "harness-message-header"
       });
+      const currentModel = this.currentSession.model || this.plugin.settings.activeModel;
       streamHeaderEl.createSpan({
-        text: `Harness Bot (${this.currentSession.model || this.plugin.settings.activeModel})`,
+        text: `${activeAgent.name} (${currentModel})`,
         cls: "harness-message-header-title"
       });
       const streamCopyBtn = streamHeaderEl.createEl("button", { cls: "harness-msg-copy-btn" });
       streamCopyBtn.setAttribute("aria-label", "Copy response");
       streamCopyBtn.setAttribute("title", "Copy response");
-      (0, import_obsidian27.setIcon)(streamCopyBtn, "copy");
+      (0, import_obsidian29.setIcon)(streamCopyBtn, "copy");
       streamCopyBtn.addEventListener("click", (e2) => {
         e2.stopPropagation();
         const currentText = textContentEl.innerText || "";
@@ -40446,7 +41731,8 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
           this.plugin.settings.activeProviderId,
           this.currentSession.model || this.plugin.settings.activeModel,
           this.currentAbortController.signal,
-          extraSystemDirectives
+          extraSystemDirectives,
+          activeAgent
         );
         this.currentSession.messages = updatedHistory;
         this.currentSession.updatedAt = Date.now();
@@ -40455,7 +41741,7 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
         if (err2.message && err2.message.includes("stopped")) {
           textContentEl.setText(textContentEl.innerText + " [Stopped]");
         } else {
-          new import_obsidian27.Notice(`Agent error: ${err2.message}`);
+          new import_obsidian29.Notice(`Agent error: ${err2.message}`);
           textContentEl.setText(`Error: ${err2.message}`);
         }
       } finally {
@@ -40509,15 +41795,15 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
   async copyToClipboard(text2, btnEl, noticeText) {
     try {
       await navigator.clipboard.writeText(text2);
-      (0, import_obsidian27.setIcon)(btnEl, "check");
+      (0, import_obsidian29.setIcon)(btnEl, "check");
       btnEl.addClass("is-copied");
-      new import_obsidian27.Notice(noticeText);
+      new import_obsidian29.Notice(noticeText);
       setTimeout(() => {
-        (0, import_obsidian27.setIcon)(btnEl, "copy");
+        (0, import_obsidian29.setIcon)(btnEl, "copy");
         btnEl.removeClass("is-copied");
       }, 2e3);
     } catch (e2) {
-      new import_obsidian27.Notice("Failed to copy to clipboard");
+      new import_obsidian29.Notice("Failed to copy to clipboard");
     }
   }
   enhanceCodeBlocksWithCopyButton(containerEl) {
@@ -40535,7 +41821,7 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
       });
       copyBtn.setAttribute("aria-label", "Copy code");
       copyBtn.setAttribute("title", "Copy code");
-      (0, import_obsidian27.setIcon)(copyBtn, "copy");
+      (0, import_obsidian29.setIcon)(copyBtn, "copy");
       copyBtn.addEventListener("click", (e2) => {
         e2.preventDefault();
         e2.stopPropagation();
@@ -40552,13 +41838,13 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
     const summaryEl = detailsEl.createEl("summary", { cls: "harness-collapsible-summary" });
     const leftEl = summaryEl.createEl("div", { cls: "harness-collapsible-summary-left" });
     const iconSpan = leftEl.createEl("span");
-    (0, import_obsidian27.setIcon)(iconSpan, "sparkles");
+    (0, import_obsidian29.setIcon)(iconSpan, "sparkles");
     leftEl.createEl("span", { text: "Reasoning / \u0420\u0430\u0441\u0441\u0443\u0436\u0434\u0435\u043D\u0438\u044F" });
     const rightEl = summaryEl.createEl("div", { cls: "harness-collapsible-summary-right" });
     const copyBtn = rightEl.createEl("button", { cls: "harness-tool-copy-btn" });
     copyBtn.setAttribute("aria-label", "Copy reasoning");
     copyBtn.setAttribute("title", "Copy reasoning");
-    (0, import_obsidian27.setIcon)(copyBtn, "copy");
+    (0, import_obsidian29.setIcon)(copyBtn, "copy");
     copyBtn.addEventListener("click", (e2) => {
       e2.preventDefault();
       e2.stopPropagation();
@@ -40566,7 +41852,7 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
     });
     rightEl.createEl("span", { text: "View", cls: "harness-collapsible-badge" });
     const bodyEl = detailsEl.createEl("div", { cls: "harness-collapsible-body harness-thinking-text" });
-    await import_obsidian27.MarkdownRenderer.render(this.app, thoughtText, bodyEl, "", this);
+    await import_obsidian29.MarkdownRenderer.render(this.app, thoughtText, bodyEl, "", this);
     this.enhanceCodeBlocksWithCopyButton(bodyEl);
   }
   formatContentForCard(rawStr) {
@@ -40586,13 +41872,13 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
     const summaryEl = detailsEl.createEl("summary", { cls: "harness-collapsible-summary" });
     const leftEl = summaryEl.createEl("div", { cls: "harness-collapsible-summary-left" });
     const iconSpan = leftEl.createEl("span");
-    (0, import_obsidian27.setIcon)(iconSpan, "wrench");
+    (0, import_obsidian29.setIcon)(iconSpan, "wrench");
     leftEl.createEl("span", { text: `Tool: ${toolName}` });
     const rightEl = summaryEl.createEl("div", { cls: "harness-collapsible-summary-right" });
     const copyBtn = rightEl.createEl("button", { cls: "harness-tool-copy-btn" });
     copyBtn.setAttribute("aria-label", "Copy tool arguments");
     copyBtn.setAttribute("title", "Copy tool arguments");
-    (0, import_obsidian27.setIcon)(copyBtn, "copy");
+    (0, import_obsidian29.setIcon)(copyBtn, "copy");
     copyBtn.addEventListener("click", (e2) => {
       e2.preventDefault();
       e2.stopPropagation();
@@ -40612,13 +41898,13 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
     const summaryEl = detailsEl.createEl("summary", { cls: "harness-collapsible-summary" });
     const leftEl = summaryEl.createEl("div", { cls: "harness-collapsible-summary-left" });
     const iconSpan = leftEl.createEl("span");
-    (0, import_obsidian27.setIcon)(iconSpan, "file-text");
+    (0, import_obsidian29.setIcon)(iconSpan, "file-text");
     leftEl.createEl("span", { text: `Output: ${toolName}` });
     const rightEl = summaryEl.createEl("div", { cls: "harness-collapsible-summary-right" });
     const copyBtn = rightEl.createEl("button", { cls: "harness-tool-copy-btn" });
     copyBtn.setAttribute("aria-label", "Copy tool output");
     copyBtn.setAttribute("title", "Copy tool output");
-    (0, import_obsidian27.setIcon)(copyBtn, "copy");
+    (0, import_obsidian29.setIcon)(copyBtn, "copy");
     copyBtn.addEventListener("click", (e2) => {
       e2.preventDefault();
       e2.stopPropagation();
@@ -40651,14 +41937,14 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
     this.isInputExpanded = !this.isInputExpanded;
     if (this.isInputExpanded) {
       this.inputAreaEl.addClass("is-expanded");
-      (0, import_obsidian27.setIcon)(this.expandBtnEl, "minimize-2");
+      (0, import_obsidian29.setIcon)(this.expandBtnEl, "minimize-2");
       this.expandBtnEl.setAttribute("aria-label", "Restore compact view");
       this.expandBtnEl.setAttribute("title", "Restore compact view");
       this.expandBtnEl.style.display = "flex";
       this.inputTextAreaEl.focus();
     } else {
       this.inputAreaEl.removeClass("is-expanded");
-      (0, import_obsidian27.setIcon)(this.expandBtnEl, "maximize-2");
+      (0, import_obsidian29.setIcon)(this.expandBtnEl, "maximize-2");
       this.expandBtnEl.setAttribute("aria-label", "Expand to full view");
       this.expandBtnEl.setAttribute("title", "Expand to full view");
       this.autoResizeTextarea();
@@ -40670,13 +41956,13 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
       return;
     this.sendButtonEl.empty();
     if (isGenerating) {
-      (0, import_obsidian27.setIcon)(this.sendButtonEl, "square");
+      (0, import_obsidian29.setIcon)(this.sendButtonEl, "square");
       this.sendButtonEl.addClass("mod-warning");
       this.sendButtonEl.removeClass("mod-cta");
       this.sendButtonEl.setAttribute("aria-label", "Stop generation");
       this.sendButtonEl.setAttribute("title", "Stop generation");
     } else {
-      (0, import_obsidian27.setIcon)(this.sendButtonEl, "send");
+      (0, import_obsidian29.setIcon)(this.sendButtonEl, "send");
       this.sendButtonEl.addClass("mod-cta");
       this.sendButtonEl.removeClass("mod-warning");
       this.sendButtonEl.setAttribute("aria-label", "Send message");
@@ -40728,6 +42014,26 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
           this.hideSuggest();
           this.resetTextareaHeight();
           this.createNewSession();
+        }
+      },
+      {
+        cmd: "/agents",
+        desc: "Manage custom agents & subagents in Settings",
+        action: () => {
+          this.inputTextAreaEl.value = "";
+          this.hideSuggest();
+          this.resetTextareaHeight();
+          this.openAgentsSettings();
+        }
+      },
+      {
+        cmd: "/agent",
+        desc: "Manage custom agents & subagents in Settings",
+        action: () => {
+          this.inputTextAreaEl.value = "";
+          this.hideSuggest();
+          this.resetTextareaHeight();
+          this.openAgentsSettings();
         }
       },
       {
@@ -40833,7 +42139,7 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
       if (index2 === 0)
         itemEl.addClass("is-selected");
       const iconSpan = itemEl.createEl("span", { cls: "harness-suggest-icon" });
-      (0, import_obsidian27.setIcon)(iconSpan, item.isFolder ? "folder" : "file-text");
+      (0, import_obsidian29.setIcon)(iconSpan, item.isFolder ? "folder" : "file-text");
       itemEl.createEl("span", { text: ` ${item.path}` });
       itemEl.addEventListener("click", onSelect);
     });
@@ -40859,10 +42165,37 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
       this.suggestPopupEl.empty();
     }
   }
+  openAgentsSettings() {
+    try {
+      const setting = this.app.setting;
+      if (setting && typeof setting.open === "function") {
+        setting.open();
+        if (this.plugin.manifest?.id && typeof setting.openTabById === "function") {
+          setting.openTabById(this.plugin.manifest.id);
+        }
+      } else {
+        new import_obsidian29.Notice("Please open Settings -> Obsidian Harness Bot to manage agents.");
+      }
+    } catch (e2) {
+      new import_obsidian29.Notice("Please open Settings -> Obsidian Harness Bot to manage agents.");
+    }
+  }
+  async switchSession(session) {
+    this.currentSession = session;
+    this.plugin.settings.currentSessionId = session.id;
+    if (!this.currentSession.activeAgentId) {
+      this.currentSession.activeAgentId = this.plugin.settings.activeAgentId || "main";
+    }
+    await this.saveSessionState();
+    await this.renderMessages();
+    this.refreshModelDropdown();
+    this.refreshAgentDropdown();
+  }
   createNewSession() {
     const newSession = SessionManager.createNewSession(
       this.plugin.settings.activeProviderId || "openrouter",
-      this.plugin.settings.activeModel || ""
+      this.plugin.settings.activeModel || "",
+      this.plugin.settings.activeAgentId || "main"
     );
     this.plugin.settings.sessions.unshift(newSession);
     this.plugin.settings.currentSessionId = newSession.id;
@@ -40870,7 +42203,8 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
     this.saveSessionState();
     this.renderMessages();
     this.refreshModelDropdown();
-    new import_obsidian27.Notice("Started new chat session");
+    this.refreshAgentDropdown();
+    new import_obsidian29.Notice("Started new chat session");
   }
   openSessionsModal() {
     new SessionsModal(
@@ -40880,11 +42214,7 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
       (selectedId) => {
         const found = this.plugin.settings.sessions.find((s3) => s3.id === selectedId);
         if (found) {
-          this.currentSession = found;
-          this.plugin.settings.currentSessionId = found.id;
-          this.saveSessionState();
-          this.renderMessages();
-          this.refreshModelDropdown();
+          this.switchSession(found);
         }
       },
       (deletedId) => {
@@ -40971,11 +42301,7 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
             cls: "setting-item-description"
           });
           itemBtn.addEventListener("click", async () => {
-            this.currentSession = prev;
-            this.plugin.settings.currentSessionId = prev.id;
-            await this.saveSessionState();
-            await this.renderMessages();
-            this.refreshModelDropdown();
+            await this.switchSession(prev);
           });
         }
       }
@@ -40990,19 +42316,21 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
         const copyBtn = headerEl.createEl("button", { cls: "harness-msg-copy-btn" });
         copyBtn.setAttribute("aria-label", "Copy message");
         copyBtn.setAttribute("title", "Copy message");
-        (0, import_obsidian27.setIcon)(copyBtn, "copy");
+        (0, import_obsidian29.setIcon)(copyBtn, "copy");
         copyBtn.addEventListener("click", (e2) => {
           e2.stopPropagation();
           this.copyToClipboard(rawContent, copyBtn, "Message copied to clipboard");
         });
         const bodyEl = msgEl.createEl("div", { cls: "harness-message-body" });
-        await import_obsidian27.MarkdownRenderer.render(this.app, rawContent, bodyEl, "", this);
+        await import_obsidian29.MarkdownRenderer.render(this.app, rawContent, bodyEl, "", this);
         this.enhanceCodeBlocksWithCopyButton(bodyEl);
       } else if (msg.role === "assistant") {
         const msgEl = this.messagesContainerEl.createEl("div", { cls: "harness-message harness-message-assistant" });
         const headerEl = msgEl.createEl("div", { cls: "harness-message-header" });
+        const activeAgent = this.plugin.agentManager ? this.plugin.agentManager.getActiveAgent(this.currentSession.activeAgentId) : void 0;
+        const agentDisplayName = msg.name || activeAgent?.name || "Harness Bot";
         headerEl.createSpan({
-          text: `Harness Bot (${this.currentSession.model || this.plugin.settings.activeModel})`,
+          text: `${agentDisplayName} (${this.currentSession.model || this.plugin.settings.activeModel})`,
           cls: "harness-message-header-title"
         });
         const rawContent = typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content || "");
@@ -41010,7 +42338,7 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
         const copyBtn = headerEl.createEl("button", { cls: "harness-msg-copy-btn" });
         copyBtn.setAttribute("aria-label", "Copy response");
         copyBtn.setAttribute("title", "Copy response");
-        (0, import_obsidian27.setIcon)(copyBtn, "copy");
+        (0, import_obsidian29.setIcon)(copyBtn, "copy");
         copyBtn.addEventListener("click", (e2) => {
           e2.stopPropagation();
           const textToCopy = parsed.finalAnswer || rawContent;
@@ -41029,7 +42357,7 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
         }
         if (parsed.finalAnswer) {
           const answerContainer = bodyEl.createEl("div", { cls: "harness-answer-text" });
-          await import_obsidian27.MarkdownRenderer.render(this.app, parsed.finalAnswer, answerContainer, "", this);
+          await import_obsidian29.MarkdownRenderer.render(this.app, parsed.finalAnswer, answerContainer, "", this);
           this.enhanceCodeBlocksWithCopyButton(answerContainer);
         }
       } else if (msg.role === "tool") {
@@ -41050,10 +42378,10 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
 };
 
 // src/skills/skill-manager.ts
-var import_obsidian29 = require("obsidian");
+var import_obsidian31 = require("obsidian");
 
 // src/skills/git-resolver.ts
-var import_obsidian28 = require("obsidian");
+var import_obsidian30 = require("obsidian");
 
 // src/skills/frontmatter.ts
 function parseSkillContent(rawContent, fallbackId) {
@@ -41168,7 +42496,7 @@ var SkillGitResolver = class {
     let successfulUrl = "";
     for (const candUrl of rawCandidates) {
       try {
-        const res = await (0, import_obsidian28.requestUrl)({ url: candUrl, method: "GET" });
+        const res = await (0, import_obsidian30.requestUrl)({ url: candUrl, method: "GET" });
         if (res.status === 200 && res.text && res.text.trim().length > 0) {
           fetchedContent = res.text;
           successfulUrl = candUrl;
@@ -41535,7 +42863,7 @@ var SkillManager = class {
     this.settings.installedSkills = this.settings.installedSkills.filter((s3) => s3.id !== resolved.id);
     this.settings.installedSkills.push(resolved);
     await this.saveSettingsCallback();
-    new import_obsidian29.Notice(`Skill "${resolved.name}" successfully installed!`);
+    new import_obsidian31.Notice(`Skill "${resolved.name}" successfully installed!`);
     return resolved;
   }
   /**
@@ -41552,7 +42880,7 @@ var SkillManager = class {
       return;
     this.settings.installedSkills = this.settings.installedSkills.filter((s3) => s3.id !== id);
     await this.saveSettingsCallback();
-    new import_obsidian29.Notice(`Skill uninstalled.`);
+    new import_obsidian31.Notice(`Skill uninstalled.`);
   }
   /**
    * Toggles skill enabled status.
@@ -41610,10 +42938,10 @@ ${skill.content}
 };
 
 // src/mcp/mcp-manager.ts
-var import_obsidian32 = require("obsidian");
+var import_obsidian34 = require("obsidian");
 
 // src/mcp/client.ts
-var import_obsidian30 = require("obsidian");
+var import_obsidian32 = require("obsidian");
 function parseJsonSafely(str) {
   try {
     return JSON.parse(str);
@@ -41681,7 +43009,7 @@ var McpClient = class {
       return this.postUrl;
     }
     try {
-      const res = await (0, import_obsidian30.requestUrl)({
+      const res = await (0, import_obsidian32.requestUrl)({
         url: this.url,
         method: "GET",
         headers: { ...this.getHeaders(), "Accept": "text/event-stream, text/plain, */*" },
@@ -41731,7 +43059,7 @@ var McpClient = class {
       body: JSON.stringify(payload),
       throw: false
     };
-    const res = await (0, import_obsidian30.requestUrl)(reqOptions);
+    const res = await (0, import_obsidian32.requestUrl)(reqOptions);
     if (res.status === 401 || res.status === 403) {
       throw new Error(`Authentication error (${res.status}): Please check API Token or OAuth permissions.`);
     }
@@ -41783,7 +43111,7 @@ var McpClient = class {
     });
     try {
       const postEndpoint = await this.discoverEndpoint();
-      await (0, import_obsidian30.requestUrl)({
+      await (0, import_obsidian32.requestUrl)({
         url: postEndpoint,
         method: "POST",
         headers: this.getHeaders(),
@@ -41876,7 +43204,7 @@ var McpClient = class {
 };
 
 // src/mcp/oauth.ts
-var import_obsidian31 = require("obsidian");
+var import_obsidian33 = require("obsidian");
 var McpOAuthHelper = class {
   /**
    * Generates a cryptographically random string for PKCE and state verification.
@@ -41977,7 +43305,7 @@ var McpOAuthHelper = class {
         bodyParams.client_id = pending.clientId;
       }
       const formBody = new URLSearchParams(bodyParams).toString();
-      const response = await (0, import_obsidian31.requestUrl)({
+      const response = await (0, import_obsidian33.requestUrl)({
         url: pending.tokenUrl,
         method: "POST",
         headers: {
@@ -42194,7 +43522,7 @@ var McpManager = class {
     }
     const authUrl = await McpOAuthHelper.startOAuthFlow(server);
     openExternalUrl(authUrl);
-    new import_obsidian32.Notice(`Opening browser for ${server.name} authorization...`);
+    new import_obsidian34.Notice(`Opening browser for ${server.name} authorization...`);
   }
   /**
    * Handles incoming OAuth deep link callback.
@@ -42207,10 +43535,10 @@ var McpManager = class {
         if (server) {
           server.enabled = true;
           await this.testAndSyncServer(result.serverId);
-          new import_obsidian32.Notice(`\u2713 Successfully connected to ${server.name}!`);
+          new import_obsidian34.Notice(`\u2713 Successfully connected to ${server.name}!`);
         }
       } catch (err2) {
-        new import_obsidian32.Notice(`Connected, but tool discovery failed: ${err2.message}`);
+        new import_obsidian34.Notice(`Connected, but tool discovery failed: ${err2.message}`);
       }
     }
     return result;
@@ -42253,14 +43581,252 @@ var McpManager = class {
   }
 };
 
+// src/engine/agent-manager.ts
+var import_obsidian35 = require("obsidian");
+var AgentManager = class {
+  constructor(app, settings, onSaveSettings) {
+    this.app = app;
+    this.settings = settings;
+    this.onSaveSettings = onSaveSettings;
+  }
+  /**
+   * Updates internal settings reference if changed.
+   */
+  setSettings(settings) {
+    this.settings = settings;
+  }
+  /**
+   * Initializes the agents list ensuring the default 'main' agent exists
+   * and an activeAgentId is set.
+   */
+  async init() {
+    if (!this.settings.agents) {
+      this.settings.agents = [];
+    }
+    let modified = false;
+    const hasMain = this.settings.agents.some((a3) => a3.id === "main" || a3.isDefaultMain);
+    if (!hasMain) {
+      const mainAgent = {
+        id: "main",
+        name: "Main Agent",
+        description: "Default autonomous agent with full vault access and orchestration capabilities.",
+        systemPrompt: this.settings.systemPrompt || DEFAULT_MAIN_SYSTEM_PROMPT,
+        workspacePath: "",
+        agentMdFile: "AGENT.md",
+        isDefaultMain: true,
+        allowedTools: ["*"],
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      };
+      this.settings.agents.unshift(mainAgent);
+      modified = true;
+    }
+    if (!this.settings.activeAgentId) {
+      this.settings.activeAgentId = "main";
+      modified = true;
+    }
+    if (modified) {
+      await this.onSaveSettings();
+    }
+  }
+  /**
+   * Looks up an agent by exact ID, case-insensitive ID, or case-insensitive name.
+   */
+  getAgent(idOrName) {
+    if (!idOrName || !this.settings.agents)
+      return void 0;
+    const target = idOrName.trim();
+    const lower = target.toLowerCase();
+    let match = this.settings.agents.find((a3) => a3.id === target);
+    if (match)
+      return match;
+    match = this.settings.agents.find((a3) => a3.id.toLowerCase() === lower);
+    if (match)
+      return match;
+    match = this.settings.agents.find((a3) => a3.name === target);
+    if (match)
+      return match;
+    match = this.settings.agents.find((a3) => a3.name.toLowerCase() === lower);
+    return match;
+  }
+  /**
+   * Returns all configured agents.
+   */
+  getAllAgents() {
+    return this.settings.agents || [];
+  }
+  /**
+   * Returns the main default agent, or the first configured agent.
+   */
+  getDefaultAgent() {
+    const agents = this.getAllAgents();
+    const main = agents.find((a3) => a3.isDefaultMain || a3.id === "main");
+    if (main)
+      return main;
+    if (agents.length > 0)
+      return agents[0];
+    return {
+      id: "main",
+      name: "Main Agent",
+      description: "Default autonomous agent with full vault access and orchestration capabilities.",
+      systemPrompt: DEFAULT_MAIN_SYSTEM_PROMPT,
+      workspacePath: "",
+      agentMdFile: "AGENT.md",
+      isDefaultMain: true,
+      allowedTools: ["*"],
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+  }
+  /**
+   * Returns the active agent for a session or globally, falling back to default agent.
+   */
+  getActiveAgent(sessionAgentId) {
+    if (sessionAgentId) {
+      const agent = this.getAgent(sessionAgentId);
+      if (agent)
+        return agent;
+    }
+    if (this.settings.activeAgentId) {
+      const agent = this.getAgent(this.settings.activeAgentId);
+      if (agent)
+        return agent;
+    }
+    return this.getDefaultAgent();
+  }
+  /**
+   * Upserts an agent in settings.agents, sets timestamps, and persists settings.
+   */
+  async createOrUpdateAgent(agentData) {
+    if (!this.settings.agents) {
+      this.settings.agents = [];
+    }
+    const existingIndex = this.settings.agents.findIndex((a3) => a3.id === agentData.id);
+    const now = Date.now();
+    let finalAgent;
+    if (existingIndex >= 0) {
+      const existing = this.settings.agents[existingIndex];
+      finalAgent = {
+        ...existing,
+        ...agentData,
+        updatedAt: now
+      };
+      this.settings.agents[existingIndex] = finalAgent;
+    } else {
+      finalAgent = {
+        description: "",
+        systemPrompt: "",
+        workspacePath: "",
+        agentMdFile: "AGENT.md",
+        allowedTools: ["*"],
+        isDefaultMain: false,
+        ...agentData,
+        createdAt: now,
+        updatedAt: now
+      };
+      this.settings.agents.push(finalAgent);
+    }
+    await this.onSaveSettings();
+    return finalAgent;
+  }
+  /**
+   * Deletes an agent from settings. Prevents deleting default main agent.
+   */
+  async deleteAgent(id) {
+    if (!this.settings.agents)
+      return false;
+    const agent = this.settings.agents.find((a3) => a3.id === id);
+    if (!agent)
+      return false;
+    if (agent.isDefaultMain || agent.id === "main") {
+      return false;
+    }
+    this.settings.agents = this.settings.agents.filter((a3) => a3.id !== id);
+    if (this.settings.activeAgentId === id) {
+      this.settings.activeAgentId = "main";
+    }
+    await this.onSaveSettings();
+    return true;
+  }
+  /**
+   * Resolves effective system prompt for an agent, augmenting with AGENT.md
+   * instructions if workspacePath is configured and file exists in vault.
+   */
+  async resolveEffectiveSystemPrompt(agent) {
+    let prompt = agent.systemPrompt || "";
+    if (agent.workspacePath && agent.workspacePath.trim().length > 0) {
+      const ws = agent.workspacePath.trim().replace(/^\/+/, "").replace(/\/+$/, "");
+      const mdFileName = (agent.agentMdFile || "AGENT.md").trim().replace(/^\/+/, "");
+      const targetPath = (0, import_obsidian35.normalizePath)(ws ? `${ws}/${mdFileName}` : mdFileName);
+      const file = this.app.vault.getAbstractFileByPath(targetPath);
+      if (file instanceof import_obsidian35.TFile) {
+        try {
+          const agentMdContent = await this.app.vault.cachedRead(file);
+          if (agentMdContent && agentMdContent.trim().length > 0) {
+            prompt += `
+
+# Agent Workspace Instructions (${targetPath}):
+${agentMdContent}`;
+          }
+        } catch (err2) {
+          console.warn(`Failed to read agent instructions file at ${targetPath}:`, err2);
+        }
+      }
+    }
+    return prompt;
+  }
+  /**
+   * Scaffolds the workspace directory hierarchy and initial AGENT.md instruction file if missing.
+   */
+  async scaffoldWorkspace(workspacePath, agentMdContent, agentName) {
+    const cleanWorkspace = workspacePath.trim().replace(/^\/+/, "").replace(/\/+$/, "");
+    let folderCreated = false;
+    if (cleanWorkspace.length > 0) {
+      const parts = cleanWorkspace.split("/").filter(Boolean);
+      let currentPath = "";
+      for (const part of parts) {
+        currentPath = currentPath ? `${currentPath}/${part}` : part;
+        const existing = this.app.vault.getAbstractFileByPath(currentPath);
+        if (!existing) {
+          try {
+            await this.app.vault.createFolder(currentPath);
+            folderCreated = true;
+          } catch (err2) {
+            const checkAgain = this.app.vault.getAbstractFileByPath(currentPath);
+            if (!checkAgain) {
+              throw err2;
+            }
+          }
+        }
+      }
+    }
+    const agentMdPath = (0, import_obsidian35.normalizePath)(cleanWorkspace ? `${cleanWorkspace}/AGENT.md` : "AGENT.md");
+    let fileCreated = false;
+    const existingFile = this.app.vault.getAbstractFileByPath(agentMdPath);
+    if (!existingFile) {
+      const name = agentName || (cleanWorkspace ? cleanWorkspace.split("/").pop() : "Custom Agent") || "Agent";
+      const content = agentMdContent ?? `# ${name} Instructions
+
+Write specialized instructions, objectives, constraints, and custom workflows for this agent here.`;
+      await this.app.vault.create(agentMdPath, content);
+      fileCreated = true;
+    }
+    return { folderCreated, fileCreated, agentMdPath };
+  }
+};
+
 // src/main.ts
-var HarnessPlugin = class extends import_obsidian33.Plugin {
+var HarnessPlugin = class extends import_obsidian36.Plugin {
   constructor() {
     super(...arguments);
     this.settings = DEFAULT_SETTINGS;
   }
   async onload() {
     await this.loadSettings();
+    this.agentManager = new AgentManager(this.app, this.settings, async () => {
+      await this.saveSettings();
+    });
+    await this.agentManager.init();
     this.skillManager = new SkillManager(this.app, this.settings, async () => {
       await this.saveSettings();
     });
@@ -42269,7 +43835,8 @@ var HarnessPlugin = class extends import_obsidian33.Plugin {
       await this.saveSettings();
     });
     await this.mcpManager.init();
-    this.toolRegistry = new ToolRegistry(this.skillManager, this.mcpManager, this.settings);
+    this.toolRegistry = new ToolRegistry(this.skillManager, this.mcpManager, this.settings, this.agentManager);
+    this.toolRegistry.setAgentManager(this.agentManager);
     this.registerObsidianProtocolHandler("oh-bot-mcp-auth", async (params) => {
       await this.mcpManager.handleOAuthCallback(params);
     });
@@ -42330,11 +43897,17 @@ var HarnessPlugin = class extends import_obsidian33.Plugin {
     if (this.settings.systemPrompt === legacyDefaultPrompt) {
       this.settings.systemPrompt = DEFAULT_SETTINGS.systemPrompt;
     }
+    if (this.agentManager) {
+      this.agentManager.setSettings(this.settings);
+    }
   }
   async saveSettings() {
     await this.saveData(this.settings);
     if (this.toolRegistry) {
       this.toolRegistry.setSettings(this.settings);
+    }
+    if (this.agentManager) {
+      this.agentManager.setSettings(this.settings);
     }
   }
 };

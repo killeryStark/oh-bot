@@ -21,7 +21,7 @@ export class SessionManager {
   /**
    * Creates a new empty session object.
    */
-  static createNewSession(providerId: string, model: string): ChatSession {
+  static createNewSession(providerId: string, model: string, activeAgentId: string = 'main'): ChatSession {
     const id = `session_${Date.now()}`;
     return {
       id,
@@ -31,6 +31,7 @@ export class SessionManager {
       messages: [],
       providerId,
       model,
+      activeAgentId,
     };
   }
 }
