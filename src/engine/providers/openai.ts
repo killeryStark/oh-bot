@@ -1,4 +1,4 @@
-import { LLMProvider, ProviderResponse } from './base';
+import { CompletionOptions, LLMProvider, ProviderResponse } from './base';
 import { LLMMessage, ToolCall, ToolSchema } from '../../types';
 import { prepareNetworkPayloadMessages, sortToolSchemasDeterministically } from '../../utils/cache-helpers';
 import { SSEStreamParser } from '../stream-parser';
@@ -15,7 +15,8 @@ export class OpenAIProvider extends LLMProvider {
     messages: LLMMessage[],
     tools: ToolSchema[],
     onChunk?: (chunk: string) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    options?: CompletionOptions
   ): Promise<ProviderResponse> {
     const endpoint = (baseUrl || 'https://api.openai.com/v1').replace(/\/$/, '') + '/chat/completions';
     const sortedTools = sortToolSchemasDeterministically(tools);
@@ -40,6 +41,10 @@ export class OpenAIProvider extends LLMProvider {
       messages: formattedMessages,
       stream: true,
     };
+
+    if (options?.reasoningEffort && options.reasoningEffort !== 'default' && options.reasoningEffort !== 'none') {
+      payload.reasoning_effort = options.reasoningEffort;
+    }
 
     if (formattedTools.length > 0) {
       payload.tools = formattedTools;

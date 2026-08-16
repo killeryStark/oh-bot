@@ -556,8 +556,8 @@
 .harness-chat-input-area {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding-top: 8px;
+  gap: 8px;
+  padding: 6px 12px 10px 12px;
   border-top: 1px solid var(--background-modifier-border);
   position: relative;
   background-color: var(--background-primary);
@@ -582,6 +582,111 @@
   flex-direction: column !important;
 }
 
+/* Rounded Input Card Box */
+.harness-input-card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 12px;
+  background-color: var(--background-primary-alt, var(--background-secondary));
+  padding: 8px 10px 8px 12px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  position: relative;
+}
+
+.harness-input-card:focus-within {
+  border-color: var(--interactive-accent);
+  box-shadow: 0 0 0 1px var(--interactive-accent-transparent, rgba(120, 100, 240, 0.2));
+}
+
+.harness-input-card.is-drag-over {
+  border-color: var(--interactive-accent) !important;
+  background-color: var(--background-modifier-hover) !important;
+  outline: 2px dashed var(--interactive-accent);
+}
+
+/* Attachments Tray & Chips */
+.harness-attachments-tray {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-bottom: 6px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.harness-attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background-color: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  font-size: 0.8em;
+  max-width: 220px;
+}
+
+.harness-attachment-thumb {
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.harness-attachment-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.harness-attachment-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.harness-attachment-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.harness-attachment-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+  color: var(--text-normal);
+}
+
+.harness-attachment-size {
+  font-size: 0.8em;
+  color: var(--text-muted);
+}
+
+.harness-attachment-remove {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  margin-left: 2px;
+}
+
+.harness-attachment-remove:hover {
+  color: var(--text-normal);
+  background-color: var(--background-modifier-hover);
+}
+
 .harness-textarea-wrapper {
   position: relative;
   width: 100%;
@@ -597,15 +702,25 @@
 
 .harness-chat-textarea {
   width: 100%;
-  min-height: 48px;
+  min-height: 44px;
   max-height: 160px;
-  line-height: 1.4;
-  border-radius: 6px;
-  padding: 8px 30px 8px 10px;
+  line-height: 1.45;
+  border: none !important;
+  outline: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 4px 28px 4px 0;
   box-sizing: border-box;
-  font-size: 0.9em;
+  font-size: 0.92em;
   resize: none;
   overflow-y: auto;
+  color: var(--text-normal);
+}
+
+.harness-chat-textarea:focus {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 .harness-chat-textarea::placeholder,
@@ -627,8 +742,8 @@
 
 .harness-expand-btn {
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: 2px;
+  right: 2px;
   width: 24px !important;
   height: 24px !important;
   min-width: 24px !important;
@@ -648,12 +763,117 @@
   background: var(--background-modifier-hover);
 }
 
-.harness-chat-bottom-row {
+/* Card Bottom Controls inside Card (+ and ↑) */
+.harness-input-card-bottom {
   display: flex;
+  align-items: center;
   justify-content: space-between;
+  padding-top: 4px;
+}
+
+.harness-attach-btn {
+  width: 28px !important;
+  height: 28px !important;
+  min-width: 28px !important;
+  padding: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 6px !important;
+  background: transparent !important;
+  border: none !important;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.harness-attach-btn:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover) !important;
+}
+
+.harness-attach-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.harness-send-btn {
+  width: 30px !important;
+  height: 30px !important;
+  min-width: 30px !important;
+  padding: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 8px !important;
+  background: var(--interactive-accent) !important;
+  color: var(--text-on-accent) !important;
+  border: none !important;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.harness-send-btn:hover {
+  opacity: 0.9;
+  transform: scale(1.03);
+}
+
+.harness-send-btn.is-generating {
+  background: var(--text-error, #e53935) !important;
+}
+
+.harness-send-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Bottom Toolbar (Agent, Model, Effort) */
+.harness-bottom-toolbar {
+  display: flex;
   align-items: center;
   gap: 8px;
-  width: 100%;
+  flex-wrap: wrap;
+  padding: 0 2px;
+}
+
+.harness-agent-select-container {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+}
+
+.harness-agent-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-muted);
+}
+
+.harness-agent-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.harness-agent-select {
+  font-size: 0.82em;
+  font-weight: 500;
+  background: transparent;
+  border: none;
+  color: var(--text-normal);
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+  outline: none;
+}
+
+.harness-agent-select:hover {
+  background: var(--background-modifier-hover);
+}
+
+.harness-model-select-wrapper {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
 }
 
 .harness-model-select {
@@ -666,38 +886,45 @@
   border-radius: 6px;
 }
 
-/* Searchable Model Select */
+/* Searchable Model Select Trigger */
 .harness-model-select-trigger {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  flex: 1;
-  min-width: 0;
-  height: 32px;
-  padding: 0 10px;
-  background-color: var(--background-modifier-form-field);
-  border: 1px solid var(--background-modifier-border);
+  gap: 5px;
+  background: transparent;
+  border: none;
+  padding: 4px 6px;
   border-radius: 6px;
   color: var(--text-normal);
   font-size: 0.82em;
+  font-weight: 500;
   cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: background-color 0.15s ease;
 }
 
 .harness-model-select-trigger:hover {
-  border-color: var(--background-modifier-border-hover);
-  background-color: var(--background-modifier-hover);
+  background: var(--background-modifier-hover);
 }
 
 .harness-model-select-trigger:focus-visible,
 .harness-model-select-trigger.is-open {
-  border-color: var(--interactive-accent);
-  box-shadow: 0 0 0 2px var(--interactive-accent-transparent, rgba(120, 100, 240, 0.2));
+  background: var(--background-modifier-hover);
   outline: 2px solid var(--interactive-accent);
   outline-offset: 2px;
+}
+
+.harness-model-select-model-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.harness-model-select-model-icon svg {
+  width: 14px;
+  height: 14px;
 }
 
 .harness-model-select-label {
@@ -724,6 +951,32 @@
 .harness-model-select-icon svg {
   width: 14px;
   height: 14px;
+}
+
+/* Reasoning Effort Selector Pill */
+.harness-effort-select-container {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 8px;
+  background-color: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  padding: 2px 6px;
+  transition: border-color 0.15s ease;
+}
+
+.harness-effort-select-container:hover {
+  border-color: var(--background-modifier-border-hover);
+}
+
+.harness-effort-select {
+  font-size: 0.82em;
+  font-weight: 500;
+  background: transparent;
+  border: none;
+  color: var(--text-normal);
+  cursor: pointer;
+  padding: 2px 4px;
+  outline: none;
 }
 
 /* Searchable Model Select Popover */
@@ -863,17 +1116,6 @@
   text-align: center;
   color: var(--text-muted);
   font-style: italic;
-}
-
-.harness-send-btn {
-  width: 34px !important;
-  height: 32px !important;
-  min-width: 34px !important;
-  padding: 0 !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  border-radius: 6px !important;
 }
 
 /* Suggestion Popup */

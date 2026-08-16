@@ -16,6 +16,17 @@ import { McpModal } from './mcp-modal';
 
 export const HARNESS_VIEW_TYPE = 'harness-chat-view';
 
+export interface PendingAttachment {
+  id: string;
+  name: string;
+  type: string;
+  size: number;
+  vaultPath: string;
+  isImage: boolean;
+  dataUrl?: string;
+  textContent?: string;
+}
+
 interface SlashCommandItem {
   cmd: string;
   desc: string;
@@ -33,13 +44,17 @@ export class HarnessChatView extends ItemView {
   private inputAreaEl!: HTMLElement;
   private inputTextAreaEl!: HTMLTextAreaElement;
   private expandBtnEl!: HTMLButtonElement;
+  private attachBtnEl!: HTMLButtonElement;
   private sendButtonEl!: HTMLButtonElement;
+  private pendingAttachmentsEl!: HTMLElement;
   private searchableModelSelect!: SearchableModelSelect;
   private suggestPopupEl!: HTMLElement;
   private agentSelectEl?: HTMLSelectElement;
   private agentIconEl?: HTMLElement;
+  private effortSelectEl?: HTMLSelectElement;
   private workspaceBadgeEl?: HTMLElement;
 
+  private pendingAttachments: PendingAttachment[] = [];
   private isInputExpanded = false;
   private activeSuggestType: 'none' | 'slash' | 'mention' = 'none';
   private selectedSuggestIndex = 0;
@@ -130,6 +145,143 @@ export class HarnessChatView extends ItemView {
     this.updateWorkspaceBadge(activeAgent);
   }
 
+  public refreshEffortDropdown(): void {
+    if (!this.effortSelectEl) return;
+    const currentEffort = this.currentSession?.reasoningEffort || this.plugin.settings.defaultReasoningEffort || 'default';
+    this.effortSelectEl.value = currentEffort;
+  }
+
+  private triggerFileInput(): void {
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.multiple = true;
+    fileInput.accept = 'image/*,.pdf,.txt,.md,.json,.js,.ts,.py,.csv,.html,.css,.doc,.docx,.xml,.yaml,.yml';
+    fileInput.style.display = 'none';
+    document.body.appendChild(fileInput);
+
+    fileInput.addEventListener('change', async () => {
+      const files = fileInput.files;
+      if (files && files.length > 0) {
+        await this.handleFilesUpload(Array.from(files));
+      }
+      fileInput.remove();
+    });
+
+    fileInput.click();
+  }
+
+  private async handleFilesUpload(files: File[]): Promise<void> {
+    for (const file of files) {
+      try {
+        const pending = await this.saveFileToVaultAndCreateAttachment(file);
+        this.pendingAttachments.push(pending);
+        new Notice(`Saved "${file.name}" to vault (${pending.vaultPath})`);
+      } catch (err: any) {
+        new Notice(`Failed to save "${file.name}": ${err.message}`);
+      }
+    }
+    this.renderPendingAttachments();
+  }
+
+  private async saveFileToVaultAndCreateAttachment(file: File): Promise<PendingAttachment> {
+    let targetFolder = 'Attachments';
+    try {
+      const exists = await this.app.vault.adapter.exists(targetFolder);
+      if (!exists) {
+        await this.app.vault.createFolder(targetFolder);
+      }
+    } catch (e) {
+      targetFolder = '';
+    }
+
+    const rawName = file.name.replace(/[\\/:*?"<>|]/g, '_');
+    const dotIndex = rawName.lastIndexOf('.');
+    const baseName = dotIndex !== -1 ? rawName.slice(0, dotIndex) : rawName;
+    const ext = dotIndex !== -1 ? rawName.slice(dotIndex) : '';
+
+    let vaultPath = targetFolder ? `${targetFolder}/${rawName}` : rawName;
+    let counter = 1;
+    while (await this.app.vault.adapter.exists(vaultPath)) {
+      vaultPath = targetFolder ? `${targetFolder}/${baseName}_${counter}${ext}` : `${baseName}_${counter}${ext}`;
+      counter++;
+    }
+
+    const arrayBuffer = await file.arrayBuffer();
+    await this.app.vault.createBinary(vaultPath, arrayBuffer);
+
+    const isImage = file.type.startsWith('image/') || /\.(png|jpe?g|webp|gif|svg|bmp)$/i.test(file.name);
+    let dataUrl: string | undefined = undefined;
+    let textContent: string | undefined = undefined;
+
+    if (isImage) {
+      const bytes = new Uint8Array(arrayBuffer);
+      let binary = '';
+      for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      const base64 = btoa(binary);
+      const mime = file.type || 'image/png';
+      dataUrl = `data:${mime};base64,${base64}`;
+    } else if (file.type.startsWith('text/') || /\.(md|txt|json|js|ts|py|csv|html|css|yaml|yml|xml|sh|env)$/i.test(file.name)) {
+      const decoder = new TextDecoder('utf-8');
+      textContent = decoder.decode(arrayBuffer);
+    }
+
+    return {
+      id: `att_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      name: file.name,
+      type: file.type || 'application/octet-stream',
+      size: file.size,
+      vaultPath,
+      isImage,
+      dataUrl,
+      textContent,
+    };
+  }
+
+  private renderPendingAttachments(): void {
+    if (!this.pendingAttachmentsEl) return;
+    this.pendingAttachmentsEl.empty();
+
+    if (this.pendingAttachments.length === 0) {
+      this.pendingAttachmentsEl.style.display = 'none';
+      return;
+    }
+
+    this.pendingAttachmentsEl.style.display = 'flex';
+
+    for (let i = 0; i < this.pendingAttachments.length; i++) {
+      const att = this.pendingAttachments[i];
+      const chipEl = this.pendingAttachmentsEl.createEl('div', { cls: 'harness-attachment-chip' });
+
+      if (att.isImage && att.dataUrl) {
+        const imgEl = chipEl.createEl('img', { cls: 'harness-attachment-thumb' });
+        imgEl.src = att.dataUrl;
+        imgEl.alt = att.name;
+      } else {
+        const iconSpan = chipEl.createEl('span', { cls: 'harness-attachment-icon' });
+        setIcon(iconSpan, att.name.endsWith('.pdf') ? 'file-text' : 'file');
+      }
+
+      const infoEl = chipEl.createEl('div', { cls: 'harness-attachment-info' });
+      const nameEl = infoEl.createEl('span', { cls: 'harness-attachment-name', text: att.name });
+      nameEl.setAttribute('title', `${att.name} (${att.vaultPath})`);
+
+      const sizeKb = Math.max(1, Math.round(att.size / 1024));
+      infoEl.createEl('span', { cls: 'harness-attachment-size', text: `${sizeKb} KB • vault` });
+
+      const removeBtn = chipEl.createEl('button', { cls: 'harness-attachment-remove' });
+      removeBtn.setText('✕');
+      removeBtn.setAttribute('aria-label', `Remove ${att.name}`);
+      removeBtn.setAttribute('title', `Remove ${att.name}`);
+      removeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.pendingAttachments.splice(i, 1);
+        this.renderPendingAttachments();
+      });
+    }
+  }
+
   private updateWorkspaceBadge(agent?: AgentConfig): void {
     if (!this.workspaceBadgeEl) return;
     if (agent && agent.workspacePath && agent.workspacePath.trim().length > 0) {
@@ -179,24 +331,6 @@ export class HarnessChatView extends ItemView {
       this.openSessionsModal();
     });
 
-    // Skills Button
-    const skillsBtn = headerActionsEl.createEl('button', { cls: 'clickable-icon' });
-    skillsBtn.setAttribute('aria-label', 'Manage Skills (/skills)');
-    skillsBtn.setAttribute('title', 'Manage Skills (/skills)');
-    setIcon(skillsBtn, 'zap');
-    skillsBtn.addEventListener('click', () => {
-      new SkillsModal(this.app, this.plugin).open();
-    });
-
-    // MCP Button
-    const mcpBtn = headerActionsEl.createEl('button', { cls: 'clickable-icon' });
-    mcpBtn.setAttribute('aria-label', 'Manage MCP Servers (/mcp)');
-    mcpBtn.setAttribute('title', 'Manage MCP Servers (/mcp)');
-    setIcon(mcpBtn, 'server');
-    mcpBtn.addEventListener('click', () => {
-      new McpModal(this.app, this.plugin).open();
-    });
-
     // Export Button
     const exportBtn = headerActionsEl.createEl('button', { cls: 'clickable-icon' });
     exportBtn.setAttribute('aria-label', 'Export Chat to Markdown (/export)');
@@ -239,11 +373,19 @@ export class HarnessChatView extends ItemView {
     this.suggestPopupEl = this.inputAreaEl.createEl('div', { cls: 'harness-suggest-popup' });
     this.suggestPopupEl.style.display = 'none';
 
-    const textareaWrapperEl = this.inputAreaEl.createEl('div', { cls: 'harness-textarea-wrapper' });
+    // Input Card Container (Box containing attachments, textarea, and inner bottom buttons)
+    const inputCardEl = this.inputAreaEl.createEl('div', { cls: 'harness-input-card' });
+
+    // Pending Attachments Tray
+    this.pendingAttachmentsEl = inputCardEl.createEl('div', { cls: 'harness-attachments-tray' });
+    this.pendingAttachmentsEl.style.display = 'none';
+
+    // Textarea Wrapper
+    const textareaWrapperEl = inputCardEl.createEl('div', { cls: 'harness-textarea-wrapper' });
 
     this.inputTextAreaEl = textareaWrapperEl.createEl('textarea', {
       cls: 'harness-chat-textarea',
-      placeholder: "Ask Harness Bot... ('/' for commands, '@' for notes)",
+      placeholder: 'Спросите что угодно... "Создать CLI команду для..."',
     });
     this.inputTextAreaEl.setAttribute('aria-label', 'Chat message input');
 
@@ -258,11 +400,28 @@ export class HarnessChatView extends ItemView {
       this.toggleInputExpand();
     });
 
-    const bottomRowEl = this.inputAreaEl.createEl('div', { cls: 'harness-chat-bottom-row' });
-    const bottomControlsLeftEl = bottomRowEl.createEl('div', { cls: 'harness-bottom-controls-left' });
+    // Card Bottom Row (inside the card: + button on left, ↑ send button on right)
+    const cardBottomRowEl = inputCardEl.createEl('div', { cls: 'harness-input-card-bottom' });
 
-    // Agent Selector Dropdown
-    const agentSelectContainer = bottomControlsLeftEl.createEl('div', { cls: 'harness-agent-select-container' });
+    // + (Add Photo / File) Button
+    this.attachBtnEl = cardBottomRowEl.createEl('button', { cls: 'harness-attach-btn clickable-icon' });
+    this.attachBtnEl.setAttribute('aria-label', 'Attach photo or file (saved to vault)');
+    this.attachBtnEl.setAttribute('title', 'Attach photo or file (saved to vault)');
+    setIcon(this.attachBtnEl, 'plus');
+
+    this.attachBtnEl.addEventListener('click', () => {
+      this.triggerFileInput();
+    });
+
+    // Send / Stop button inside the card on the right
+    this.sendButtonEl = cardBottomRowEl.createEl('button', { cls: 'harness-send-btn mod-cta clickable-icon' });
+    this.setSendButtonState(false);
+
+    // Bottom Toolbar Row (underneath the card: Agent selector, Model selector, Effort selector)
+    const bottomToolbarEl = this.inputAreaEl.createEl('div', { cls: 'harness-bottom-toolbar' });
+
+    // 1. Agent Selector Container
+    const agentSelectContainer = bottomToolbarEl.createEl('div', { cls: 'harness-agent-select-container' });
     this.agentIconEl = agentSelectContainer.createEl('span', { cls: 'harness-agent-icon' });
     setIcon(this.agentIconEl, 'bot');
 
@@ -289,13 +448,14 @@ export class HarnessChatView extends ItemView {
     });
 
     // Workspace Scope Badge
-    this.workspaceBadgeEl = bottomControlsLeftEl.createEl('span', { cls: 'harness-workspace-badge' });
+    this.workspaceBadgeEl = agentSelectContainer.createEl('span', { cls: 'harness-workspace-badge' });
     this.workspaceBadgeEl.style.display = 'none';
 
     this.refreshAgentDropdown();
 
-    // Searchable Model Selector
-    this.searchableModelSelect = new SearchableModelSelect(bottomControlsLeftEl, {
+    // 2. Searchable Model Selector
+    const modelSelectWrapper = bottomToolbarEl.createEl('div', { cls: 'harness-model-select-wrapper' });
+    this.searchableModelSelect = new SearchableModelSelect(modelSelectWrapper, {
       models: [],
       selectedModel: '',
       onChange: async (val: string) => {
@@ -306,9 +466,30 @@ export class HarnessChatView extends ItemView {
     });
     this.refreshModelDropdown();
 
-    // Send / Stop button as an icon
-    this.sendButtonEl = bottomRowEl.createEl('button', { cls: 'harness-send-btn mod-cta clickable-icon' });
-    this.setSendButtonState(false);
+    // 3. Reasoning Effort Selector (Pill styled dropdown: По Умолчанию ˅)
+    const effortContainer = bottomToolbarEl.createEl('div', { cls: 'harness-effort-select-container' });
+    this.effortSelectEl = effortContainer.createEl('select', { cls: 'dropdown harness-effort-select' });
+    this.effortSelectEl.setAttribute('aria-label', 'Reasoning Effort');
+
+    const effortOptions = [
+      { value: 'default', label: 'По Умолчанию' },
+      { value: 'low', label: 'Низкий' },
+      { value: 'medium', label: 'Средний' },
+      { value: 'high', label: 'Высокий' },
+    ];
+
+    for (const opt of effortOptions) {
+      this.effortSelectEl.createEl('option', { value: opt.value, text: opt.label });
+    }
+
+    this.effortSelectEl.addEventListener('change', async () => {
+      const val = this.effortSelectEl?.value || 'default';
+      this.currentSession.reasoningEffort = val;
+      this.plugin.settings.defaultReasoningEffort = val;
+      await this.saveSessionState();
+    });
+
+    this.refreshEffortDropdown();
 
     const handleSendOrStop = async () => {
       if (this.currentAbortController) {
@@ -319,8 +500,12 @@ export class HarnessChatView extends ItemView {
         return;
       }
 
-      const text = this.inputTextAreaEl.value.trim();
-      if (!text) return;
+      const rawText = this.inputTextAreaEl.value.trim();
+      const hasAttachments = this.pendingAttachments.length > 0;
+
+      if (!rawText && !hasAttachments) return;
+
+      const text = rawText || (hasAttachments ? 'Please review the attached file(s).' : '');
 
       // Handle slash commands
       if (text === '/sessions' || text === '/history') {
@@ -360,6 +545,12 @@ export class HarnessChatView extends ItemView {
         this.hideSuggest();
         this.resetTextareaHeight();
         new McpModal(this.app, this.plugin).open();
+        return;
+      } else if (text === '/attach') {
+        this.inputTextAreaEl.value = '';
+        this.hideSuggest();
+        this.resetTextareaHeight();
+        this.triggerFileInput();
         return;
       } else if (text === '/agents' || text === '/agent' || text.startsWith('/agents ') || text.startsWith('/agent ')) {
         const agentQuery = text.replace(/^\/agents?\s*/, '').trim();
@@ -431,8 +622,47 @@ export class HarnessChatView extends ItemView {
       // Enriched text with resolved @mentions
       const resolvedContent = await MentionHelper.resolveMentions(this.app, processedUserText);
 
-      // Append clean user message to UI state (WITHOUT timestamp)
-      const userMsg: LLMMessage = { role: 'user', content: resolvedContent };
+      // Process attachments if any
+      let userMessageContent: string | any[] = resolvedContent;
+
+      if (hasAttachments) {
+        const currentAtts = [...this.pendingAttachments];
+        this.pendingAttachments = [];
+        this.renderPendingAttachments();
+
+        const attachedImages = currentAtts.filter((a) => a.isImage && a.dataUrl);
+        const attachedDocs = currentAtts.filter((a) => !a.isImage || !a.dataUrl);
+
+        let extraMarkdown = '';
+        for (const doc of attachedDocs) {
+          extraMarkdown += `\n\n📎 Attached file: [[${doc.vaultPath}]] (saved to vault)`;
+          if (doc.textContent) {
+            const snippet = doc.textContent.length > 2500 ? doc.textContent.slice(0, 2500) + '\n...[content truncated]' : doc.textContent;
+            extraMarkdown += `\n\`\`\`\n${snippet}\n\`\`\``;
+          }
+        }
+
+        for (const img of attachedImages) {
+          extraMarkdown += `\n\n![[${img.vaultPath}]]`;
+        }
+
+        const combinedText = (resolvedContent ? `${resolvedContent}` : '') + extraMarkdown;
+
+        if (attachedImages.length > 0) {
+          userMessageContent = [
+            { type: 'text', text: combinedText },
+            ...attachedImages.map((img) => ({
+              type: 'image_url',
+              image_url: { url: img.dataUrl },
+            })),
+          ];
+        } else {
+          userMessageContent = combinedText;
+        }
+      }
+
+      // Append clean user message to UI state
+      const userMsg: LLMMessage = { role: 'user', content: userMessageContent };
       this.currentSession.messages.push(userMsg);
       this.currentSession.updatedAt = Date.now();
       await this.saveSessionState();
@@ -476,6 +706,7 @@ export class HarnessChatView extends ItemView {
       const textContentEl = streamingMsgEl.createEl('div', { cls: 'harness-message-body' });
 
       try {
+        const effort = this.currentSession.reasoningEffort || this.plugin.settings.defaultReasoningEffort || 'default';
         const updatedHistory = await this.agentHarness.runTurn(
           this.currentSession.messages,
           (event) => {
@@ -517,7 +748,9 @@ export class HarnessChatView extends ItemView {
           this.currentSession.model || this.plugin.settings.activeModel,
           this.currentAbortController.signal,
           extraSystemDirectives,
-          activeAgent
+          activeAgent,
+          undefined,
+          effort
         );
 
         this.currentSession.messages = updatedHistory;
@@ -538,6 +771,45 @@ export class HarnessChatView extends ItemView {
     };
 
     this.sendButtonEl.addEventListener('click', handleSendOrStop);
+
+    // Drag and drop files support
+    this.inputAreaEl.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      inputCardEl.addClass('is-drag-over');
+    });
+
+    this.inputAreaEl.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      inputCardEl.removeClass('is-drag-over');
+    });
+
+    this.inputAreaEl.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      inputCardEl.removeClass('is-drag-over');
+      if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+        await this.handleFilesUpload(Array.from(e.dataTransfer.files));
+      }
+    });
+
+    // Paste file / image support from clipboard
+    this.inputTextAreaEl.addEventListener('paste', async (e) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      const files: File[] = [];
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].kind === 'file') {
+          const file = items[i].getAsFile();
+          if (file) files.push(file);
+        }
+      }
+      if (files.length > 0) {
+        e.preventDefault();
+        await this.handleFilesUpload(files);
+      }
+    });
 
     this.inputTextAreaEl.addEventListener('input', () => {
       this.autoResizeTextarea();
@@ -1029,13 +1301,15 @@ export class HarnessChatView extends ItemView {
     await this.renderMessages();
     this.refreshModelDropdown();
     this.refreshAgentDropdown();
+    this.refreshEffortDropdown();
   }
 
   private createNewSession() {
     const newSession = SessionManager.createNewSession(
       this.plugin.settings.activeProviderId || 'openrouter',
       this.plugin.settings.activeModel || '',
-      this.plugin.settings.activeAgentId || 'main'
+      this.plugin.settings.activeAgentId || 'main',
+      this.plugin.settings.defaultReasoningEffort || 'default'
     );
     this.plugin.settings.sessions.unshift(newSession);
     this.plugin.settings.currentSessionId = newSession.id;
@@ -1044,6 +1318,7 @@ export class HarnessChatView extends ItemView {
     this.renderMessages();
     this.refreshModelDropdown();
     this.refreshAgentDropdown();
+    this.refreshEffortDropdown();
     new Notice('Started new chat session');
   }
 

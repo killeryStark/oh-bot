@@ -20311,7 +20311,8 @@ var DEFAULT_SETTINGS = {
       updatedAt: Date.now()
     }
   ],
-  activeAgentId: "main"
+  activeAgentId: "main",
+  defaultReasoningEffort: "default"
 };
 
 // src/ui/settings-tab.ts
@@ -21721,6 +21722,10 @@ var SearchableModelSelect = class {
     this.triggerEl.setAttribute("aria-expanded", "false");
     this.triggerEl.setAttribute("aria-label", "Select active model");
     this.triggerEl.setAttribute("tabindex", "0");
+    this.modelIconEl = this.triggerEl.createEl("span", {
+      cls: "harness-model-select-model-icon"
+    });
+    (0, import_obsidian9.setIcon)(this.modelIconEl, "cpu");
     this.labelEl = this.triggerEl.createEl("span", {
       cls: "harness-model-select-label"
     });
@@ -21771,9 +21776,28 @@ var SearchableModelSelect = class {
     if (this.selectedModel) {
       this.labelEl.setText(this.selectedModel);
       this.labelEl.removeClass("is-placeholder");
+      const lower = this.selectedModel.toLowerCase();
+      if (this.modelIconEl) {
+        if (lower.includes("deepseek")) {
+          (0, import_obsidian9.setIcon)(this.modelIconEl, "zap");
+        } else if (lower.includes("claude") || lower.includes("anthropic")) {
+          (0, import_obsidian9.setIcon)(this.modelIconEl, "sparkles");
+        } else if (lower.includes("gpt") || lower.includes("openai") || lower.includes("o1") || lower.includes("o3")) {
+          (0, import_obsidian9.setIcon)(this.modelIconEl, "bot");
+        } else if (lower.includes("gemini") || lower.includes("google")) {
+          (0, import_obsidian9.setIcon)(this.modelIconEl, "sparkles");
+        } else if (lower.includes("llama") || lower.includes("meta")) {
+          (0, import_obsidian9.setIcon)(this.modelIconEl, "terminal");
+        } else {
+          (0, import_obsidian9.setIcon)(this.modelIconEl, "cpu");
+        }
+      }
     } else {
       this.labelEl.setText(this.placeholder);
       this.labelEl.addClass("is-placeholder");
+      if (this.modelIconEl) {
+        (0, import_obsidian9.setIcon)(this.modelIconEl, "cpu");
+      }
     }
   }
   onTriggerClick(e2) {
@@ -22894,11 +22918,20 @@ function prepareNetworkPayloadMessages(messages2) {
     return [];
   const networkMessages = JSON.parse(JSON.stringify(messages2));
   for (let i3 = networkMessages.length - 1; i3 >= 0; i3--) {
-    if (networkMessages[i3].role === "user" && typeof networkMessages[i3].content === "string") {
+    if (networkMessages[i3].role === "user") {
       const nowIso = (/* @__PURE__ */ new Date()).toISOString();
-      networkMessages[i3].content = `${networkMessages[i3].content}
+      if (typeof networkMessages[i3].content === "string") {
+        networkMessages[i3].content = `${networkMessages[i3].content}
 
 [Current Date & Time: ${nowIso}]`;
+      } else if (Array.isArray(networkMessages[i3].content)) {
+        const textItem = networkMessages[i3].content.find((c4) => c4.type === "text");
+        if (textItem && typeof textItem.text === "string") {
+          textItem.text = `${textItem.text}
+
+[Current Date & Time: ${nowIso}]`;
+        }
+      }
       break;
     }
   }
@@ -22950,7 +22983,7 @@ var OpenRouterProvider = class extends LLMProvider {
     super(...arguments);
     this.name = "openrouter";
   }
-  async chatCompletion(apiKey, baseUrl, model, systemPrompt, messages2, tools, onChunk, signal) {
+  async chatCompletion(apiKey, baseUrl, model, systemPrompt, messages2, tools, onChunk, signal, options) {
     const endpoint = (baseUrl || "https://openrouter.ai/api/v1").replace(/\/$/, "") + "/chat/completions";
     const sortedTools = sortToolSchemasDeterministically(tools);
     const networkMessages = prepareNetworkPayloadMessages(messages2);
@@ -22971,6 +23004,10 @@ var OpenRouterProvider = class extends LLMProvider {
       messages: formattedMessages,
       stream: true
     };
+    if (options?.reasoningEffort && options.reasoningEffort !== "default" && options.reasoningEffort !== "none") {
+      payload.reasoning = { effort: options.reasoningEffort };
+      payload.reasoning_effort = options.reasoningEffort;
+    }
     if (formattedTools.length > 0) {
       payload.tools = formattedTools;
     }
@@ -23078,7 +23115,7 @@ var OpenAIProvider = class extends LLMProvider {
     super(...arguments);
     this.name = "openai";
   }
-  async chatCompletion(apiKey, baseUrl, model, systemPrompt, messages2, tools, onChunk, signal) {
+  async chatCompletion(apiKey, baseUrl, model, systemPrompt, messages2, tools, onChunk, signal, options) {
     const endpoint = (baseUrl || "https://api.openai.com/v1").replace(/\/$/, "") + "/chat/completions";
     const sortedTools = sortToolSchemasDeterministically(tools);
     const networkMessages = prepareNetworkPayloadMessages(messages2);
@@ -23099,6 +23136,9 @@ var OpenAIProvider = class extends LLMProvider {
       messages: formattedMessages,
       stream: true
     };
+    if (options?.reasoningEffort && options.reasoningEffort !== "default" && options.reasoningEffort !== "none") {
+      payload.reasoning_effort = options.reasoningEffort;
+    }
     if (formattedTools.length > 0) {
       payload.tools = formattedTools;
     }
@@ -23204,14 +23244,35 @@ var AnthropicProvider = class extends LLMProvider {
     super(...arguments);
     this.name = "anthropic";
   }
-  async chatCompletion(apiKey, baseUrl, model, systemPrompt, messages2, tools, onChunk, signal) {
+  async chatCompletion(apiKey, baseUrl, model, systemPrompt, messages2, tools, onChunk, signal, options) {
     const endpoint = (baseUrl || "https://api.anthropic.com/v1").replace(/\/$/, "") + "/messages";
     const sortedTools = sortToolSchemasDeterministically(tools);
     const networkMessages = prepareNetworkPayloadMessages(messages2);
-    const formattedMessages = networkMessages.map((msg) => ({
-      role: msg.role === "assistant" ? "assistant" : "user",
-      content: msg.content
-    }));
+    const formattedMessages = networkMessages.map((msg) => {
+      let content = msg.content;
+      if (Array.isArray(content)) {
+        content = content.map((part) => {
+          if (part.type === "image_url" && part.image_url?.url?.startsWith("data:")) {
+            const match = part.image_url.url.match(/^data:([^;]+);base64,(.+)$/);
+            if (match) {
+              return {
+                type: "image",
+                source: {
+                  type: "base64",
+                  media_type: match[1],
+                  data: match[2]
+                }
+              };
+            }
+          }
+          return part;
+        });
+      }
+      return {
+        role: msg.role === "assistant" ? "assistant" : "user",
+        content
+      };
+    });
     const formattedTools = sortedTools.map((t3) => ({
       name: t3.name,
       description: t3.description,
@@ -23230,6 +23291,17 @@ var AnthropicProvider = class extends LLMProvider {
       messages: formattedMessages,
       stream: true
     };
+    if (options?.reasoningEffort && options.reasoningEffort !== "default" && options.reasoningEffort !== "none") {
+      let budget = 4096;
+      if (options.reasoningEffort === "low")
+        budget = 2048;
+      else if (options.reasoningEffort === "medium")
+        budget = 8192;
+      else if (options.reasoningEffort === "high")
+        budget = 16384;
+      payload.thinking = { type: "enabled", budget_tokens: budget };
+      payload.max_tokens = Math.max(payload.max_tokens || 4096, budget + 4096);
+    }
     if (formattedTools.length > 0) {
       payload.tools = formattedTools;
     }
@@ -23356,7 +23428,7 @@ var OllamaProvider = class extends LLMProvider {
     super(...arguments);
     this.name = "ollama";
   }
-  async chatCompletion(apiKey, baseUrl, model, systemPrompt, messages2, tools, onChunk, signal) {
+  async chatCompletion(apiKey, baseUrl, model, systemPrompt, messages2, tools, onChunk, signal, options) {
     const endpoint = (baseUrl || "http://localhost:11434/v1").replace(/\/$/, "") + "/chat/completions";
     const sortedTools = sortToolSchemasDeterministically(tools);
     const networkMessages = prepareNetworkPayloadMessages(messages2);
@@ -23798,7 +23870,7 @@ var AgentHarness = class {
   /**
    * Runs the multi-step agent turn loop with AbortSignal and subagent context support.
    */
-  async runTurn(history, onEvent, onConfirm, overrideProviderId, overrideModel, signal, extraSystemDirectives, agentConfig, subagentContext) {
+  async runTurn(history, onEvent, onConfirm, overrideProviderId, overrideModel, signal, extraSystemDirectives, agentConfig, subagentContext, reasoningEffort) {
     const targetProviderId = overrideProviderId || agentConfig?.providerId || this.settings.activeProviderId;
     const { provider, config, apiKey } = this.getActiveProviderConfig(targetProviderId);
     this.toolRegistry.setSettings(this.settings);
@@ -23850,7 +23922,10 @@ ${extraSystemDirectives}` : baseSystemPrompt;
               content: streamContent
             });
           },
-          signal
+          signal,
+          {
+            reasoningEffort: reasoningEffort || this.settings.defaultReasoningEffort || "default"
+          }
         );
         if (signal?.aborted) {
           throw new Error("Generation stopped by user.");
@@ -41133,7 +41208,7 @@ var SessionManager = class {
   /**
    * Creates a new empty session object.
    */
-  static createNewSession(providerId, model, activeAgentId = "main") {
+  static createNewSession(providerId, model, activeAgentId = "main", reasoningEffort = "default") {
     const id = `session_${Date.now()}`;
     return {
       id,
@@ -41143,7 +41218,8 @@ var SessionManager = class {
       messages: [],
       providerId,
       model,
-      activeAgentId
+      activeAgentId,
+      reasoningEffort
     };
   }
 };
@@ -41742,6 +41818,7 @@ var HARNESS_VIEW_TYPE = "harness-chat-view";
 var HarnessChatView = class extends import_obsidian30.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
+    this.pendingAttachments = [];
     this.isInputExpanded = false;
     this.activeSuggestType = "none";
     this.selectedSuggestIndex = 0;
@@ -41816,6 +41893,125 @@ var HarnessChatView = class extends import_obsidian30.ItemView {
     }
     this.updateWorkspaceBadge(activeAgent);
   }
+  refreshEffortDropdown() {
+    if (!this.effortSelectEl)
+      return;
+    const currentEffort = this.currentSession?.reasoningEffort || this.plugin.settings.defaultReasoningEffort || "default";
+    this.effortSelectEl.value = currentEffort;
+  }
+  triggerFileInput() {
+    const fileInput = document.createElement("input");
+    fileInput.type = "file";
+    fileInput.multiple = true;
+    fileInput.accept = "image/*,.pdf,.txt,.md,.json,.js,.ts,.py,.csv,.html,.css,.doc,.docx,.xml,.yaml,.yml";
+    fileInput.style.display = "none";
+    document.body.appendChild(fileInput);
+    fileInput.addEventListener("change", async () => {
+      const files = fileInput.files;
+      if (files && files.length > 0) {
+        await this.handleFilesUpload(Array.from(files));
+      }
+      fileInput.remove();
+    });
+    fileInput.click();
+  }
+  async handleFilesUpload(files) {
+    for (const file of files) {
+      try {
+        const pending = await this.saveFileToVaultAndCreateAttachment(file);
+        this.pendingAttachments.push(pending);
+        new import_obsidian30.Notice(`Saved "${file.name}" to vault (${pending.vaultPath})`);
+      } catch (err2) {
+        new import_obsidian30.Notice(`Failed to save "${file.name}": ${err2.message}`);
+      }
+    }
+    this.renderPendingAttachments();
+  }
+  async saveFileToVaultAndCreateAttachment(file) {
+    let targetFolder = "Attachments";
+    try {
+      const exists = await this.app.vault.adapter.exists(targetFolder);
+      if (!exists) {
+        await this.app.vault.createFolder(targetFolder);
+      }
+    } catch (e2) {
+      targetFolder = "";
+    }
+    const rawName = file.name.replace(/[\\/:*?"<>|]/g, "_");
+    const dotIndex = rawName.lastIndexOf(".");
+    const baseName = dotIndex !== -1 ? rawName.slice(0, dotIndex) : rawName;
+    const ext = dotIndex !== -1 ? rawName.slice(dotIndex) : "";
+    let vaultPath = targetFolder ? `${targetFolder}/${rawName}` : rawName;
+    let counter = 1;
+    while (await this.app.vault.adapter.exists(vaultPath)) {
+      vaultPath = targetFolder ? `${targetFolder}/${baseName}_${counter}${ext}` : `${baseName}_${counter}${ext}`;
+      counter++;
+    }
+    const arrayBuffer = await file.arrayBuffer();
+    await this.app.vault.createBinary(vaultPath, arrayBuffer);
+    const isImage = file.type.startsWith("image/") || /\.(png|jpe?g|webp|gif|svg|bmp)$/i.test(file.name);
+    let dataUrl = void 0;
+    let textContent = void 0;
+    if (isImage) {
+      const bytes = new Uint8Array(arrayBuffer);
+      let binary = "";
+      for (let i3 = 0; i3 < bytes.byteLength; i3++) {
+        binary += String.fromCharCode(bytes[i3]);
+      }
+      const base64 = btoa(binary);
+      const mime = file.type || "image/png";
+      dataUrl = `data:${mime};base64,${base64}`;
+    } else if (file.type.startsWith("text/") || /\.(md|txt|json|js|ts|py|csv|html|css|yaml|yml|xml|sh|env)$/i.test(file.name)) {
+      const decoder = new TextDecoder("utf-8");
+      textContent = decoder.decode(arrayBuffer);
+    }
+    return {
+      id: `att_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      name: file.name,
+      type: file.type || "application/octet-stream",
+      size: file.size,
+      vaultPath,
+      isImage,
+      dataUrl,
+      textContent
+    };
+  }
+  renderPendingAttachments() {
+    if (!this.pendingAttachmentsEl)
+      return;
+    this.pendingAttachmentsEl.empty();
+    if (this.pendingAttachments.length === 0) {
+      this.pendingAttachmentsEl.style.display = "none";
+      return;
+    }
+    this.pendingAttachmentsEl.style.display = "flex";
+    for (let i3 = 0; i3 < this.pendingAttachments.length; i3++) {
+      const att = this.pendingAttachments[i3];
+      const chipEl = this.pendingAttachmentsEl.createEl("div", { cls: "harness-attachment-chip" });
+      if (att.isImage && att.dataUrl) {
+        const imgEl = chipEl.createEl("img", { cls: "harness-attachment-thumb" });
+        imgEl.src = att.dataUrl;
+        imgEl.alt = att.name;
+      } else {
+        const iconSpan = chipEl.createEl("span", { cls: "harness-attachment-icon" });
+        (0, import_obsidian30.setIcon)(iconSpan, att.name.endsWith(".pdf") ? "file-text" : "file");
+      }
+      const infoEl = chipEl.createEl("div", { cls: "harness-attachment-info" });
+      const nameEl = infoEl.createEl("span", { cls: "harness-attachment-name", text: att.name });
+      nameEl.setAttribute("title", `${att.name} (${att.vaultPath})`);
+      const sizeKb = Math.max(1, Math.round(att.size / 1024));
+      infoEl.createEl("span", { cls: "harness-attachment-size", text: `${sizeKb} KB \u2022 vault` });
+      const removeBtn = chipEl.createEl("button", { cls: "harness-attachment-remove" });
+      removeBtn.setText("\u2715");
+      removeBtn.setAttribute("aria-label", `Remove ${att.name}`);
+      removeBtn.setAttribute("title", `Remove ${att.name}`);
+      removeBtn.addEventListener("click", (e2) => {
+        e2.stopPropagation();
+        this.pendingAttachments.splice(i3, 1);
+        this.renderPendingAttachments();
+      });
+    }
+  }
   updateWorkspaceBadge(agent) {
     if (!this.workspaceBadgeEl)
       return;
@@ -41857,20 +42053,6 @@ var HarnessChatView = class extends import_obsidian30.ItemView {
     sessionsBtn.addEventListener("click", () => {
       this.openSessionsModal();
     });
-    const skillsBtn = headerActionsEl.createEl("button", { cls: "clickable-icon" });
-    skillsBtn.setAttribute("aria-label", "Manage Skills (/skills)");
-    skillsBtn.setAttribute("title", "Manage Skills (/skills)");
-    (0, import_obsidian30.setIcon)(skillsBtn, "zap");
-    skillsBtn.addEventListener("click", () => {
-      new SkillsModal(this.app, this.plugin).open();
-    });
-    const mcpBtn = headerActionsEl.createEl("button", { cls: "clickable-icon" });
-    mcpBtn.setAttribute("aria-label", "Manage MCP Servers (/mcp)");
-    mcpBtn.setAttribute("title", "Manage MCP Servers (/mcp)");
-    (0, import_obsidian30.setIcon)(mcpBtn, "server");
-    mcpBtn.addEventListener("click", () => {
-      new McpModal(this.app, this.plugin).open();
-    });
     const exportBtn = headerActionsEl.createEl("button", { cls: "clickable-icon" });
     exportBtn.setAttribute("aria-label", "Export Chat to Markdown (/export)");
     exportBtn.setAttribute("title", "Export Chat to Markdown (/export)");
@@ -41903,10 +42085,13 @@ var HarnessChatView = class extends import_obsidian30.ItemView {
     this.inputAreaEl = container.createEl("div", { cls: "harness-chat-input-area" });
     this.suggestPopupEl = this.inputAreaEl.createEl("div", { cls: "harness-suggest-popup" });
     this.suggestPopupEl.style.display = "none";
-    const textareaWrapperEl = this.inputAreaEl.createEl("div", { cls: "harness-textarea-wrapper" });
+    const inputCardEl = this.inputAreaEl.createEl("div", { cls: "harness-input-card" });
+    this.pendingAttachmentsEl = inputCardEl.createEl("div", { cls: "harness-attachments-tray" });
+    this.pendingAttachmentsEl.style.display = "none";
+    const textareaWrapperEl = inputCardEl.createEl("div", { cls: "harness-textarea-wrapper" });
     this.inputTextAreaEl = textareaWrapperEl.createEl("textarea", {
       cls: "harness-chat-textarea",
-      placeholder: "Ask Harness Bot... ('/' for commands, '@' for notes)"
+      placeholder: '\u0421\u043F\u0440\u043E\u0441\u0438\u0442\u0435 \u0447\u0442\u043E \u0443\u0433\u043E\u0434\u043D\u043E... "\u0421\u043E\u0437\u0434\u0430\u0442\u044C CLI \u043A\u043E\u043C\u0430\u043D\u0434\u0443 \u0434\u043B\u044F..."'
     });
     this.inputTextAreaEl.setAttribute("aria-label", "Chat message input");
     this.expandBtnEl = textareaWrapperEl.createEl("button", { cls: "harness-expand-btn clickable-icon" });
@@ -41917,9 +42102,18 @@ var HarnessChatView = class extends import_obsidian30.ItemView {
     this.expandBtnEl.addEventListener("click", () => {
       this.toggleInputExpand();
     });
-    const bottomRowEl = this.inputAreaEl.createEl("div", { cls: "harness-chat-bottom-row" });
-    const bottomControlsLeftEl = bottomRowEl.createEl("div", { cls: "harness-bottom-controls-left" });
-    const agentSelectContainer = bottomControlsLeftEl.createEl("div", { cls: "harness-agent-select-container" });
+    const cardBottomRowEl = inputCardEl.createEl("div", { cls: "harness-input-card-bottom" });
+    this.attachBtnEl = cardBottomRowEl.createEl("button", { cls: "harness-attach-btn clickable-icon" });
+    this.attachBtnEl.setAttribute("aria-label", "Attach photo or file (saved to vault)");
+    this.attachBtnEl.setAttribute("title", "Attach photo or file (saved to vault)");
+    (0, import_obsidian30.setIcon)(this.attachBtnEl, "plus");
+    this.attachBtnEl.addEventListener("click", () => {
+      this.triggerFileInput();
+    });
+    this.sendButtonEl = cardBottomRowEl.createEl("button", { cls: "harness-send-btn mod-cta clickable-icon" });
+    this.setSendButtonState(false);
+    const bottomToolbarEl = this.inputAreaEl.createEl("div", { cls: "harness-bottom-toolbar" });
+    const agentSelectContainer = bottomToolbarEl.createEl("div", { cls: "harness-agent-select-container" });
     this.agentIconEl = agentSelectContainer.createEl("span", { cls: "harness-agent-icon" });
     (0, import_obsidian30.setIcon)(this.agentIconEl, "bot");
     this.agentSelectEl = agentSelectContainer.createEl("select", { cls: "dropdown harness-agent-select" });
@@ -41939,10 +42133,11 @@ var HarnessChatView = class extends import_obsidian30.ItemView {
       this.updateWorkspaceBadge(selectedAgent);
       await this.saveSessionState();
     });
-    this.workspaceBadgeEl = bottomControlsLeftEl.createEl("span", { cls: "harness-workspace-badge" });
+    this.workspaceBadgeEl = agentSelectContainer.createEl("span", { cls: "harness-workspace-badge" });
     this.workspaceBadgeEl.style.display = "none";
     this.refreshAgentDropdown();
-    this.searchableModelSelect = new SearchableModelSelect(bottomControlsLeftEl, {
+    const modelSelectWrapper = bottomToolbarEl.createEl("div", { cls: "harness-model-select-wrapper" });
+    this.searchableModelSelect = new SearchableModelSelect(modelSelectWrapper, {
       models: [],
       selectedModel: "",
       onChange: async (val) => {
@@ -41952,8 +42147,25 @@ var HarnessChatView = class extends import_obsidian30.ItemView {
       }
     });
     this.refreshModelDropdown();
-    this.sendButtonEl = bottomRowEl.createEl("button", { cls: "harness-send-btn mod-cta clickable-icon" });
-    this.setSendButtonState(false);
+    const effortContainer = bottomToolbarEl.createEl("div", { cls: "harness-effort-select-container" });
+    this.effortSelectEl = effortContainer.createEl("select", { cls: "dropdown harness-effort-select" });
+    this.effortSelectEl.setAttribute("aria-label", "Reasoning Effort");
+    const effortOptions = [
+      { value: "default", label: "\u041F\u043E \u0423\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E" },
+      { value: "low", label: "\u041D\u0438\u0437\u043A\u0438\u0439" },
+      { value: "medium", label: "\u0421\u0440\u0435\u0434\u043D\u0438\u0439" },
+      { value: "high", label: "\u0412\u044B\u0441\u043E\u043A\u0438\u0439" }
+    ];
+    for (const opt of effortOptions) {
+      this.effortSelectEl.createEl("option", { value: opt.value, text: opt.label });
+    }
+    this.effortSelectEl.addEventListener("change", async () => {
+      const val = this.effortSelectEl?.value || "default";
+      this.currentSession.reasoningEffort = val;
+      this.plugin.settings.defaultReasoningEffort = val;
+      await this.saveSessionState();
+    });
+    this.refreshEffortDropdown();
     const handleSendOrStop = async () => {
       if (this.currentAbortController) {
         this.currentAbortController.abort();
@@ -41962,9 +42174,11 @@ var HarnessChatView = class extends import_obsidian30.ItemView {
         new import_obsidian30.Notice("Generation stopped.");
         return;
       }
-      const text2 = this.inputTextAreaEl.value.trim();
-      if (!text2)
+      const rawText = this.inputTextAreaEl.value.trim();
+      const hasAttachments = this.pendingAttachments.length > 0;
+      if (!rawText && !hasAttachments)
         return;
+      const text2 = rawText || (hasAttachments ? "Please review the attached file(s)." : "");
       if (text2 === "/sessions" || text2 === "/history") {
         this.inputTextAreaEl.value = "";
         this.hideSuggest();
@@ -42002,6 +42216,12 @@ var HarnessChatView = class extends import_obsidian30.ItemView {
         this.hideSuggest();
         this.resetTextareaHeight();
         new McpModal(this.app, this.plugin).open();
+        return;
+      } else if (text2 === "/attach") {
+        this.inputTextAreaEl.value = "";
+        this.hideSuggest();
+        this.resetTextareaHeight();
+        this.triggerFileInput();
         return;
       } else if (text2 === "/agents" || text2 === "/agent" || text2.startsWith("/agents ") || text2.startsWith("/agent ")) {
         const agentQuery = text2.replace(/^\/agents?\s*/, "").trim();
@@ -42061,7 +42281,45 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
         this.currentSession.title = SessionManager.generateTitle(processedUserText);
       }
       const resolvedContent = await MentionHelper.resolveMentions(this.app, processedUserText);
-      const userMsg = { role: "user", content: resolvedContent };
+      let userMessageContent = resolvedContent;
+      if (hasAttachments) {
+        const currentAtts = [...this.pendingAttachments];
+        this.pendingAttachments = [];
+        this.renderPendingAttachments();
+        const attachedImages = currentAtts.filter((a3) => a3.isImage && a3.dataUrl);
+        const attachedDocs = currentAtts.filter((a3) => !a3.isImage || !a3.dataUrl);
+        let extraMarkdown = "";
+        for (const doc of attachedDocs) {
+          extraMarkdown += `
+
+\u{1F4CE} Attached file: [[${doc.vaultPath}]] (saved to vault)`;
+          if (doc.textContent) {
+            const snippet = doc.textContent.length > 2500 ? doc.textContent.slice(0, 2500) + "\n...[content truncated]" : doc.textContent;
+            extraMarkdown += `
+\`\`\`
+${snippet}
+\`\`\``;
+          }
+        }
+        for (const img of attachedImages) {
+          extraMarkdown += `
+
+![[${img.vaultPath}]]`;
+        }
+        const combinedText = (resolvedContent ? `${resolvedContent}` : "") + extraMarkdown;
+        if (attachedImages.length > 0) {
+          userMessageContent = [
+            { type: "text", text: combinedText },
+            ...attachedImages.map((img) => ({
+              type: "image_url",
+              image_url: { url: img.dataUrl }
+            }))
+          ];
+        } else {
+          userMessageContent = combinedText;
+        }
+      }
+      const userMsg = { role: "user", content: userMessageContent };
       this.currentSession.messages.push(userMsg);
       this.currentSession.updatedAt = Date.now();
       await this.saveSessionState();
@@ -42097,6 +42355,7 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
       });
       const textContentEl = streamingMsgEl.createEl("div", { cls: "harness-message-body" });
       try {
+        const effort = this.currentSession.reasoningEffort || this.plugin.settings.defaultReasoningEffort || "default";
         const updatedHistory = await this.agentHarness.runTurn(
           this.currentSession.messages,
           (event) => {
@@ -42138,7 +42397,9 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
           this.currentSession.model || this.plugin.settings.activeModel,
           this.currentAbortController.signal,
           extraSystemDirectives,
-          activeAgent
+          activeAgent,
+          void 0,
+          effort
         );
         this.currentSession.messages = updatedHistory;
         this.currentSession.updatedAt = Date.now();
@@ -42157,6 +42418,41 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
       }
     };
     this.sendButtonEl.addEventListener("click", handleSendOrStop);
+    this.inputAreaEl.addEventListener("dragover", (e2) => {
+      e2.preventDefault();
+      e2.stopPropagation();
+      inputCardEl.addClass("is-drag-over");
+    });
+    this.inputAreaEl.addEventListener("dragleave", (e2) => {
+      e2.preventDefault();
+      e2.stopPropagation();
+      inputCardEl.removeClass("is-drag-over");
+    });
+    this.inputAreaEl.addEventListener("drop", async (e2) => {
+      e2.preventDefault();
+      e2.stopPropagation();
+      inputCardEl.removeClass("is-drag-over");
+      if (e2.dataTransfer?.files && e2.dataTransfer.files.length > 0) {
+        await this.handleFilesUpload(Array.from(e2.dataTransfer.files));
+      }
+    });
+    this.inputTextAreaEl.addEventListener("paste", async (e2) => {
+      const items = e2.clipboardData?.items;
+      if (!items)
+        return;
+      const files = [];
+      for (let i3 = 0; i3 < items.length; i3++) {
+        if (items[i3].kind === "file") {
+          const file = items[i3].getAsFile();
+          if (file)
+            files.push(file);
+        }
+      }
+      if (files.length > 0) {
+        e2.preventDefault();
+        await this.handleFilesUpload(files);
+      }
+    });
     this.inputTextAreaEl.addEventListener("input", () => {
       this.autoResizeTextarea();
       this.handleInputSuggest();
@@ -42596,12 +42892,14 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
     await this.renderMessages();
     this.refreshModelDropdown();
     this.refreshAgentDropdown();
+    this.refreshEffortDropdown();
   }
   createNewSession() {
     const newSession = SessionManager.createNewSession(
       this.plugin.settings.activeProviderId || "openrouter",
       this.plugin.settings.activeModel || "",
-      this.plugin.settings.activeAgentId || "main"
+      this.plugin.settings.activeAgentId || "main",
+      this.plugin.settings.defaultReasoningEffort || "default"
     );
     this.plugin.settings.sessions.unshift(newSession);
     this.plugin.settings.currentSessionId = newSession.id;
@@ -42610,6 +42908,7 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
     this.renderMessages();
     this.refreshModelDropdown();
     this.refreshAgentDropdown();
+    this.refreshEffortDropdown();
     new import_obsidian30.Notice("Started new chat session");
   }
   openSessionsModal() {

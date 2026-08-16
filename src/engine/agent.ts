@@ -186,7 +186,8 @@ export class AgentHarness {
     signal?: AbortSignal,
     extraSystemDirectives?: string,
     agentConfig?: AgentConfig,
-    subagentContext?: SubagentStepContext
+    subagentContext?: SubagentStepContext,
+    reasoningEffort?: string
   ): Promise<LLMMessage[]> {
     const targetProviderId = overrideProviderId || agentConfig?.providerId || this.settings.activeProviderId;
     const { provider, config, apiKey } = this.getActiveProviderConfig(targetProviderId);
@@ -261,7 +262,10 @@ export class AgentHarness {
               content: streamContent,
             });
           },
-          signal
+          signal,
+          {
+            reasoningEffort: reasoningEffort || this.settings.defaultReasoningEffort || 'default',
+          }
         );
 
         if (signal?.aborted) {

@@ -5,6 +5,10 @@ export interface ProviderResponse {
   toolCalls?: ToolCall[];
 }
 
+export interface CompletionOptions {
+  reasoningEffort?: 'default' | 'low' | 'medium' | 'high' | string;
+}
+
 export abstract class LLMProvider {
   abstract name: string;
 
@@ -21,6 +25,8 @@ export abstract class LLMProvider {
     messages: LLMMessage[],
     tools: ToolSchema[],
     onChunk?: (chunk: string) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    options?: CompletionOptions
   ): Promise<ProviderResponse>;
 }
+

@@ -39,9 +39,16 @@ export function prepareNetworkPayloadMessages(messages: LLMMessage[]): LLMMessag
   
   // Find the last user message to append situational time metadata
   for (let i = networkMessages.length - 1; i >= 0; i--) {
-    if (networkMessages[i].role === 'user' && typeof networkMessages[i].content === 'string') {
+    if (networkMessages[i].role === 'user') {
       const nowIso = new Date().toISOString();
-      networkMessages[i].content = `${networkMessages[i].content}\n\n[Current Date & Time: ${nowIso}]`;
+      if (typeof networkMessages[i].content === 'string') {
+        networkMessages[i].content = `${networkMessages[i].content}\n\n[Current Date & Time: ${nowIso}]`;
+      } else if (Array.isArray(networkMessages[i].content)) {
+        const textItem = (networkMessages[i].content as any[]).find((c) => c.type === 'text');
+        if (textItem && typeof textItem.text === 'string') {
+          textItem.text = `${textItem.text}\n\n[Current Date & Time: ${nowIso}]`;
+        }
+      }
       break;
     }
   }

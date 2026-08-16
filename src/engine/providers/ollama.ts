@@ -1,4 +1,4 @@
-import { LLMProvider, ProviderResponse } from './base';
+import { CompletionOptions, LLMProvider, ProviderResponse } from './base';
 import { LLMMessage, ToolCall, ToolSchema } from '../../types';
 import { prepareNetworkPayloadMessages, sortToolSchemasDeterministically } from '../../utils/cache-helpers';
 import { requestUrl } from 'obsidian';
@@ -14,7 +14,8 @@ export class OllamaProvider extends LLMProvider {
     messages: LLMMessage[],
     tools: ToolSchema[],
     onChunk?: (chunk: string) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    options?: CompletionOptions
   ): Promise<ProviderResponse> {
     const endpoint = (baseUrl || 'http://localhost:11434/v1').replace(/\/$/, '') + '/chat/completions';
     const sortedTools = sortToolSchemasDeterministically(tools);

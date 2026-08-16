@@ -20,6 +20,7 @@ export class SearchableModelSelect {
 
   // DOM Elements
   private triggerEl!: HTMLElement;
+  private modelIconEl!: HTMLElement;
   private labelEl!: HTMLElement;
   private iconSpanEl!: HTMLElement;
   private popoverEl!: HTMLElement;
@@ -70,6 +71,11 @@ export class SearchableModelSelect {
     this.triggerEl.setAttribute('aria-expanded', 'false');
     this.triggerEl.setAttribute('aria-label', 'Select active model');
     this.triggerEl.setAttribute('tabindex', '0');
+
+    this.modelIconEl = this.triggerEl.createEl('span', {
+      cls: 'harness-model-select-model-icon',
+    });
+    setIcon(this.modelIconEl, 'cpu');
 
     this.labelEl = this.triggerEl.createEl('span', {
       cls: 'harness-model-select-label',
@@ -134,9 +140,28 @@ export class SearchableModelSelect {
     if (this.selectedModel) {
       this.labelEl.setText(this.selectedModel);
       this.labelEl.removeClass('is-placeholder');
+      const lower = this.selectedModel.toLowerCase();
+      if (this.modelIconEl) {
+        if (lower.includes('deepseek')) {
+          setIcon(this.modelIconEl, 'zap');
+        } else if (lower.includes('claude') || lower.includes('anthropic')) {
+          setIcon(this.modelIconEl, 'sparkles');
+        } else if (lower.includes('gpt') || lower.includes('openai') || lower.includes('o1') || lower.includes('o3')) {
+          setIcon(this.modelIconEl, 'bot');
+        } else if (lower.includes('gemini') || lower.includes('google')) {
+          setIcon(this.modelIconEl, 'sparkles');
+        } else if (lower.includes('llama') || lower.includes('meta')) {
+          setIcon(this.modelIconEl, 'terminal');
+        } else {
+          setIcon(this.modelIconEl, 'cpu');
+        }
+      }
     } else {
       this.labelEl.setText(this.placeholder);
       this.labelEl.addClass('is-placeholder');
+      if (this.modelIconEl) {
+        setIcon(this.modelIconEl, 'cpu');
+      }
     }
   }
 

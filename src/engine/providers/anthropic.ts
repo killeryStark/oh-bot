@@ -1,4 +1,4 @@
-import { LLMProvider, ProviderResponse } from './base';
+import { CompletionOptions, LLMProvider, ProviderResponse } from './base';
 import { LLMMessage, ToolCall, ToolSchema } from '../../types';
 import { prepareNetworkPayloadMessages, sortToolSchemasDeterministically } from '../../utils/cache-helpers';
 import { SSEStreamParser } from '../stream-parser';
@@ -15,16 +15,38 @@ export class AnthropicProvider extends LLMProvider {
     messages: LLMMessage[],
     tools: ToolSchema[],
     onChunk?: (chunk: string) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    options?: CompletionOptions
   ): Promise<ProviderResponse> {
     const endpoint = (baseUrl || 'https://api.anthropic.com/v1').replace(/\/$/, '') + '/messages';
     const sortedTools = sortToolSchemasDeterministically(tools);
     const networkMessages = prepareNetworkPayloadMessages(messages);
 
-    const formattedMessages = networkMessages.map((msg) => ({
-      role: msg.role === 'assistant' ? 'assistant' : 'user',
-      content: msg.content,
-    }));
+    const formattedMessages = networkMessages.map((msg) => {
+      let content = msg.content;
+      if (Array.isArray(content)) {
+        content = content.map((part: any) => {
+          if (part.type === 'image_url' && part.image_url?.url?.startsWith('data:')) {
+            const match = part.image_url.url.match(/^data:([^;]+);base64,(.+)$/);
+            if (match) {
+              return {
+                type: 'image',
+                source: {
+                  type: 'base64',
+                  media_type: match[1],
+                  data: match[2],
+                },
+              };
+            }
+          }
+          return part;
+        });
+      }
+      return {
+        role: msg.role === 'assistant' ? 'assistant' : 'user',
+        content,
+      };
+    });
 
     const formattedTools = sortedTools.map((t) => ({
       name: t.name,
@@ -46,6 +68,15 @@ export class AnthropicProvider extends LLMProvider {
       messages: formattedMessages,
       stream: true,
     };
+
+    if (options?.reasoningEffort && options.reasoningEffort !== 'default' && options.reasoningEffort !== 'none') {
+      let budget = 4096;
+      if (options.reasoningEffort === 'low') budget = 2048;
+      else if (options.reasoningEffort === 'medium') budget = 8192;
+      else if (options.reasoningEffort === 'high') budget = 16384;
+      payload.thinking = { type: 'enabled', budget_tokens: budget };
+      payload.max_tokens = Math.max(payload.max_tokens || 4096, budget + 4096);
+    }
 
     if (formattedTools.length > 0) {
       payload.tools = formattedTools;

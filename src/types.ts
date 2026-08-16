@@ -121,6 +121,7 @@ export interface ChatSession {
   providerId: string;
   model: string;
   activeAgentId?: string;
+  reasoningEffort?: string;
 }
 
 export type SearchProviderType = 'duckduckgo' | 'searxng' | 'tavily';
@@ -155,6 +156,7 @@ export interface HarnessSettings {
   defaultPdfFolder?: string;
   agents: AgentConfig[];
   activeAgentId?: string;
+  defaultReasoningEffort?: string;
 }
 
 export const DEFAULT_SETTINGS: HarnessSettings = {
@@ -188,6 +190,7 @@ export const DEFAULT_SETTINGS: HarnessSettings = {
     }
   ],
   activeAgentId: 'main',
+  defaultReasoningEffort: 'default',
 };
 
 export interface LLMMessage {
