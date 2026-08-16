@@ -46,37 +46,37 @@
 
 
 ### Task 5: PDF Generation Engine & Themes
-- [ ] Create `src/tools/pdf/themes.ts`:
+- [x] Create `src/tools/pdf/themes.ts`:
   - Anthropic Report theme (modern typography, callouts, zebra tables, headers, page numbers).
   - Academic & Minimal themes.
-- [ ] Implement `src/tools/pdf/generator.ts`:
+- [x] Implement `src/tools/pdf/generator.ts`:
   - Offscreen DOM container rendering.
   - Vector PDF generation via `jsPDF`.
   - Recursive folder creation and binary write (`app.vault.createBinary` / `modifyBinary`).
   - Strict DOM cleanup in `finally` blocks to prevent mobile memory leaks.
 
 ### Task 6: Agent Tools Implementation
-- [ ] Implement `src/tools/web/search-tool.ts` (`web_search`).
-- [ ] Implement `src/tools/web/fetch-page-tool.ts` (`fetch_web_page`).
-- [ ] Implement `src/tools/pdf/generate-pdf-tool.ts` (`generate_pdf`).
+- [x] Implement `src/tools/web/search-tool.ts` (`web_search`).
+- [x] Implement `src/tools/web/fetch-page-tool.ts` (`fetch_web_page`).
+- [x] Implement `src/tools/pdf/generate-pdf-tool.ts` (`generate_pdf`).
 
 ### Task 7: Tool Registry Registration
-- [ ] Update `src/tools/registry.ts`:
+- [x] Update `src/tools/registry.ts`:
   - Register `web_search`, `fetch_web_page`, and `generate_pdf` into the default toolset.
   - Pass plugin settings / App context where needed.
 
 ### Task 8: Settings Tab UI Additions
-- [ ] Update `src/ui/settings-tab.ts`:
+- [x] Update `src/ui/settings-tab.ts`:
   - Add **Web Search & Document Tools** section.
   - Search Provider dropdown (`DuckDuckGo`, `SearXNG`, `Tavily`).
   - Conditional input for SearXNG URL and Tavily API key.
   - Default PDF folder path input.
 
 ### Task 9: CSS Styling
-- [ ] Update `styles.css`:
+- [x] Update `styles.css`:
   - Add styles for new settings controls.
   - Add base styles for PDF generation containers.
 
 ### Task 10: Build Verification & Git Commit
-- [ ] Run `npm run lint` and `npm run build` to verify clean compilation.
-- [ ] Commit all changes to the Git repository.
+- [x] Run `npm run lint` and `npm run build` to verify clean compilation.
+- [x] Commit all changes to the Git repository.
