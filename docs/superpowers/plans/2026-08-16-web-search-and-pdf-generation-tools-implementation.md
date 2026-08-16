@@ -38,11 +38,12 @@
   - Dynamic routing based on plugin settings.
 
 ### Task 4: Web Content Extractor (`fetch_web_page`)
-- [ ] Implement `src/tools/web/reader.ts`:
+- [x] Implement `src/tools/web/reader.ts`:
   - Fetch HTML with `requestUrl`.
   - DOM-based sanitization (strip scripts, styles, nav, footer, header, ads).
   - Convert structured content to clean, readable Markdown.
   - Apply `maxLength` limits with overflow notice.
+
 
 ### Task 5: PDF Generation Engine & Themes
 - [ ] Create `src/tools/pdf/themes.ts`:
