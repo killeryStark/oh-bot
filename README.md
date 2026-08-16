@@ -13,8 +13,12 @@ Unlike typical single-turn AI chat interfaces, `obsidian-harness-bot` provides a
 ## Key Features
 
 - 📱 **100% Cross-Platform (Mobile & Desktop)**: Built with web-standard APIs and Obsidian APIs. Zero dependencies on Node.js native modules (`fs`, `child_process`, `net`).
+- 🤖 **Custom Agents & Subagent Harness**: Create specialized agents with independent System Prompts, scoped workspace paths (`workspacePath`), custom model/provider overrides, and tool permissions.
+- 📁 **Vault Sandboxing & `AGENT.md`**: Restrict agents to dedicated folders in the vault. The agent automatically reads and follows localized guidelines from `AGENT.md` in its directory.
+- ⚡ **Nested Subagent Delegation (`invoke_subagent`)**: The Main Agent can delegate focused sub-tasks to specialized subagents, streaming their execution steps in real-time within collapsible in-chat cards.
+- 👤 **Direct Agent Chat Mode**: Select any agent in the Chat View header toolbar to communicate one-on-one directly in their sandboxed profile.
 - 🧠 **Extensible Skills System (`SKILL.md` Standard)**: Cross-compatible with Cloud Code, OpenCode, Antigravity, and Claude Code skills.
-- ⚡ **Dynamic Slash Commands (`/`)**: Type `/` to access built-in commands (`/sessions`, `/new`, `/clear`, `/export`, `/skills`) and all active skills (`/skill-creator`, `/brainstorming`, etc.).
+- ⚡ **Dynamic Slash Commands (`/`)**: Type `/` to access built-in commands (`/sessions`, `/new`, `/clear`, `/export`, `/skills`, `/agents`) and all active skills (`/subagent-management`, `/skill-creator`, `/brainstorming`, etc.).
 - 🛒 **Skills Marketplace & Smart Git Importer**: Install curated skills in 1 click or import any skill directly from a GitHub repository URL (`https://github.com/owner/repo`, folder `/tree/...`, or raw URL).
 - 📂 **Local Vault Skills Scanner**: Automatically discovers and synchronizes skills from `.agents/skills/`, `.skills/`, `.claude/skills/`, `.gemini/skills/` with symlink protection, deduplication, and SemVer conflict resolution.
 - 🛠️ **Autonomous Agent Tools**:
@@ -51,6 +55,20 @@ Obsidian Harness Bot includes a first-class skills management engine compatible 
 1. **Direct Slash Command**: Type `/[skill-id] <your prompt>` in chat (e.g. `/brainstorming Design a new habit tracker note`). The skill's methodology is injected with highest priority into the agent context.
 2. **Autonomous Activation**: The agent is aware of all registered skills and can follow their instructions automatically when relevant.
 3. **Skills Manager GUI**: Open via the `/skills` command or through **Settings → Obsidian Harness Bot → Skills & Marketplace** to search, toggle, view markdown instructions, update from Git, or install from the marketplace.
+
+---
+
+## Custom Agents & Subagent Harness (Multi-Agent System)
+
+Obsidian Harness Bot features an autonomous multi-agent architecture allowing you to configure domain-specific AI agents with custom instructions and strict vault boundaries:
+
+### Highlights
+- 👤 **Custom Profiles & Independent System Prompts**: Configure agents with distinct personalities, specialized workflows, and individual model/provider preferences in **Settings → Obsidian Harness Bot → Agents & Subagents**.
+- 📁 **Vault Sandboxing & `workspacePath`**: Restrict an agent's file tools (`read_file`, `create_file`, `patch_file`, `list_dir`, `search_notes`, `generate_pdf`) strictly to a designated folder (e.g. `Projects/Research`). Path traversal attempts (`..`) are strictly rejected.
+- 📜 **Automatic `AGENT.md` Instruction Context**: When an agent has a `workspacePath`, any `AGENT.md` file residing in that folder is automatically appended to the agent's prompt as localized rules and guidelines.
+- ⚡ **Autonomous Subagent Delegation (`invoke_subagent`)**: The Main Agent can spawn subagents to complete focused sub-tasks in parallel or sequentially. Subagents execute in their own isolated loop and stream thoughts and actions directly into collapsible cards in the chat timeline.
+- 🛠️ **Programmatic Agent Management (`manage_agents`)**: The Main Agent can dynamically create new subagent profiles and scaffold their directories and `AGENT.md` templates on the fly.
+- 💬 **Direct Chat Mode**: Easily switch the active agent using the dropdown in the chat header to converse directly with any specialized agent in its isolated sandbox.
 
 ---
 
