@@ -1533,6 +1533,166 @@
 }
 
 /* ==========================================================================
+   Custom Agents & Subagent Harness Styles
+   ========================================================================== */
+
+.harness-agents-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.harness-agents-empty {
+  padding: 12px 14px;
+  color: var(--text-muted);
+  font-style: italic;
+  background-color: var(--background-secondary-alt);
+  border: 1px dashed var(--background-modifier-border);
+  border-radius: 6px;
+  text-align: center;
+}
+
+.harness-agent-card {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 4px 0 8px 0;
+  background-color: var(--background-primary-alt);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.harness-agent-card:hover {
+  border-color: var(--interactive-accent);
+}
+
+.harness-agent-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.harness-agent-card-title,
+.harness-agent-title-wrapper {
+  font-size: 1.05em;
+  font-weight: 600;
+  color: var(--text-normal);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.harness-agent-main-badge,
+.harness-badge-main {
+  font-size: 0.75em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+  font-weight: 600;
+  line-height: 1.2;
+  display: inline-flex;
+  align-items: center;
+}
+
+.harness-agent-card-desc,
+.harness-agent-desc {
+  font-size: 0.88em;
+  color: var(--text-muted);
+  line-height: 1.4;
+  margin: 4px 0;
+}
+
+.harness-agent-card-meta,
+.harness-agent-badges-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 2px;
+}
+
+.harness-agent-badge {
+  font-size: 0.75em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background-color: var(--background-secondary-alt);
+  border: 1px solid var(--background-modifier-border);
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  line-height: 1.3;
+}
+
+.harness-agent-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.harness-agent-edit-modal {
+  max-width: 680px;
+  width: 90vw;
+}
+
+.harness-agent-edit-modal .setting-item {
+  border-top: 1px solid var(--background-modifier-border);
+  padding: 10px 0;
+}
+
+.harness-agent-edit-modal .setting-item:first-of-type {
+  border-top: none;
+}
+
+.harness-tools-permission-section {
+  background-color: var(--background-secondary-alt);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  padding: 12px;
+  margin: 8px 0 16px 0;
+}
+
+.harness-tool-category-grid,
+.harness-tool-categories-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.harness-tool-category-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--background-modifier-border);
+  background-color: var(--background-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.harness-tool-category-item:hover {
+  background-color: var(--background-modifier-hover);
+  border-color: var(--interactive-accent);
+}
+
+.harness-tool-category-item input[type="checkbox"] {
+  margin-top: 2px;
+  cursor: pointer;
+}
+
+/* ==========================================================================
    Universal Keyboard Focus Indicators (:focus-visible)
    ========================================================================== */
 .harness-chat-container button:focus-visible,
@@ -1540,6 +1700,7 @@
 .harness-chat-container textarea:focus-visible,
 .harness-chat-container select:focus-visible,
 .harness-chat-container summary:focus-visible,
+.harness-agent-select:focus-visible,
 .harness-model-select-trigger:focus-visible,
 .harness-model-search-input:focus-visible,
 .harness-model-option:focus-visible,
@@ -1549,6 +1710,12 @@
 .harness-skills-modal input:focus-visible,
 .harness-mcp-modal button:focus-visible,
 .harness-mcp-modal input:focus-visible,
+.harness-agent-edit-modal button:focus-visible,
+.harness-agent-edit-modal input:focus-visible,
+.harness-agent-edit-modal textarea:focus-visible,
+.harness-agent-edit-modal select:focus-visible,
+.harness-tool-category-item input:focus-visible,
+.harness-tool-category-item:focus-within,
 .harness-settings-container button:focus-visible,
 .harness-settings-container input:focus-visible,
 .harness-settings-container select:focus-visible,
@@ -1563,7 +1730,10 @@
 .harness-tab-btn:focus-visible,
 .harness-session-card:focus-visible,
 .harness-skill-card:focus-visible,
-.harness-mcp-card:focus-visible {
+.harness-mcp-card:focus-visible,
+.harness-agent-card:focus-visible,
+.harness-subagent-card summary:focus-visible,
+.harness-subagent-card button:focus-visible {
   outline: 2px solid var(--interactive-accent) !important;
   outline-offset: 2px !important;
   border-radius: 4px;
@@ -1581,6 +1751,13 @@
     gap: 6px;
   }
 
+  .harness-agent-select {
+    min-height: 38px;
+    height: 38px;
+    font-size: 14px;
+    padding: 4px 8px;
+  }
+
   .harness-chat-messages {
     padding: 8px 2px;
     -webkit-overflow-scrolling: touch;
@@ -1589,6 +1766,18 @@
 
   .harness-message {
     max-width: 98%;
+  }
+
+  .harness-subagent-card .harness-collapsible-summary,
+  .harness-subagent-summary {
+    min-height: 38px;
+    padding: 8px 10px;
+  }
+
+  .harness-subagent-card .harness-tool-copy-btn {
+    min-width: 36px !important;
+    min-height: 36px !important;
+    padding: 6px 8px;
   }
 
   .harness-chat-bottom-row {
@@ -1682,6 +1871,67 @@
     min-height: 44px !important;
     width: 44px !important;
     height: 44px !important;
+  }
+
+  .harness-agent-card {
+    padding: 10px 12px;
+  }
+
+  .harness-agent-card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .harness-agent-card-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .harness-agent-edit-modal {
+    width: 96vw !important;
+    max-height: 88vh !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    touch-action: pan-x pan-y;
+    padding: 14px !important;
+  }
+
+  .harness-agent-edit-modal .setting-item {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .harness-agent-edit-modal .setting-item-control {
+    width: 100%;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .harness-agent-edit-modal .setting-item-control input[type="text"],
+  .harness-agent-edit-modal .setting-item-control textarea,
+  .harness-agent-edit-modal .setting-item-control select {
+    flex: 1 1 180px;
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .harness-agent-edit-modal .setting-item-control button {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 8px 14px;
+  }
+
+  .harness-tool-category-grid,
+  .harness-tool-categories-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .harness-tool-category-item {
+    min-height: 40px;
+    padding: 8px 10px;
   }
 
   .harness-provider-card {
@@ -1823,6 +2073,28 @@
     padding: 10px 12px;
   }
 
+  .harness-agent-select {
+    min-height: 44px;
+    height: 44px;
+    font-size: 16px;
+    padding: 6px 10px;
+  }
+
+  .harness-subagent-card .harness-collapsible-summary,
+  .harness-subagent-summary {
+    min-height: 44px;
+    padding: 10px 12px;
+  }
+
+  .harness-tool-category-item {
+    min-height: 44px;
+    padding: 10px 12px;
+  }
+
+  .harness-agent-badge {
+    padding: 4px 8px;
+  }
+
   .harness-expand-btn {
     min-width: 36px !important;
     min-height: 36px !important;
@@ -1838,7 +2110,8 @@
 
   .harness-msg-copy-btn,
   .harness-code-copy-btn,
-  .harness-tool-copy-btn {
+  .harness-tool-copy-btn,
+  .harness-subagent-card .harness-tool-copy-btn {
     min-height: 36px;
     min-width: 36px;
     padding: 6px 8px;
