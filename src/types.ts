@@ -100,6 +100,8 @@ export interface ChatSession {
   model: string;
 }
 
+export type SearchProviderType = 'duckduckgo' | 'searxng' | 'tavily';
+
 import { SkillMetadata } from './skills/types';
 import { McpServerConfig } from './mcp/types';
 
@@ -115,6 +117,10 @@ export interface HarnessSettings {
   customMarketplaceUrl?: string;
   scanVaultSkills?: boolean;
   mcpServers?: McpServerConfig[];
+  searchProvider?: SearchProviderType;
+  searxngUrl?: string;
+  tavilyApiKeySecretName?: string;
+  defaultPdfFolder?: string;
 }
 
 export const DEFAULT_SETTINGS: HarnessSettings = {
@@ -129,6 +135,10 @@ export const DEFAULT_SETTINGS: HarnessSettings = {
   customMarketplaceUrl: '',
   scanVaultSkills: true,
   mcpServers: [],
+  searchProvider: 'duckduckgo',
+  searxngUrl: 'http://localhost:8080',
+  tavilyApiKeySecretName: 'oh_bot_secret_tavily',
+  defaultPdfFolder: 'Documents/Generated',
 };
 
 export interface LLMMessage {

@@ -8,13 +8,22 @@
 ## Proposed Tasks
 
 ### Task 1: Package Dependencies & Bundle Setup
-- [ ] Install `jspdf` and `@types/jspdf` for in-memory pure client-side PDF document compilation.
-- [ ] Verify `esbuild.config.mjs` bundles `jspdf` seamlessly for Obsidian mobile/desktop.
+- [x] Install `jspdf` and `@types/jspdf` for in-memory pure client-side PDF document compilation.
+- [x] Verify `esbuild.config.mjs` bundles `jspdf` seamlessly for Obsidian mobile/desktop.
 
 ### Task 2: Data Models & Settings Extension
-- [ ] Update `src/types.ts`:
-  - Add `SearchProviderType` (`'duckduckgo' | 'searxng' | 'tavily'`).
-  - Add `searchProvider`, `searxngUrl`, `tavilyApiKeySecretName`, `defaultPdfFolder` to `HarnessSettings` and `DEFAULT_SETTINGS`.
+- [x] Update `src/types.ts`:
+  - Export `type SearchProviderType = 'duckduckgo' | 'searxng' | 'tavily';`
+  - In `HarnessSettings` interface, add:
+    - `searchProvider?: SearchProviderType;` (or required with default in DEFAULT_SETTINGS)
+    - `searxngUrl?: string;`
+    - `tavilyApiKeySecretName?: string;`
+    - `defaultPdfFolder?: string;`
+  - In `DEFAULT_SETTINGS`, populate:
+    - `searchProvider: 'duckduckgo'`,
+    - `searxngUrl: 'http://localhost:8080'`,
+    - `tavilyApiKeySecretName: 'oh_bot_secret_tavily'`,
+    - `defaultPdfFolder: 'Documents/Generated'`.
 
 ### Task 3: Search Engine Adapters & Router
 - [ ] Create `src/tools/web/types.ts` for search results and provider interfaces.
