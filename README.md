@@ -54,6 +54,39 @@ Obsidian Harness Bot includes a first-class skills management engine compatible 
 
 ---
 
+## Web Search & Deep Research (`web_search` & `fetch_web_page`)
+
+Obsidian Harness Bot equips the agent with native internet research capabilities that work seamlessly on **Mobile (iOS & Android)** and **Desktop** without CORS issues:
+
+- 🔍 **`web_search`**:
+  - **DuckDuckGo (Default, Free & Zero-Config)**: Search the web immediately without signing up for third-party API keys or external services.
+  - **SearXNG Support**: Connect to your private self-hosted SearXNG instance by providing your custom instance URL.
+  - **Tavily Search API**: Optional cloud search engine support with API key securely stored in Obsidian's `SecretStorage`.
+- 📖 **`fetch_web_page`**:
+  - Fetches and converts full web pages into clean, readable Markdown.
+  - Automatically strips navigation bars, scripts, stylesheets, ads, headers, footers, and cookie banners.
+  - Includes smart content truncation and anti-bot / Cloudflare challenge detection.
+
+Configure your active search provider under **Settings → Obsidian Harness Bot → Web Search & Document Tools**.
+
+---
+
+## Client-Side PDF Generation (`generate_pdf`)
+
+Generate beautifully formatted, publication-ready PDF documents and executive reports directly into your Obsidian Vault:
+
+- 📱 **100% Pure Client-Side (Mobile & Desktop)**: Uses an in-memory `html2canvas` + `jsPDF` canvas-slicing pipeline in JavaScript. Zero dependencies on Node.js CLI tools, external servers, or browser print dialogs.
+- 🔤 **Full Unicode & Cyrillic Support**: High-DPI (Retina 2x) rendering ensures crisp, native typography for Russian (Cyrillic), English, Asian scripts, emojis, and math symbols.
+- 🎨 **Anthropic-Grade Themes**:
+  - `anthropic-report` (Default): Modern aesthetic with terracotta accents (`#cc6b49`), clean typography, callout cards, zebra-striped tables, header metadata, and page breaks.
+  - `academic`: Formal serif typography (Georgia), compact academic tables, and numbered headings.
+  - `minimal`: Clean monochrome styling with high-contrast borders.
+  - `raw`: Unstyled HTML/Markdown structure.
+- 📂 **Direct Vault Persistence**: Automatically creates missing parent directories recursively and writes binary `.pdf` files into your vault (`app.vault.createBinary`).
+- 🛡️ **Strict Safety Mode**: Integrated with the plugin's mutation safety system to request user confirmation before modifying the vault.
+
+---
+
 ## Supported Providers & Presets
 
 - **OpenRouter** (Claude 3.7 Sonnet, DeepSeek R1, GPT-4o, Llama 3.3)
