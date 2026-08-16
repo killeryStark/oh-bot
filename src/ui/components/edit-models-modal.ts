@@ -48,6 +48,7 @@ export class EditModelsModal extends Modal {
       rowEl.style.gap = '8px';
 
       const input = rowEl.createEl('input', { type: 'text', value: modelName });
+      input.setAttribute('aria-label', 'Model identifier');
       input.style.flex = '1';
       input.addEventListener('change', (e) => {
         const val = (e.target as HTMLInputElement).value.trim();
@@ -59,6 +60,7 @@ export class EditModelsModal extends Modal {
       const delBtn = rowEl.createEl('button', { cls: 'harness-btn-icon-round' });
       setIcon(delBtn, 'trash');
       delBtn.setAttribute('aria-label', 'Delete model');
+      delBtn.setAttribute('title', 'Delete model');
       delBtn.addEventListener('click', () => {
         this.models.splice(index, 1);
         this.render();
@@ -75,9 +77,12 @@ export class EditModelsModal extends Modal {
       type: 'text',
       placeholder: 'Enter new model identifier (e.g. gpt-4o, claude-3-5-haiku)',
     });
+    addInput.setAttribute('aria-label', 'New model identifier');
     addInput.style.flex = '1';
 
     const addBtn = addRowEl.createEl('button', { text: ' Add Model' });
+    addBtn.setAttribute('aria-label', 'Add model');
+    addBtn.setAttribute('title', 'Add model');
     setIcon(addBtn, 'plus');
     const handleAdd = () => {
       const val = addInput.value.trim();
@@ -103,24 +108,29 @@ export class EditModelsModal extends Modal {
 
     // Footer actions
     new Setting(contentEl)
-      .addButton((btn) =>
-        btn.setButtonText('Cancel').onClick(() => {
+      .addButton((btn) => {
+        btn.setButtonText('Cancel');
+        btn.buttonEl.setAttribute('aria-label', 'Cancel');
+        btn.buttonEl.setAttribute('title', 'Cancel');
+        btn.onClick(() => {
           this.close();
-        })
-      )
-      .addButton((btn) =>
+        });
+      })
+      .addButton((btn) => {
         btn
           .setButtonText('Save Changes')
-          .setCta()
-          .onClick(async () => {
-            const cleanModels = this.models
-              .map((m) => m.trim())
-              .filter((m) => m.length > 0);
-            await this.onSave(cleanModels);
-            new Notice(`Models updated for ${this.provider.name}`);
-            this.close();
-          })
-      );
+          .setCta();
+        btn.buttonEl.setAttribute('aria-label', 'Save changes');
+        btn.buttonEl.setAttribute('title', 'Save changes');
+        btn.onClick(async () => {
+          const cleanModels = this.models
+            .map((m) => m.trim())
+            .filter((m) => m.length > 0);
+          await this.onSave(cleanModels);
+          new Notice(`Models updated for ${this.provider.name}`);
+          this.close();
+        });
+      });
   }
 
   onClose() {

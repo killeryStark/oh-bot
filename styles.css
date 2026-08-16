@@ -794,6 +794,11 @@
   justify-content: flex-start;
 }
 
+.harness-settings-container .harness-model-select-trigger {
+  min-width: 180px;
+  max-width: 320px;
+}
+
 .harness-btn-icon-round {
   width: 30px !important;
   height: 30px !important;
@@ -1522,7 +1527,8 @@
   .harness-settings-container .setting-item-control input[type="text"],
   .harness-settings-container .setting-item-control input[type="password"],
   .harness-settings-container .setting-item-control select,
-  .harness-settings-container .setting-item-control .dropdown {
+  .harness-settings-container .setting-item-control .dropdown,
+  .harness-settings-container .setting-item-control .harness-model-select-trigger {
     min-height: 44px;
     font-size: 16px;
     box-sizing: border-box;

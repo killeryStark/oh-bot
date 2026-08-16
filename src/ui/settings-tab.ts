@@ -7,17 +7,35 @@ import { fetchAvailableModels } from '../utils/model-fetcher';
 import { SecretManager } from '../utils/secrets';
 import { SkillsModal } from './skills-modal';
 import { McpModal } from './mcp-modal';
+import { SearchableModelSelect } from './components/searchable-model-select';
 
 export class HarnessSettingTab extends PluginSettingTab {
   plugin: HarnessPlugin;
   private selectedConfigProviderId: string;
   private secretManager: SecretManager;
+  private activeModelSelects: SearchableModelSelect[] = [];
 
   constructor(app: App, plugin: HarnessPlugin) {
     super(app, plugin);
     this.plugin = plugin;
     this.secretManager = new SecretManager(app);
     this.selectedConfigProviderId = this.plugin.settings.activeProviderId || this.plugin.settings.providers[0]?.id || 'openrouter';
+  }
+
+  public hide(): void {
+    super.hide();
+    this.destroyActiveModelSelects();
+  }
+
+  private destroyActiveModelSelects(): void {
+    for (const select of this.activeModelSelects) {
+      try {
+        select.destroy();
+      } catch (e) {
+        // ignore
+      }
+    }
+    this.activeModelSelects = [];
   }
 
   private async saveSettings(): Promise<void> {
@@ -28,6 +46,8 @@ export class HarnessSettingTab extends PluginSettingTab {
   }
 
   display(): void {
+    this.destroyActiveModelSelects();
+
     const { containerEl } = this;
     containerEl.empty();
     containerEl.addClass('harness-settings-container');
@@ -68,28 +88,30 @@ export class HarnessSettingTab extends PluginSettingTab {
       .setName('Default Active Model')
       .setDesc(currentActiveProvider ? `Select model for ${currentActiveProvider.name}` : 'Select an active provider first');
 
-    if (currentActiveProvider && currentActiveProvider.models.length > 0) {
-      modelSetting.addDropdown((dropdown) => {
-        for (const m of currentActiveProvider.models) {
-          dropdown.addOption(m, m);
-        }
-        if (currentActiveProvider.models.includes(this.plugin.settings.activeModel)) {
-          dropdown.setValue(this.plugin.settings.activeModel);
-        } else {
-          dropdown.setValue(currentActiveProvider.models[0]);
-          this.plugin.settings.activeModel = currentActiveProvider.models[0];
-        }
-        dropdown.onChange(async (val) => {
-          this.plugin.settings.activeModel = val;
-          await this.saveSettings();
-        });
-      });
-    } else {
-      modelSetting.addDropdown((dropdown) => {
-        dropdown.addOption('', '(No models configured)');
-        dropdown.setValue('');
-      });
+    const availableModels = currentActiveProvider ? currentActiveProvider.models : [];
+    let selectedModel = '';
+    if (availableModels.length > 0) {
+      if (availableModels.includes(this.plugin.settings.activeModel)) {
+        selectedModel = this.plugin.settings.activeModel;
+      } else {
+        selectedModel = availableModels[0];
+        this.plugin.settings.activeModel = selectedModel;
+        void this.saveSettings();
+      }
     }
+
+    const defaultModelSelect = new SearchableModelSelect(modelSetting.controlEl, {
+      models: availableModels,
+      selectedModel: selectedModel,
+      placeholder: currentActiveProvider
+        ? (availableModels.length > 0 ? 'Select model...' : '(No models configured)')
+        : '(No provider selected)',
+      onChange: async (val) => {
+        this.plugin.settings.activeModel = val;
+        await this.saveSettings();
+      },
+    });
+    this.activeModelSelects.push(defaultModelSelect);
 
     containerEl.createEl('h3', { text: 'Provider Configuration' });
 
@@ -110,6 +132,8 @@ export class HarnessSettingTab extends PluginSettingTab {
 
     providerSelectSetting.addButton((btn) => {
       btn.setButtonText('+ Custom Provider');
+      btn.buttonEl.setAttribute('aria-label', 'Add custom provider');
+      btn.buttonEl.setAttribute('title', 'Add custom provider');
       btn.setCta();
       btn.onClick(() => {
         new AddProviderModal(this.app, async (newProvider) => {
@@ -176,6 +200,8 @@ export class HarnessSettingTab extends PluginSettingTab {
       if (hasKey) {
         keySetting.addButton((btn) => {
           btn.setButtonText('Clear Key');
+          btn.buttonEl.setAttribute('aria-label', 'Clear API key');
+          btn.buttonEl.setAttribute('title', 'Clear API key');
           btn.setWarning();
           btn.onClick(async () => {
             this.secretManager.setSecret(configProvider.apiKeySecretName, '');
@@ -190,23 +216,22 @@ export class HarnessSettingTab extends PluginSettingTab {
         .setName('Available Models')
         .setDesc(`${configProvider.models.length} model(s) configured`);
 
-      if (configProvider.models.length > 0) {
-        modelsSetting.addDropdown((dropdown) => {
-          for (const m of configProvider.models) {
-            dropdown.addOption(m, m);
-          }
-          dropdown.setValue(configProvider.models[0]);
-        });
-      } else {
-        modelsSetting.addDropdown((dropdown) => {
-          dropdown.addOption('', '(No models loaded)');
-        });
-      }
+      const providerModelSelect = new SearchableModelSelect(modelsSetting.controlEl, {
+        models: configProvider.models,
+        selectedModel: configProvider.models[0] || '',
+        placeholder: configProvider.models.length === 0 ? '(No models loaded)' : 'Search models...',
+        onChange: () => {
+          // Model selected in provider preview
+        },
+      });
+      this.activeModelSelects.push(providerModelSelect);
 
       // Round Refresh Button
       modelsSetting.addButton((btn) => {
         btn.setClass('harness-btn-icon-round');
         btn.setTooltip('Fetch models from endpoint');
+        btn.buttonEl.setAttribute('aria-label', 'Fetch models from endpoint');
+        btn.buttonEl.setAttribute('title', 'Fetch models from endpoint');
         setIcon(btn.buttonEl, 'refresh-cw');
         btn.onClick(async () => {
           const apiKey = this.secretManager.getSecret(configProvider.apiKeySecretName) || '';
@@ -230,6 +255,8 @@ export class HarnessSettingTab extends PluginSettingTab {
       modelsSetting.addButton((btn) => {
         btn.setClass('harness-btn-icon-round');
         btn.setTooltip('Edit models list');
+        btn.buttonEl.setAttribute('aria-label', 'Edit models list');
+        btn.buttonEl.setAttribute('title', 'Edit models list');
         setIcon(btn.buttonEl, 'pencil');
         btn.onClick(() => {
           new EditModelsModal(this.app, configProvider, async (updatedModels) => {
@@ -253,6 +280,8 @@ export class HarnessSettingTab extends PluginSettingTab {
 
         deleteSetting.addButton((btn) => {
           btn.setButtonText('Delete Provider');
+          btn.buttonEl.setAttribute('aria-label', 'Delete provider');
+          btn.buttonEl.setAttribute('title', 'Delete provider');
           setIcon(btn.buttonEl, 'trash');
           btn.setWarning();
           btn.onClick(async () => {
@@ -353,6 +382,8 @@ export class HarnessSettingTab extends PluginSettingTab {
       if (hasTavilyKey) {
         tavilySetting.addButton((btn) => {
           btn.setButtonText('Clear Key');
+          btn.buttonEl.setAttribute('aria-label', 'Clear Tavily API key');
+          btn.buttonEl.setAttribute('title', 'Clear Tavily API key');
           btn.setWarning();
           btn.onClick(async () => {
             this.secretManager.setSecret(tavilySecretName, '');
@@ -384,14 +415,15 @@ export class HarnessSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName('Manage Skills & Marketplace')
       .setDesc('Install skills from GitHub, browse the marketplace, or manage local vault skills')
-      .addButton((btn) =>
-        btn
-          .setButtonText('Open Skills Manager')
-          .setCta()
-          .onClick(() => {
-            new SkillsModal(this.app, this.plugin).open();
-          })
-      );
+      .addButton((btn) => {
+        btn.setButtonText('Open Skills Manager');
+        btn.buttonEl.setAttribute('aria-label', 'Open Skills Manager');
+        btn.buttonEl.setAttribute('title', 'Open Skills Manager');
+        btn.setCta();
+        btn.onClick(() => {
+          new SkillsModal(this.app, this.plugin).open();
+        });
+      });
 
     // Auto-scan Vault Skills
     new Setting(containerEl)
@@ -429,13 +461,14 @@ export class HarnessSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName('Manage MCP Servers & Integrations')
       .setDesc(`${enabledMcpCount} of ${mcpServers.length} servers active. Connect remote tools like Todoist, web search, and custom APIs.`)
-      .addButton((btn) =>
-        btn
-          .setButtonText('Open MCP Servers (/mcp)')
-          .setCta()
-          .onClick(() => {
-            new McpModal(this.app, this.plugin).open();
-          })
-      );
+      .addButton((btn) => {
+        btn.setButtonText('Open MCP Servers (/mcp)');
+        btn.buttonEl.setAttribute('aria-label', 'Open MCP servers');
+        btn.buttonEl.setAttribute('title', 'Open MCP servers');
+        btn.setCta();
+        btn.onClick(() => {
+          new McpModal(this.app, this.plugin).open();
+        });
+      });
   }
 }

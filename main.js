@@ -20299,7 +20299,7 @@ Always think step-by-step, use tools autonomously to verify or retrieve informat
 };
 
 // src/ui/settings-tab.ts
-var import_obsidian9 = require("obsidian");
+var import_obsidian10 = require("obsidian");
 
 // src/ui/components/add-provider-modal.ts
 var import_obsidian2 = require("obsidian");
@@ -20530,6 +20530,7 @@ var EditModelsModal = class extends import_obsidian3.Modal {
       rowEl.style.alignItems = "center";
       rowEl.style.gap = "8px";
       const input = rowEl.createEl("input", { type: "text", value: modelName });
+      input.setAttribute("aria-label", "Model identifier");
       input.style.flex = "1";
       input.addEventListener("change", (e2) => {
         const val = e2.target.value.trim();
@@ -20540,6 +20541,7 @@ var EditModelsModal = class extends import_obsidian3.Modal {
       const delBtn = rowEl.createEl("button", { cls: "harness-btn-icon-round" });
       (0, import_obsidian3.setIcon)(delBtn, "trash");
       delBtn.setAttribute("aria-label", "Delete model");
+      delBtn.setAttribute("title", "Delete model");
       delBtn.addEventListener("click", () => {
         this.models.splice(index2, 1);
         this.render();
@@ -20553,8 +20555,11 @@ var EditModelsModal = class extends import_obsidian3.Modal {
       type: "text",
       placeholder: "Enter new model identifier (e.g. gpt-4o, claude-3-5-haiku)"
     });
+    addInput.setAttribute("aria-label", "New model identifier");
     addInput.style.flex = "1";
     const addBtn = addRowEl.createEl("button", { text: " Add Model" });
+    addBtn.setAttribute("aria-label", "Add model");
+    addBtn.setAttribute("title", "Add model");
     (0, import_obsidian3.setIcon)(addBtn, "plus");
     const handleAdd = () => {
       const val = addInput.value.trim();
@@ -20576,18 +20581,24 @@ var EditModelsModal = class extends import_obsidian3.Modal {
         handleAdd();
       }
     });
-    new import_obsidian3.Setting(contentEl).addButton(
-      (btn) => btn.setButtonText("Cancel").onClick(() => {
+    new import_obsidian3.Setting(contentEl).addButton((btn) => {
+      btn.setButtonText("Cancel");
+      btn.buttonEl.setAttribute("aria-label", "Cancel");
+      btn.buttonEl.setAttribute("title", "Cancel");
+      btn.onClick(() => {
         this.close();
-      })
-    ).addButton(
-      (btn) => btn.setButtonText("Save Changes").setCta().onClick(async () => {
+      });
+    }).addButton((btn) => {
+      btn.setButtonText("Save Changes").setCta();
+      btn.buttonEl.setAttribute("aria-label", "Save changes");
+      btn.buttonEl.setAttribute("title", "Save changes");
+      btn.onClick(async () => {
         const cleanModels = this.models.map((m4) => m4.trim()).filter((m4) => m4.length > 0);
         await this.onSave(cleanModels);
         new import_obsidian3.Notice(`Models updated for ${this.provider.name}`);
         this.close();
-      })
-    );
+      });
+    });
   }
   onClose() {
     this.contentEl.empty();
@@ -21646,13 +21657,409 @@ var McpModal = class extends import_obsidian8.Modal {
   }
 };
 
+// src/ui/components/searchable-model-select.ts
+var import_obsidian9 = require("obsidian");
+var SearchableModelSelect = class {
+  constructor(containerEl, options) {
+    this.models = [];
+    this.selectedModel = "";
+    this.placeholder = "Select model...";
+    this.isOpen = false;
+    this.searchQuery = "";
+    this.filteredModels = [];
+    this.highlightedIndex = -1;
+    this.containerEl = containerEl;
+    this.options = options;
+    this.models = options.models ? [...options.models] : [];
+    this.selectedModel = options.selectedModel || "";
+    if (options.placeholder) {
+      this.placeholder = options.placeholder;
+    }
+    this.boundOnDocPointerDown = this.onDocPointerDown.bind(this);
+    this.boundOnWindowResize = this.updatePopoverPosition.bind(this);
+    this.boundOnTriggerClick = this.onTriggerClick.bind(this);
+    this.boundOnTriggerKeyDown = this.onTriggerKeyDown.bind(this);
+    this.boundOnSearchKeyDown = this.onSearchKeyDown.bind(this);
+    this.boundOnSearchInput = this.onSearchInput.bind(this);
+    this.boundOnClearClick = this.onClearClick.bind(this);
+    this.buildTrigger();
+    this.buildPopover();
+    this.updateTriggerText();
+  }
+  buildTrigger() {
+    this.triggerEl = this.containerEl.createEl("div", {
+      cls: "harness-model-select-trigger"
+    });
+    this.triggerEl.setAttribute("role", "combobox");
+    this.triggerEl.setAttribute("aria-haspopup", "listbox");
+    this.triggerEl.setAttribute("aria-expanded", "false");
+    this.triggerEl.setAttribute("aria-label", "Select active model");
+    this.triggerEl.setAttribute("tabindex", "0");
+    this.labelEl = this.triggerEl.createEl("span", {
+      cls: "harness-model-select-label"
+    });
+    this.iconSpanEl = this.triggerEl.createEl("span", {
+      cls: "harness-model-select-icon"
+    });
+    (0, import_obsidian9.setIcon)(this.iconSpanEl, "chevron-down");
+    this.triggerEl.addEventListener("click", this.boundOnTriggerClick);
+    this.triggerEl.addEventListener("keydown", this.boundOnTriggerKeyDown);
+  }
+  buildPopover() {
+    this.popoverEl = document.body.createEl("div", {
+      cls: "harness-model-select-popover"
+    });
+    this.popoverEl.style.display = "none";
+    this.searchContainerEl = this.popoverEl.createEl("div", {
+      cls: "harness-model-search-container"
+    });
+    const searchIconSpan = this.searchContainerEl.createEl("span", {
+      cls: "harness-model-search-icon"
+    });
+    (0, import_obsidian9.setIcon)(searchIconSpan, "search");
+    this.searchInputEl = this.searchContainerEl.createEl("input", {
+      cls: "harness-model-search-input",
+      type: "text",
+      placeholder: "Search model..."
+    });
+    this.searchInputEl.setAttribute("aria-label", "Search model");
+    this.searchInputEl.setAttribute("autocomplete", "off");
+    this.searchInputEl.setAttribute("spellcheck", "false");
+    this.clearBtnEl = this.searchContainerEl.createEl("button", {
+      cls: "harness-search-clear-btn",
+      text: "\u2715"
+    });
+    this.clearBtnEl.setAttribute("aria-label", "Clear search");
+    this.clearBtnEl.setAttribute("tabindex", "-1");
+    this.clearBtnEl.style.display = "none";
+    this.optionsListEl = this.popoverEl.createEl("div", {
+      cls: "harness-model-options-list"
+    });
+    this.optionsListEl.setAttribute("role", "listbox");
+    this.optionsListEl.setAttribute("aria-label", "Models list");
+    this.searchInputEl.addEventListener("input", this.boundOnSearchInput);
+    this.searchInputEl.addEventListener("keydown", this.boundOnSearchKeyDown);
+    this.clearBtnEl.addEventListener("click", this.boundOnClearClick);
+  }
+  updateTriggerText() {
+    if (this.selectedModel) {
+      this.labelEl.setText(this.selectedModel);
+      this.labelEl.removeClass("is-placeholder");
+    } else {
+      this.labelEl.setText(this.placeholder);
+      this.labelEl.addClass("is-placeholder");
+    }
+  }
+  onTriggerClick(e2) {
+    e2.preventDefault();
+    e2.stopPropagation();
+    if (this.isOpen) {
+      this.close();
+    } else {
+      this.open();
+    }
+  }
+  onTriggerKeyDown(e2) {
+    if (e2.key === "Enter" || e2.key === " " || e2.key === "ArrowDown" || e2.key === "ArrowUp") {
+      e2.preventDefault();
+      e2.stopPropagation();
+      this.open();
+    }
+  }
+  onSearchInput(e2) {
+    this.searchQuery = this.searchInputEl.value;
+    this.clearBtnEl.style.display = this.searchQuery ? "inline-flex" : "none";
+    this.highlightedIndex = -1;
+    this.renderOptions();
+  }
+  onClearClick(e2) {
+    e2.preventDefault();
+    e2.stopPropagation();
+    this.searchQuery = "";
+    this.searchInputEl.value = "";
+    this.clearBtnEl.style.display = "none";
+    this.highlightedIndex = -1;
+    this.renderOptions();
+    this.searchInputEl.focus();
+  }
+  onSearchKeyDown(e2) {
+    if (e2.key === "ArrowDown") {
+      e2.preventDefault();
+      if (this.filteredModels.length > 0) {
+        const nextIndex = this.highlightedIndex === -1 ? 0 : (this.highlightedIndex + 1) % this.filteredModels.length;
+        this.setHighlightedIndex(nextIndex, true);
+      }
+    } else if (e2.key === "ArrowUp") {
+      e2.preventDefault();
+      if (this.filteredModels.length > 0) {
+        const prevIndex = this.highlightedIndex <= 0 ? this.filteredModels.length - 1 : this.highlightedIndex - 1;
+        this.setHighlightedIndex(prevIndex, true);
+      }
+    } else if (e2.key === "Enter") {
+      e2.preventDefault();
+      if (this.highlightedIndex >= 0 && this.highlightedIndex < this.filteredModels.length) {
+        this.selectModel(this.filteredModels[this.highlightedIndex]);
+      } else if (this.filteredModels.length === 1) {
+        this.selectModel(this.filteredModels[0]);
+      }
+    } else if (e2.key === "Escape") {
+      e2.preventDefault();
+      this.close();
+      this.triggerEl.focus();
+    } else if (e2.key === "Tab") {
+      this.close();
+    }
+  }
+  highlightMatches(containerEl, text2, query) {
+    if (!query) {
+      containerEl.setText(text2);
+      return;
+    }
+    const lowerText = text2.toLowerCase();
+    const lowerQuery = query.toLowerCase();
+    let startIndex = 0;
+    let matchIndex = lowerText.indexOf(lowerQuery, startIndex);
+    if (matchIndex === -1) {
+      containerEl.setText(text2);
+      return;
+    }
+    while (matchIndex !== -1) {
+      if (matchIndex > startIndex) {
+        containerEl.createSpan({ text: text2.substring(startIndex, matchIndex) });
+      }
+      const matchEnd = matchIndex + lowerQuery.length;
+      containerEl.createEl("mark", {
+        cls: "harness-search-highlight",
+        text: text2.substring(matchIndex, matchEnd)
+      });
+      startIndex = matchEnd;
+      matchIndex = lowerText.indexOf(lowerQuery, startIndex);
+    }
+    if (startIndex < text2.length) {
+      containerEl.createSpan({ text: text2.substring(startIndex) });
+    }
+  }
+  renderOptions() {
+    this.optionsListEl.empty();
+    const query = this.searchQuery.trim().toLowerCase();
+    this.filteredModels = this.models.filter(
+      (m4) => m4.toLowerCase().includes(query)
+    );
+    if (this.filteredModels.length === 0) {
+      const emptyEl = this.optionsListEl.createEl("div", {
+        cls: "harness-model-empty"
+      });
+      if (this.searchQuery.trim()) {
+        emptyEl.setText(`No models found matching "${this.searchQuery.trim()}"`);
+      } else {
+        emptyEl.setText("No models available");
+      }
+      this.highlightedIndex = -1;
+      return;
+    }
+    if (this.highlightedIndex < 0 || this.highlightedIndex >= this.filteredModels.length) {
+      const selectedIdx = this.filteredModels.indexOf(this.selectedModel);
+      this.highlightedIndex = selectedIdx >= 0 ? selectedIdx : 0;
+    }
+    for (let i3 = 0; i3 < this.filteredModels.length; i3++) {
+      const model = this.filteredModels[i3];
+      const isSelected = model === this.selectedModel;
+      const isHighlighted = i3 === this.highlightedIndex;
+      const optionEl = this.optionsListEl.createEl("div", {
+        cls: "harness-model-option"
+      });
+      optionEl.setAttribute("role", "option");
+      optionEl.setAttribute("aria-selected", isSelected ? "true" : "false");
+      optionEl.setAttribute("data-model", model);
+      optionEl.setAttribute("data-index", String(i3));
+      if (isSelected) {
+        optionEl.addClass("is-selected");
+      }
+      if (isHighlighted) {
+        optionEl.addClass("is-highlighted");
+      }
+      const textSpan = optionEl.createEl("span", {
+        cls: "harness-model-option-text"
+      });
+      this.highlightMatches(textSpan, model, this.searchQuery.trim());
+      const checkIconSpan = optionEl.createEl("span", {
+        cls: "harness-model-check-icon"
+      });
+      if (isSelected) {
+        (0, import_obsidian9.setIcon)(checkIconSpan, "check");
+      }
+      optionEl.addEventListener("mouseenter", () => {
+        this.setHighlightedIndex(i3, false);
+      });
+      optionEl.addEventListener("mousedown", (e2) => {
+        e2.preventDefault();
+      });
+      optionEl.addEventListener("click", (e2) => {
+        e2.preventDefault();
+        e2.stopPropagation();
+        this.selectModel(model);
+      });
+    }
+  }
+  setHighlightedIndex(index2, scrollIntoView = false) {
+    if (this.filteredModels.length === 0) {
+      this.highlightedIndex = -1;
+      return;
+    }
+    this.highlightedIndex = Math.max(0, Math.min(index2, this.filteredModels.length - 1));
+    const optionEls = this.optionsListEl.querySelectorAll(".harness-model-option");
+    optionEls.forEach((opt, i3) => {
+      if (i3 === this.highlightedIndex) {
+        opt.addClass("is-highlighted");
+        if (scrollIntoView) {
+          opt.scrollIntoView({ block: "nearest" });
+        }
+      } else {
+        opt.removeClass("is-highlighted");
+      }
+    });
+  }
+  updatePopoverPosition() {
+    if (!this.isOpen)
+      return;
+    const rect = this.triggerEl.getBoundingClientRect();
+    const popoverWidth = Math.max(rect.width, 240);
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    let left = rect.left;
+    if (left + popoverWidth > viewportWidth - 8) {
+      left = Math.max(8, viewportWidth - popoverWidth - 8);
+    }
+    if (left < 8)
+      left = 8;
+    const spaceBelow = viewportHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    this.popoverEl.style.position = "fixed";
+    this.popoverEl.style.left = `${left}px`;
+    this.popoverEl.style.width = `${popoverWidth}px`;
+    this.popoverEl.style.zIndex = "9999";
+    if (spaceBelow < 220 && spaceAbove > spaceBelow) {
+      this.popoverEl.style.top = "auto";
+      this.popoverEl.style.bottom = `${viewportHeight - rect.top + 4}px`;
+    } else {
+      this.popoverEl.style.top = `${rect.bottom + 4}px`;
+      this.popoverEl.style.bottom = "auto";
+    }
+  }
+  onDocPointerDown(e2) {
+    if (!this.isOpen)
+      return;
+    const target = e2.target;
+    if (this.popoverEl.contains(target) || this.triggerEl.contains(target)) {
+      return;
+    }
+    this.close();
+  }
+  async selectModel(model) {
+    this.setValue(model);
+    this.close();
+    this.triggerEl.focus();
+    if (this.options.onChange) {
+      try {
+        await this.options.onChange(model);
+      } catch (err2) {
+        console.error("Error in SearchableModelSelect onChange callback:", err2);
+      }
+    }
+  }
+  open() {
+    if (this.isOpen)
+      return;
+    this.isOpen = true;
+    this.triggerEl.setAttribute("aria-expanded", "true");
+    this.triggerEl.addClass("is-open");
+    this.searchQuery = "";
+    this.searchInputEl.value = "";
+    this.clearBtnEl.style.display = "none";
+    this.renderOptions();
+    this.popoverEl.style.display = "flex";
+    this.updatePopoverPosition();
+    if (this.highlightedIndex >= 0) {
+      const activeOpt = this.optionsListEl.querySelector(".is-highlighted");
+      if (activeOpt) {
+        activeOpt.scrollIntoView({ block: "nearest" });
+      }
+    }
+    setTimeout(() => {
+      this.searchInputEl.focus();
+      this.searchInputEl.select();
+    }, 0);
+    document.addEventListener("pointerdown", this.boundOnDocPointerDown, true);
+    window.addEventListener("resize", this.boundOnWindowResize);
+    window.addEventListener("scroll", this.boundOnWindowResize, true);
+  }
+  close() {
+    if (!this.isOpen)
+      return;
+    this.isOpen = false;
+    this.triggerEl.setAttribute("aria-expanded", "false");
+    this.triggerEl.removeClass("is-open");
+    this.popoverEl.style.display = "none";
+    document.removeEventListener("pointerdown", this.boundOnDocPointerDown, true);
+    window.removeEventListener("resize", this.boundOnWindowResize);
+    window.removeEventListener("scroll", this.boundOnWindowResize, true);
+  }
+  setModels(models, selectedModel) {
+    this.models = [...models];
+    if (selectedModel !== void 0) {
+      this.selectedModel = selectedModel;
+    } else if (!this.models.includes(this.selectedModel)) {
+      this.selectedModel = this.models[0] || "";
+    }
+    this.updateTriggerText();
+    if (this.isOpen) {
+      this.renderOptions();
+      this.updatePopoverPosition();
+    }
+  }
+  setValue(model) {
+    this.selectedModel = model;
+    this.updateTriggerText();
+    if (this.isOpen) {
+      this.renderOptions();
+    }
+  }
+  getValue() {
+    return this.selectedModel;
+  }
+  destroy() {
+    this.close();
+    this.triggerEl.removeEventListener("click", this.boundOnTriggerClick);
+    this.triggerEl.removeEventListener("keydown", this.boundOnTriggerKeyDown);
+    this.searchInputEl.removeEventListener("input", this.boundOnSearchInput);
+    this.searchInputEl.removeEventListener("keydown", this.boundOnSearchKeyDown);
+    this.clearBtnEl.removeEventListener("click", this.boundOnClearClick);
+    this.triggerEl.remove();
+    this.popoverEl.remove();
+  }
+};
+
 // src/ui/settings-tab.ts
-var HarnessSettingTab = class extends import_obsidian9.PluginSettingTab {
+var HarnessSettingTab = class extends import_obsidian10.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
+    this.activeModelSelects = [];
     this.plugin = plugin;
     this.secretManager = new SecretManager(app);
     this.selectedConfigProviderId = this.plugin.settings.activeProviderId || this.plugin.settings.providers[0]?.id || "openrouter";
+  }
+  hide() {
+    super.hide();
+    this.destroyActiveModelSelects();
+  }
+  destroyActiveModelSelects() {
+    for (const select of this.activeModelSelects) {
+      try {
+        select.destroy();
+      } catch (e2) {
+      }
+    }
+    this.activeModelSelects = [];
   }
   async saveSettings() {
     await this.plugin.saveSettings();
@@ -21661,11 +22068,12 @@ var HarnessSettingTab = class extends import_obsidian9.PluginSettingTab {
     }
   }
   display() {
+    this.destroyActiveModelSelects();
     const { containerEl } = this;
     containerEl.empty();
     containerEl.addClass("harness-settings-container");
     containerEl.createEl("h2", { text: "Obsidian Harness Bot Settings" });
-    new import_obsidian9.Setting(containerEl).setName("Default Active Provider").setDesc("Select the default AI provider for agent operations").addDropdown((dropdown) => {
+    new import_obsidian10.Setting(containerEl).setName("Default Active Provider").setDesc("Select the default AI provider for agent operations").addDropdown((dropdown) => {
       dropdown.addOption("", "(Not configured)");
       for (const prov of this.plugin.settings.providers) {
         const hasKey = prov.type === "ollama" || this.secretManager.hasSecret(prov.apiKeySecretName);
@@ -21688,31 +22096,30 @@ var HarnessSettingTab = class extends import_obsidian9.PluginSettingTab {
     const currentActiveProvider = this.plugin.settings.providers.find(
       (p3) => p3.id === this.plugin.settings.activeProviderId
     );
-    const modelSetting = new import_obsidian9.Setting(containerEl).setName("Default Active Model").setDesc(currentActiveProvider ? `Select model for ${currentActiveProvider.name}` : "Select an active provider first");
-    if (currentActiveProvider && currentActiveProvider.models.length > 0) {
-      modelSetting.addDropdown((dropdown) => {
-        for (const m4 of currentActiveProvider.models) {
-          dropdown.addOption(m4, m4);
-        }
-        if (currentActiveProvider.models.includes(this.plugin.settings.activeModel)) {
-          dropdown.setValue(this.plugin.settings.activeModel);
-        } else {
-          dropdown.setValue(currentActiveProvider.models[0]);
-          this.plugin.settings.activeModel = currentActiveProvider.models[0];
-        }
-        dropdown.onChange(async (val) => {
-          this.plugin.settings.activeModel = val;
-          await this.saveSettings();
-        });
-      });
-    } else {
-      modelSetting.addDropdown((dropdown) => {
-        dropdown.addOption("", "(No models configured)");
-        dropdown.setValue("");
-      });
+    const modelSetting = new import_obsidian10.Setting(containerEl).setName("Default Active Model").setDesc(currentActiveProvider ? `Select model for ${currentActiveProvider.name}` : "Select an active provider first");
+    const availableModels = currentActiveProvider ? currentActiveProvider.models : [];
+    let selectedModel = "";
+    if (availableModels.length > 0) {
+      if (availableModels.includes(this.plugin.settings.activeModel)) {
+        selectedModel = this.plugin.settings.activeModel;
+      } else {
+        selectedModel = availableModels[0];
+        this.plugin.settings.activeModel = selectedModel;
+        void this.saveSettings();
+      }
     }
+    const defaultModelSelect = new SearchableModelSelect(modelSetting.controlEl, {
+      models: availableModels,
+      selectedModel,
+      placeholder: currentActiveProvider ? availableModels.length > 0 ? "Select model..." : "(No models configured)" : "(No provider selected)",
+      onChange: async (val) => {
+        this.plugin.settings.activeModel = val;
+        await this.saveSettings();
+      }
+    });
+    this.activeModelSelects.push(defaultModelSelect);
     containerEl.createEl("h3", { text: "Provider Configuration" });
-    const providerSelectSetting = new import_obsidian9.Setting(containerEl).setName("Select Provider to Configure").setDesc("Choose a provider to configure its API key, base URL, and model list").addDropdown((dropdown) => {
+    const providerSelectSetting = new import_obsidian10.Setting(containerEl).setName("Select Provider to Configure").setDesc("Choose a provider to configure its API key, base URL, and model list").addDropdown((dropdown) => {
       for (const prov of this.plugin.settings.providers) {
         dropdown.addOption(prov.id, prov.name);
       }
@@ -21724,6 +22131,8 @@ var HarnessSettingTab = class extends import_obsidian9.PluginSettingTab {
     });
     providerSelectSetting.addButton((btn) => {
       btn.setButtonText("+ Custom Provider");
+      btn.buttonEl.setAttribute("aria-label", "Add custom provider");
+      btn.buttonEl.setAttribute("title", "Add custom provider");
       btn.setCta();
       btn.onClick(() => {
         new AddProviderModal(this.app, async (newProvider) => {
@@ -21749,14 +22158,14 @@ var HarnessSettingTab = class extends import_obsidian9.PluginSettingTab {
       providerCardEl.style.marginBottom = "16px";
       providerCardEl.style.backgroundColor = "var(--background-secondary)";
       providerCardEl.createEl("h4", { text: `Configuration: ${configProvider.name}` });
-      new import_obsidian9.Setting(providerCardEl).setName("Base URL").setDesc("API Endpoint URL").addText(
+      new import_obsidian10.Setting(providerCardEl).setName("Base URL").setDesc("API Endpoint URL").addText(
         (text2) => text2.setValue(configProvider.baseUrl).onChange(async (val) => {
           configProvider.baseUrl = val.trim();
           await this.saveSettings();
         })
       );
       const hasKey = this.secretManager.hasSecret(configProvider.apiKeySecretName);
-      const keySetting = new import_obsidian9.Setting(providerCardEl).setName("API Key").setDesc(hasKey ? "Key is configured in SecretStorage" : "Enter API Key to store securely");
+      const keySetting = new import_obsidian10.Setting(providerCardEl).setName("API Key").setDesc(hasKey ? "Key is configured in SecretStorage" : "Enter API Key to store securely");
       keySetting.addText((text2) => {
         text2.inputEl.type = "password";
         text2.setPlaceholder(hasKey ? "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" : "Enter API Key");
@@ -21769,41 +22178,41 @@ var HarnessSettingTab = class extends import_obsidian9.PluginSettingTab {
               this.plugin.settings.activeModel = configProvider.models[0] || "";
             }
             await this.saveSettings();
-            new import_obsidian9.Notice(`API Key saved for ${configProvider.name}`);
+            new import_obsidian10.Notice(`API Key saved for ${configProvider.name}`);
           }
         });
       });
       if (hasKey) {
         keySetting.addButton((btn) => {
           btn.setButtonText("Clear Key");
+          btn.buttonEl.setAttribute("aria-label", "Clear API key");
+          btn.buttonEl.setAttribute("title", "Clear API key");
           btn.setWarning();
           btn.onClick(async () => {
             this.secretManager.setSecret(configProvider.apiKeySecretName, "");
-            new import_obsidian9.Notice(`API Key cleared for ${configProvider.name}`);
+            new import_obsidian10.Notice(`API Key cleared for ${configProvider.name}`);
             this.display();
           });
         });
       }
-      const modelsSetting = new import_obsidian9.Setting(providerCardEl).setName("Available Models").setDesc(`${configProvider.models.length} model(s) configured`);
-      if (configProvider.models.length > 0) {
-        modelsSetting.addDropdown((dropdown) => {
-          for (const m4 of configProvider.models) {
-            dropdown.addOption(m4, m4);
-          }
-          dropdown.setValue(configProvider.models[0]);
-        });
-      } else {
-        modelsSetting.addDropdown((dropdown) => {
-          dropdown.addOption("", "(No models loaded)");
-        });
-      }
+      const modelsSetting = new import_obsidian10.Setting(providerCardEl).setName("Available Models").setDesc(`${configProvider.models.length} model(s) configured`);
+      const providerModelSelect = new SearchableModelSelect(modelsSetting.controlEl, {
+        models: configProvider.models,
+        selectedModel: configProvider.models[0] || "",
+        placeholder: configProvider.models.length === 0 ? "(No models loaded)" : "Search models...",
+        onChange: () => {
+        }
+      });
+      this.activeModelSelects.push(providerModelSelect);
       modelsSetting.addButton((btn) => {
         btn.setClass("harness-btn-icon-round");
         btn.setTooltip("Fetch models from endpoint");
-        (0, import_obsidian9.setIcon)(btn.buttonEl, "refresh-cw");
+        btn.buttonEl.setAttribute("aria-label", "Fetch models from endpoint");
+        btn.buttonEl.setAttribute("title", "Fetch models from endpoint");
+        (0, import_obsidian10.setIcon)(btn.buttonEl, "refresh-cw");
         btn.onClick(async () => {
           const apiKey = this.secretManager.getSecret(configProvider.apiKeySecretName) || "";
-          new import_obsidian9.Notice(`Fetching models for ${configProvider.name}...`);
+          new import_obsidian10.Notice(`Fetching models for ${configProvider.name}...`);
           const fetched = await fetchAvailableModels(configProvider.baseUrl, apiKey);
           if (fetched.length > 0) {
             configProvider.models = fetched;
@@ -21811,17 +22220,19 @@ var HarnessSettingTab = class extends import_obsidian9.PluginSettingTab {
               this.plugin.settings.activeModel = fetched[0];
             }
             await this.saveSettings();
-            new import_obsidian9.Notice(`Updated ${configProvider.name} with ${fetched.length} models!`);
+            new import_obsidian10.Notice(`Updated ${configProvider.name} with ${fetched.length} models!`);
             this.display();
           } else {
-            new import_obsidian9.Notice("Could not fetch models automatically from endpoint.");
+            new import_obsidian10.Notice("Could not fetch models automatically from endpoint.");
           }
         });
       });
       modelsSetting.addButton((btn) => {
         btn.setClass("harness-btn-icon-round");
         btn.setTooltip("Edit models list");
-        (0, import_obsidian9.setIcon)(btn.buttonEl, "pencil");
+        btn.buttonEl.setAttribute("aria-label", "Edit models list");
+        btn.buttonEl.setAttribute("title", "Edit models list");
+        (0, import_obsidian10.setIcon)(btn.buttonEl, "pencil");
         btn.onClick(() => {
           new EditModelsModal(this.app, configProvider, async (updatedModels) => {
             configProvider.models = updatedModels;
@@ -21836,10 +22247,12 @@ var HarnessSettingTab = class extends import_obsidian9.PluginSettingTab {
         });
       });
       if (configProvider.isCustom) {
-        const deleteSetting = new import_obsidian9.Setting(providerCardEl).setName("Delete Provider").setDesc("Remove this custom provider from settings");
+        const deleteSetting = new import_obsidian10.Setting(providerCardEl).setName("Delete Provider").setDesc("Remove this custom provider from settings");
         deleteSetting.addButton((btn) => {
           btn.setButtonText("Delete Provider");
-          (0, import_obsidian9.setIcon)(btn.buttonEl, "trash");
+          btn.buttonEl.setAttribute("aria-label", "Delete provider");
+          btn.buttonEl.setAttribute("title", "Delete provider");
+          (0, import_obsidian10.setIcon)(btn.buttonEl, "trash");
           btn.setWarning();
           btn.onClick(async () => {
             this.plugin.settings.providers = this.plugin.settings.providers.filter(
@@ -21851,21 +22264,21 @@ var HarnessSettingTab = class extends import_obsidian9.PluginSettingTab {
               this.plugin.settings.activeModel = "";
             }
             await this.saveSettings();
-            new import_obsidian9.Notice(`Deleted provider "${configProvider.name}".`);
+            new import_obsidian10.Notice(`Deleted provider "${configProvider.name}".`);
             this.display();
           });
         });
       }
     }
     containerEl.createEl("h3", { text: "General & Safety" });
-    new import_obsidian9.Setting(containerEl).setName("Vault Modification Safety Mode").setDesc("Strict mode prompts for user confirmation before writing or modifying any Vault file").addDropdown(
+    new import_obsidian10.Setting(containerEl).setName("Vault Modification Safety Mode").setDesc("Strict mode prompts for user confirmation before writing or modifying any Vault file").addDropdown(
       (dropdown) => dropdown.addOption("strict", "Strict (Prompt before file edits)").addOption("auto", "Auto (Auto-approve file edits)").setValue(this.plugin.settings.safetyMode).onChange(async (value) => {
         this.plugin.settings.safetyMode = value;
         await this.saveSettings();
       })
     );
     containerEl.createEl("h3", { text: "Web Search & Document Tools" });
-    new import_obsidian9.Setting(containerEl).setName("Search Provider").setDesc("Select the web search provider used by the web_search tool").addDropdown((dropdown) => {
+    new import_obsidian10.Setting(containerEl).setName("Search Provider").setDesc("Select the web search provider used by the web_search tool").addDropdown((dropdown) => {
       dropdown.addOption("duckduckgo", "DuckDuckGo (Free / Zero-Config)").addOption("searxng", "SearXNG (Self-Hosted / Custom URL)").addOption("tavily", "Tavily Search (API Key)").setValue(this.plugin.settings.searchProvider || "duckduckgo").onChange(async (val) => {
         this.plugin.settings.searchProvider = val;
         await this.saveSettings();
@@ -21873,7 +22286,7 @@ var HarnessSettingTab = class extends import_obsidian9.PluginSettingTab {
       });
     });
     if (this.plugin.settings.searchProvider === "searxng") {
-      new import_obsidian9.Setting(containerEl).setName("SearXNG URL").setDesc("Base URL of your SearXNG instance (e.g. http://localhost:8080 or https://searx.example.com)").addText((text2) => {
+      new import_obsidian10.Setting(containerEl).setName("SearXNG URL").setDesc("Base URL of your SearXNG instance (e.g. http://localhost:8080 or https://searx.example.com)").addText((text2) => {
         text2.setPlaceholder("http://localhost:8080").setValue(this.plugin.settings.searxngUrl || "").onChange(async (val) => {
           this.plugin.settings.searxngUrl = val.trim();
           await this.saveSettings();
@@ -21883,7 +22296,7 @@ var HarnessSettingTab = class extends import_obsidian9.PluginSettingTab {
     if (this.plugin.settings.searchProvider === "tavily") {
       const tavilySecretName = this.plugin.settings.tavilyApiKeySecretName || "oh_bot_secret_tavily";
       const hasTavilyKey = this.secretManager.hasSecret(tavilySecretName);
-      const tavilySetting = new import_obsidian9.Setting(containerEl).setName("Tavily API Key").setDesc(
+      const tavilySetting = new import_obsidian10.Setting(containerEl).setName("Tavily API Key").setDesc(
         hasTavilyKey ? "Key is configured in SecretStorage" : "Enter Tavily API Key to store securely"
       );
       tavilySetting.addText((text2) => {
@@ -21894,43 +22307,49 @@ var HarnessSettingTab = class extends import_obsidian9.PluginSettingTab {
           if (trimmed) {
             this.secretManager.setSecret(tavilySecretName, trimmed);
             await this.saveSettings();
-            new import_obsidian9.Notice("Tavily API Key saved");
+            new import_obsidian10.Notice("Tavily API Key saved");
           }
         });
       });
       if (hasTavilyKey) {
         tavilySetting.addButton((btn) => {
           btn.setButtonText("Clear Key");
+          btn.buttonEl.setAttribute("aria-label", "Clear Tavily API key");
+          btn.buttonEl.setAttribute("title", "Clear Tavily API key");
           btn.setWarning();
           btn.onClick(async () => {
             this.secretManager.setSecret(tavilySecretName, "");
-            new import_obsidian9.Notice("Tavily API Key cleared");
+            new import_obsidian10.Notice("Tavily API Key cleared");
             await this.saveSettings();
             this.display();
           });
         });
       }
     }
-    new import_obsidian9.Setting(containerEl).setName("Default PDF Folder").setDesc("Default folder path in the vault for generated PDF documents").addText((text2) => {
+    new import_obsidian10.Setting(containerEl).setName("Default PDF Folder").setDesc("Default folder path in the vault for generated PDF documents").addText((text2) => {
       text2.setPlaceholder("Documents/Generated").setValue(this.plugin.settings.defaultPdfFolder || "").onChange(async (val) => {
         this.plugin.settings.defaultPdfFolder = val.trim();
         await this.saveSettings();
       });
     });
     containerEl.createEl("h3", { text: "Skills & Marketplace" });
-    new import_obsidian9.Setting(containerEl).setName("Manage Skills & Marketplace").setDesc("Install skills from GitHub, browse the marketplace, or manage local vault skills").addButton(
-      (btn) => btn.setButtonText("Open Skills Manager").setCta().onClick(() => {
+    new import_obsidian10.Setting(containerEl).setName("Manage Skills & Marketplace").setDesc("Install skills from GitHub, browse the marketplace, or manage local vault skills").addButton((btn) => {
+      btn.setButtonText("Open Skills Manager");
+      btn.buttonEl.setAttribute("aria-label", "Open Skills Manager");
+      btn.buttonEl.setAttribute("title", "Open Skills Manager");
+      btn.setCta();
+      btn.onClick(() => {
         new SkillsModal(this.app, this.plugin).open();
-      })
-    );
-    new import_obsidian9.Setting(containerEl).setName("Auto-scan Vault Folders").setDesc("Scan .agents/skills/, .skills/, .claude/skills/, .gemini/skills/ in Vault for local skills").addToggle(
+      });
+    });
+    new import_obsidian10.Setting(containerEl).setName("Auto-scan Vault Folders").setDesc("Scan .agents/skills/, .skills/, .claude/skills/, .gemini/skills/ in Vault for local skills").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.scanVaultSkills !== false).onChange(async (val) => {
         this.plugin.settings.scanVaultSkills = val;
         await this.saveSettings();
         await this.plugin.skillManager.refreshLocalSkills();
       })
     );
-    new import_obsidian9.Setting(containerEl).setName("Custom Marketplace Manifest URL").setDesc("Optional URL to load custom community skills manifest JSON").addText(
+    new import_obsidian10.Setting(containerEl).setName("Custom Marketplace Manifest URL").setDesc("Optional URL to load custom community skills manifest JSON").addText(
       (text2) => text2.setPlaceholder("https://raw.githubusercontent.com/.../skills.json").setValue(this.plugin.settings.customMarketplaceUrl || "").onChange(async (val) => {
         this.plugin.settings.customMarketplaceUrl = val.trim();
         await this.saveSettings();
@@ -21939,11 +22358,15 @@ var HarnessSettingTab = class extends import_obsidian9.PluginSettingTab {
     containerEl.createEl("h3", { text: "Model Context Protocol (MCP) Servers" });
     const mcpServers = this.plugin.mcpManager?.getAllServers() || [];
     const enabledMcpCount = mcpServers.filter((s3) => s3.enabled).length;
-    new import_obsidian9.Setting(containerEl).setName("Manage MCP Servers & Integrations").setDesc(`${enabledMcpCount} of ${mcpServers.length} servers active. Connect remote tools like Todoist, web search, and custom APIs.`).addButton(
-      (btn) => btn.setButtonText("Open MCP Servers (/mcp)").setCta().onClick(() => {
+    new import_obsidian10.Setting(containerEl).setName("Manage MCP Servers & Integrations").setDesc(`${enabledMcpCount} of ${mcpServers.length} servers active. Connect remote tools like Todoist, web search, and custom APIs.`).addButton((btn) => {
+      btn.setButtonText("Open MCP Servers (/mcp)");
+      btn.buttonEl.setAttribute("aria-label", "Open MCP servers");
+      btn.buttonEl.setAttribute("title", "Open MCP servers");
+      btn.setCta();
+      btn.onClick(() => {
         new McpModal(this.app, this.plugin).open();
-      })
-    );
+      });
+    });
   }
 };
 
@@ -22028,7 +22451,7 @@ var SSEStreamParser = class {
 };
 
 // src/engine/providers/openrouter.ts
-var import_obsidian10 = require("obsidian");
+var import_obsidian11 = require("obsidian");
 var OpenRouterProvider = class extends LLMProvider {
   constructor() {
     super(...arguments);
@@ -22136,7 +22559,7 @@ var OpenRouterProvider = class extends LLMProvider {
       if (signal?.aborted || err2.name === "AbortError") {
         throw new Error("Generation stopped by user.");
       }
-      const reqRes = await (0, import_obsidian10.requestUrl)({
+      const reqRes = await (0, import_obsidian11.requestUrl)({
         url: endpoint,
         method: "POST",
         headers: {
@@ -22156,7 +22579,7 @@ var OpenRouterProvider = class extends LLMProvider {
 };
 
 // src/engine/providers/openai.ts
-var import_obsidian11 = require("obsidian");
+var import_obsidian12 = require("obsidian");
 var OpenAIProvider = class extends LLMProvider {
   constructor() {
     super(...arguments);
@@ -22262,7 +22685,7 @@ var OpenAIProvider = class extends LLMProvider {
       if (signal?.aborted || err2.name === "AbortError") {
         throw new Error("Generation stopped by user.");
       }
-      const reqRes = await (0, import_obsidian11.requestUrl)({
+      const reqRes = await (0, import_obsidian12.requestUrl)({
         url: endpoint,
         method: "POST",
         headers: {
@@ -22282,7 +22705,7 @@ var OpenAIProvider = class extends LLMProvider {
 };
 
 // src/engine/providers/anthropic.ts
-var import_obsidian12 = require("obsidian");
+var import_obsidian13 = require("obsidian");
 var AnthropicProvider = class extends LLMProvider {
   constructor() {
     super(...arguments);
@@ -22398,7 +22821,7 @@ var AnthropicProvider = class extends LLMProvider {
       if (signal?.aborted || err2.name === "AbortError") {
         throw new Error("Generation stopped by user.");
       }
-      const reqRes = await (0, import_obsidian12.requestUrl)({
+      const reqRes = await (0, import_obsidian13.requestUrl)({
         url: endpoint,
         method: "POST",
         headers: {
@@ -22434,7 +22857,7 @@ var AnthropicProvider = class extends LLMProvider {
 };
 
 // src/engine/providers/ollama.ts
-var import_obsidian13 = require("obsidian");
+var import_obsidian14 = require("obsidian");
 var OllamaProvider = class extends LLMProvider {
   constructor() {
     super(...arguments);
@@ -22473,7 +22896,7 @@ var OllamaProvider = class extends LLMProvider {
     if (signal?.aborted) {
       throw new Error("Generation stopped by user.");
     }
-    const reqRes = await (0, import_obsidian13.requestUrl)({
+    const reqRes = await (0, import_obsidian14.requestUrl)({
       url: endpoint,
       method: "POST",
       headers,
@@ -22682,7 +23105,7 @@ var AgentTool = class {
 };
 
 // src/tools/vault/read-file.ts
-var import_obsidian14 = require("obsidian");
+var import_obsidian15 = require("obsidian");
 var VaultReadFileTool = class extends AgentTool {
   constructor() {
     super(...arguments);
@@ -22703,7 +23126,7 @@ var VaultReadFileTool = class extends AgentTool {
   async execute(args, app) {
     try {
       const file = app.vault.getAbstractFileByPath(args.path);
-      if (!file || !(file instanceof import_obsidian14.TFile)) {
+      if (!file || !(file instanceof import_obsidian15.TFile)) {
         return {
           success: false,
           output: "",
@@ -22781,7 +23204,7 @@ var VaultCreateFileTool = class extends AgentTool {
 };
 
 // src/tools/vault/patch-file.ts
-var import_obsidian15 = require("obsidian");
+var import_obsidian16 = require("obsidian");
 var VaultPatchFileTool = class extends AgentTool {
   constructor() {
     super(...arguments);
@@ -22811,7 +23234,7 @@ var VaultPatchFileTool = class extends AgentTool {
   async execute(args, app) {
     try {
       const file = app.vault.getAbstractFileByPath(args.path);
-      if (!file || !(file instanceof import_obsidian15.TFile)) {
+      if (!file || !(file instanceof import_obsidian16.TFile)) {
         return {
           success: false,
           output: "",
@@ -22842,7 +23265,7 @@ var VaultPatchFileTool = class extends AgentTool {
 };
 
 // src/tools/vault/list-dir.ts
-var import_obsidian16 = require("obsidian");
+var import_obsidian17 = require("obsidian");
 var VaultListDirTool = class extends AgentTool {
   constructor() {
     super(...arguments);
@@ -22864,7 +23287,7 @@ var VaultListDirTool = class extends AgentTool {
     try {
       const folderPath = (args.path || "").replace(/^\//, "");
       const folder = folderPath === "" ? app.vault.getRoot() : app.vault.getAbstractFileByPath(folderPath);
-      if (!folder || !(folder instanceof import_obsidian16.TFolder)) {
+      if (!folder || !(folder instanceof import_obsidian17.TFolder)) {
         return {
           success: false,
           output: "",
@@ -22874,7 +23297,7 @@ var VaultListDirTool = class extends AgentTool {
       const items = folder.children.map((child) => ({
         name: child.name,
         path: child.path,
-        type: child instanceof import_obsidian16.TFolder ? "folder" : "file"
+        type: child instanceof import_obsidian17.TFolder ? "folder" : "file"
       }));
       return {
         success: true,
@@ -22933,7 +23356,7 @@ var VaultSearchNotesTool = class extends AgentTool {
 };
 
 // src/tools/skills/create-skill.ts
-var import_obsidian17 = require("obsidian");
+var import_obsidian18 = require("obsidian");
 var CreateSkillTool = class extends AgentTool {
   constructor(skillManager) {
     super();
@@ -23011,7 +23434,7 @@ var CreateSkillTool = class extends AgentTool {
         author: typeof author === "string" ? author : void 0,
         version: typeof version === "string" ? version : void 0
       });
-      new import_obsidian17.Notice(`Skill "${saved.name}" (/${saved.id}) created!`);
+      new import_obsidian18.Notice(`Skill "${saved.name}" (/${saved.id}) created!`);
       return {
         success: true,
         output: `Successfully created and registered skill "${saved.name}" (ID: ${saved.id}, version: ${saved.version || "1.0.0"}).
@@ -23128,7 +23551,7 @@ var ListSkillsTool = class extends AgentTool {
 };
 
 // src/tools/web/adapters/duckduckgo.ts
-var import_obsidian18 = require("obsidian");
+var import_obsidian19 = require("obsidian");
 function decodeDuckDuckGoUrl(rawUrl) {
   if (!rawUrl)
     return "";
@@ -23174,7 +23597,7 @@ var DuckDuckGoAdapter = class {
       "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
     };
     try {
-      const res = await (0, import_obsidian18.requestUrl)({
+      const res = await (0, import_obsidian19.requestUrl)({
         url: "https://html.duckduckgo.com/html/",
         method: "POST",
         headers,
@@ -23183,7 +23606,7 @@ var DuckDuckGoAdapter = class {
       html2 = res.text;
     } catch (postError) {
       try {
-        const getRes = await (0, import_obsidian18.requestUrl)({
+        const getRes = await (0, import_obsidian19.requestUrl)({
           url: `https://html.duckduckgo.com/html/?q=${encodeURIComponent(trimmedQuery)}`,
           method: "GET",
           headers: {
@@ -23249,7 +23672,7 @@ var DuckDuckGoAdapter = class {
 };
 
 // src/tools/web/adapters/searxng.ts
-var import_obsidian19 = require("obsidian");
+var import_obsidian20 = require("obsidian");
 var SearXNGAdapter = class {
   constructor(searxngUrl = "http://localhost:8080") {
     this.searxngUrl = searxngUrl;
@@ -23266,7 +23689,7 @@ var SearXNGAdapter = class {
     const endpoint = `${baseUrl}/search?q=${encodeURIComponent(trimmedQuery)}&format=json`;
     let data;
     try {
-      const res = await (0, import_obsidian19.requestUrl)({
+      const res = await (0, import_obsidian20.requestUrl)({
         url: endpoint,
         method: "GET",
         headers: {
@@ -23299,7 +23722,7 @@ var SearXNGAdapter = class {
 };
 
 // src/tools/web/adapters/tavily.ts
-var import_obsidian20 = require("obsidian");
+var import_obsidian21 = require("obsidian");
 var TavilyAdapter = class {
   constructor(apiKey) {
     this.apiKey = apiKey;
@@ -23318,7 +23741,7 @@ var TavilyAdapter = class {
     const maxResults = Math.max(1, Math.min(limit || 5, 20));
     let data;
     try {
-      const res = await (0, import_obsidian20.requestUrl)({
+      const res = await (0, import_obsidian21.requestUrl)({
         url: "https://api.tavily.com/search",
         method: "POST",
         headers: {
@@ -23486,7 +23909,7 @@ ${formattedResults}`
 };
 
 // src/tools/web/reader.ts
-var import_obsidian21 = require("obsidian");
+var import_obsidian22 = require("obsidian");
 var NOISY_SELECTORS = [
   "script",
   "style",
@@ -23599,7 +24022,7 @@ var WebContentReader = class _WebContentReader {
     };
     let html2 = "";
     try {
-      const res = await (0, import_obsidian21.requestUrl)({
+      const res = await (0, import_obsidian22.requestUrl)({
         url: trimmedUrl,
         method: "GET",
         headers
@@ -24107,7 +24530,7 @@ ${result.content}`;
 };
 
 // src/tools/pdf/generator.ts
-var import_obsidian22 = require("obsidian");
+var import_obsidian23 = require("obsidian");
 
 // node_modules/jspdf/dist/jspdf.es.min.js
 init_typeof();
@@ -38996,11 +39419,11 @@ async function renderContentToElement(app, content, targetEl) {
     targetEl.innerHTML = content;
     return;
   }
-  if (app && import_obsidian22.MarkdownRenderer && typeof import_obsidian22.MarkdownRenderer.render === "function") {
-    const comp = new import_obsidian22.Component();
+  if (app && import_obsidian23.MarkdownRenderer && typeof import_obsidian23.MarkdownRenderer.render === "function") {
+    const comp = new import_obsidian23.Component();
     comp.load();
     try {
-      await import_obsidian22.MarkdownRenderer.render(app, content, targetEl, "", comp);
+      await import_obsidian23.MarkdownRenderer.render(app, content, targetEl, "", comp);
     } catch (err2) {
       console.warn("MarkdownRenderer failed, falling back to innerHTML:", err2);
       targetEl.innerHTML = content;
@@ -39127,9 +39550,9 @@ async function generatePdf(options, app) {
     await ensureParentFoldersExist(app, normalizedPath);
     const existing = app.vault.getAbstractFileByPath(normalizedPath);
     if (existing) {
-      if (existing instanceof import_obsidian22.TFile || "stat" in existing && !existing.children) {
+      if (existing instanceof import_obsidian23.TFile || "stat" in existing && !existing.children) {
         await app.vault.modifyBinary(existing, arrayBuffer);
-      } else if (existing instanceof import_obsidian22.TFolder) {
+      } else if (existing instanceof import_obsidian23.TFolder) {
         throw new Error(`A folder already exists at path: ${normalizedPath}`);
       } else {
         await app.vault.modifyBinary(existing, arrayBuffer);
@@ -39533,7 +39956,7 @@ var SessionManager = class {
 };
 
 // src/utils/mention-helper.ts
-var import_obsidian23 = require("obsidian");
+var import_obsidian24 = require("obsidian");
 var MentionHelper = class {
   /**
    * Returns all searchable files and folders in the Vault for @ autocomplete suggestions.
@@ -39545,7 +39968,7 @@ var MentionHelper = class {
     for (const item of allFiles) {
       if (item.path === "/" || item.path === "")
         continue;
-      const isFolder = item instanceof import_obsidian23.TFolder;
+      const isFolder = item instanceof import_obsidian24.TFolder;
       if (!queryLower || item.name.toLowerCase().includes(queryLower) || item.path.toLowerCase().includes(queryLower)) {
         items.push({
           name: item.name,
@@ -39575,7 +39998,7 @@ var MentionHelper = class {
     for (const match of matches) {
       const targetPath = match[1];
       const item = app.vault.getAbstractFileByPath(targetPath);
-      if (item instanceof import_obsidian23.TFile) {
+      if (item instanceof import_obsidian24.TFile) {
         try {
           const content = await app.vault.read(item);
           attachedBlocks.push(
@@ -39586,9 +40009,9 @@ ${content}
           );
         } catch (e2) {
         }
-      } else if (item instanceof import_obsidian23.TFolder) {
+      } else if (item instanceof import_obsidian24.TFolder) {
         try {
-          const children = item.children.map((c4) => `- ${c4.name} (${c4 instanceof import_obsidian23.TFolder ? "folder" : "file"})`).join("\n");
+          const children = item.children.map((c4) => `- ${c4.name} (${c4 instanceof import_obsidian24.TFolder ? "folder" : "file"})`).join("\n");
           attachedBlocks.push(
             `[Attached Folder: @${item.path}]
 \`\`\`
@@ -39609,8 +40032,8 @@ ${attachedBlocks.join("\n\n")}`;
 };
 
 // src/ui/components/confirmation-modal.ts
-var import_obsidian24 = require("obsidian");
-var ConfirmationModal = class extends import_obsidian24.Modal {
+var import_obsidian25 = require("obsidian");
+var ConfirmationModal = class extends import_obsidian25.Modal {
   constructor(app, toolCall, onResult) {
     super(app);
     this.toolCall = toolCall;
@@ -39626,7 +40049,7 @@ var ConfirmationModal = class extends import_obsidian24.Modal {
     });
     const codeBlock = contentEl.createEl("pre");
     codeBlock.createEl("code", { text: this.toolCall.function.arguments });
-    new import_obsidian24.Setting(contentEl).addButton(
+    new import_obsidian25.Setting(contentEl).addButton(
       (btn) => btn.setButtonText("Deny").onClick(() => {
         this.onResult(false);
         this.close();
@@ -39645,8 +40068,8 @@ var ConfirmationModal = class extends import_obsidian24.Modal {
 };
 
 // src/ui/components/sessions-modal.ts
-var import_obsidian25 = require("obsidian");
-var SessionsModal = class extends import_obsidian25.Modal {
+var import_obsidian26 = require("obsidian");
+var SessionsModal = class extends import_obsidian26.Modal {
   constructor(app, sessions, currentSessionId, onSelect, onDelete, onNewSession) {
     super(app);
     this.sessions = [...sessions];
@@ -39663,10 +40086,12 @@ var SessionsModal = class extends import_obsidian25.Modal {
     contentEl.empty();
     contentEl.addClass("harness-modal-content");
     contentEl.createEl("h2", { text: "Chat Sessions" });
-    const topSetting = new import_obsidian25.Setting(contentEl).setName("New Conversation").setDesc("Start a fresh agent harness session");
+    const topSetting = new import_obsidian26.Setting(contentEl).setName("New Conversation").setDesc("Start a fresh agent harness session");
     topSetting.addButton((btn) => {
       btn.setButtonText("+ New Session");
       btn.setCta();
+      btn.buttonEl.setAttribute("aria-label", "New chat session");
+      btn.buttonEl.setAttribute("title", "New session");
       btn.onClick(() => {
         this.onNewSession();
         this.close();
@@ -39687,7 +40112,7 @@ var SessionsModal = class extends import_obsidian25.Modal {
     const sorted = [...this.sessions].sort((a3, b2) => b2.updatedAt - a3.updatedAt);
     for (const session of sorted) {
       const isCurrent = session.id === this.currentSessionId;
-      const sessionRow = listEl.createEl("div");
+      const sessionRow = listEl.createEl("div", { cls: "harness-session-row" });
       sessionRow.style.display = "flex";
       sessionRow.style.alignItems = "center";
       sessionRow.style.justifyContent = "space-between";
@@ -39698,6 +40123,9 @@ var SessionsModal = class extends import_obsidian25.Modal {
       const infoEl = sessionRow.createEl("div");
       infoEl.style.cursor = "pointer";
       infoEl.style.flex = "1";
+      infoEl.setAttribute("tabindex", "0");
+      infoEl.setAttribute("role", "button");
+      infoEl.setAttribute("aria-label", `Select session: ${session.title}`);
       const titleEl = infoEl.createEl("div", { text: session.title, cls: "harness-session-title" });
       titleEl.style.fontWeight = "bold";
       titleEl.style.fontSize = "0.95em";
@@ -39707,16 +40135,24 @@ var SessionsModal = class extends import_obsidian25.Modal {
         cls: "setting-item-description"
       });
       metaEl.style.fontSize = "0.75em";
-      infoEl.addEventListener("click", () => {
+      const handleSelect = () => {
         this.onSelect(session.id);
         this.close();
+      };
+      infoEl.addEventListener("click", handleSelect);
+      infoEl.addEventListener("keydown", (e2) => {
+        if (e2.key === "Enter" || e2.key === " ") {
+          e2.preventDefault();
+          handleSelect();
+        }
       });
       const actionsEl = sessionRow.createEl("div");
       actionsEl.style.display = "flex";
       actionsEl.style.gap = "4px";
       const delBtn = actionsEl.createEl("button", { cls: "harness-btn-icon-round" });
-      (0, import_obsidian25.setIcon)(delBtn, "trash");
+      (0, import_obsidian26.setIcon)(delBtn, "trash");
       delBtn.setAttribute("aria-label", "Delete session");
+      delBtn.setAttribute("title", "Delete session");
       delBtn.addEventListener("click", (e2) => {
         e2.stopPropagation();
         this.onDelete(session.id);
@@ -39727,388 +40163,6 @@ var SessionsModal = class extends import_obsidian25.Modal {
   }
   onClose() {
     this.contentEl.empty();
-  }
-};
-
-// src/ui/components/searchable-model-select.ts
-var import_obsidian26 = require("obsidian");
-var SearchableModelSelect = class {
-  constructor(containerEl, options) {
-    this.models = [];
-    this.selectedModel = "";
-    this.placeholder = "Select model...";
-    this.isOpen = false;
-    this.searchQuery = "";
-    this.filteredModels = [];
-    this.highlightedIndex = -1;
-    this.containerEl = containerEl;
-    this.options = options;
-    this.models = options.models ? [...options.models] : [];
-    this.selectedModel = options.selectedModel || "";
-    if (options.placeholder) {
-      this.placeholder = options.placeholder;
-    }
-    this.boundOnDocPointerDown = this.onDocPointerDown.bind(this);
-    this.boundOnWindowResize = this.updatePopoverPosition.bind(this);
-    this.boundOnTriggerClick = this.onTriggerClick.bind(this);
-    this.boundOnTriggerKeyDown = this.onTriggerKeyDown.bind(this);
-    this.boundOnSearchKeyDown = this.onSearchKeyDown.bind(this);
-    this.boundOnSearchInput = this.onSearchInput.bind(this);
-    this.boundOnClearClick = this.onClearClick.bind(this);
-    this.buildTrigger();
-    this.buildPopover();
-    this.updateTriggerText();
-  }
-  buildTrigger() {
-    this.triggerEl = this.containerEl.createEl("div", {
-      cls: "harness-model-select-trigger"
-    });
-    this.triggerEl.setAttribute("role", "combobox");
-    this.triggerEl.setAttribute("aria-haspopup", "listbox");
-    this.triggerEl.setAttribute("aria-expanded", "false");
-    this.triggerEl.setAttribute("aria-label", "Select active model");
-    this.triggerEl.setAttribute("tabindex", "0");
-    this.labelEl = this.triggerEl.createEl("span", {
-      cls: "harness-model-select-label"
-    });
-    this.iconSpanEl = this.triggerEl.createEl("span", {
-      cls: "harness-model-select-icon"
-    });
-    (0, import_obsidian26.setIcon)(this.iconSpanEl, "chevron-down");
-    this.triggerEl.addEventListener("click", this.boundOnTriggerClick);
-    this.triggerEl.addEventListener("keydown", this.boundOnTriggerKeyDown);
-  }
-  buildPopover() {
-    this.popoverEl = document.body.createEl("div", {
-      cls: "harness-model-select-popover"
-    });
-    this.popoverEl.style.display = "none";
-    this.searchContainerEl = this.popoverEl.createEl("div", {
-      cls: "harness-model-search-container"
-    });
-    const searchIconSpan = this.searchContainerEl.createEl("span", {
-      cls: "harness-model-search-icon"
-    });
-    (0, import_obsidian26.setIcon)(searchIconSpan, "search");
-    this.searchInputEl = this.searchContainerEl.createEl("input", {
-      cls: "harness-model-search-input",
-      type: "text",
-      placeholder: "Search model..."
-    });
-    this.searchInputEl.setAttribute("aria-label", "Search model");
-    this.searchInputEl.setAttribute("autocomplete", "off");
-    this.searchInputEl.setAttribute("spellcheck", "false");
-    this.clearBtnEl = this.searchContainerEl.createEl("button", {
-      cls: "harness-search-clear-btn",
-      text: "\u2715"
-    });
-    this.clearBtnEl.setAttribute("aria-label", "Clear search");
-    this.clearBtnEl.setAttribute("tabindex", "-1");
-    this.clearBtnEl.style.display = "none";
-    this.optionsListEl = this.popoverEl.createEl("div", {
-      cls: "harness-model-options-list"
-    });
-    this.optionsListEl.setAttribute("role", "listbox");
-    this.optionsListEl.setAttribute("aria-label", "Models list");
-    this.searchInputEl.addEventListener("input", this.boundOnSearchInput);
-    this.searchInputEl.addEventListener("keydown", this.boundOnSearchKeyDown);
-    this.clearBtnEl.addEventListener("click", this.boundOnClearClick);
-  }
-  updateTriggerText() {
-    if (this.selectedModel) {
-      this.labelEl.setText(this.selectedModel);
-      this.labelEl.removeClass("is-placeholder");
-    } else {
-      this.labelEl.setText(this.placeholder);
-      this.labelEl.addClass("is-placeholder");
-    }
-  }
-  onTriggerClick(e2) {
-    e2.preventDefault();
-    e2.stopPropagation();
-    if (this.isOpen) {
-      this.close();
-    } else {
-      this.open();
-    }
-  }
-  onTriggerKeyDown(e2) {
-    if (e2.key === "Enter" || e2.key === " " || e2.key === "ArrowDown" || e2.key === "ArrowUp") {
-      e2.preventDefault();
-      e2.stopPropagation();
-      this.open();
-    }
-  }
-  onSearchInput(e2) {
-    this.searchQuery = this.searchInputEl.value;
-    this.clearBtnEl.style.display = this.searchQuery ? "inline-flex" : "none";
-    this.highlightedIndex = -1;
-    this.renderOptions();
-  }
-  onClearClick(e2) {
-    e2.preventDefault();
-    e2.stopPropagation();
-    this.searchQuery = "";
-    this.searchInputEl.value = "";
-    this.clearBtnEl.style.display = "none";
-    this.highlightedIndex = -1;
-    this.renderOptions();
-    this.searchInputEl.focus();
-  }
-  onSearchKeyDown(e2) {
-    if (e2.key === "ArrowDown") {
-      e2.preventDefault();
-      if (this.filteredModels.length > 0) {
-        const nextIndex = this.highlightedIndex === -1 ? 0 : (this.highlightedIndex + 1) % this.filteredModels.length;
-        this.setHighlightedIndex(nextIndex, true);
-      }
-    } else if (e2.key === "ArrowUp") {
-      e2.preventDefault();
-      if (this.filteredModels.length > 0) {
-        const prevIndex = this.highlightedIndex <= 0 ? this.filteredModels.length - 1 : this.highlightedIndex - 1;
-        this.setHighlightedIndex(prevIndex, true);
-      }
-    } else if (e2.key === "Enter") {
-      e2.preventDefault();
-      if (this.highlightedIndex >= 0 && this.highlightedIndex < this.filteredModels.length) {
-        this.selectModel(this.filteredModels[this.highlightedIndex]);
-      } else if (this.filteredModels.length === 1) {
-        this.selectModel(this.filteredModels[0]);
-      }
-    } else if (e2.key === "Escape") {
-      e2.preventDefault();
-      this.close();
-      this.triggerEl.focus();
-    } else if (e2.key === "Tab") {
-      this.close();
-    }
-  }
-  highlightMatches(containerEl, text2, query) {
-    if (!query) {
-      containerEl.setText(text2);
-      return;
-    }
-    const lowerText = text2.toLowerCase();
-    const lowerQuery = query.toLowerCase();
-    let startIndex = 0;
-    let matchIndex = lowerText.indexOf(lowerQuery, startIndex);
-    if (matchIndex === -1) {
-      containerEl.setText(text2);
-      return;
-    }
-    while (matchIndex !== -1) {
-      if (matchIndex > startIndex) {
-        containerEl.createSpan({ text: text2.substring(startIndex, matchIndex) });
-      }
-      const matchEnd = matchIndex + lowerQuery.length;
-      containerEl.createEl("mark", {
-        cls: "harness-search-highlight",
-        text: text2.substring(matchIndex, matchEnd)
-      });
-      startIndex = matchEnd;
-      matchIndex = lowerText.indexOf(lowerQuery, startIndex);
-    }
-    if (startIndex < text2.length) {
-      containerEl.createSpan({ text: text2.substring(startIndex) });
-    }
-  }
-  renderOptions() {
-    this.optionsListEl.empty();
-    const query = this.searchQuery.trim().toLowerCase();
-    this.filteredModels = this.models.filter(
-      (m4) => m4.toLowerCase().includes(query)
-    );
-    if (this.filteredModels.length === 0) {
-      const emptyEl = this.optionsListEl.createEl("div", {
-        cls: "harness-model-empty"
-      });
-      if (this.searchQuery.trim()) {
-        emptyEl.setText(`No models found matching "${this.searchQuery.trim()}"`);
-      } else {
-        emptyEl.setText("No models available");
-      }
-      this.highlightedIndex = -1;
-      return;
-    }
-    if (this.highlightedIndex < 0 || this.highlightedIndex >= this.filteredModels.length) {
-      const selectedIdx = this.filteredModels.indexOf(this.selectedModel);
-      this.highlightedIndex = selectedIdx >= 0 ? selectedIdx : 0;
-    }
-    for (let i3 = 0; i3 < this.filteredModels.length; i3++) {
-      const model = this.filteredModels[i3];
-      const isSelected = model === this.selectedModel;
-      const isHighlighted = i3 === this.highlightedIndex;
-      const optionEl = this.optionsListEl.createEl("div", {
-        cls: "harness-model-option"
-      });
-      optionEl.setAttribute("role", "option");
-      optionEl.setAttribute("aria-selected", isSelected ? "true" : "false");
-      optionEl.setAttribute("data-model", model);
-      optionEl.setAttribute("data-index", String(i3));
-      if (isSelected) {
-        optionEl.addClass("is-selected");
-      }
-      if (isHighlighted) {
-        optionEl.addClass("is-highlighted");
-      }
-      const textSpan = optionEl.createEl("span", {
-        cls: "harness-model-option-text"
-      });
-      this.highlightMatches(textSpan, model, this.searchQuery.trim());
-      const checkIconSpan = optionEl.createEl("span", {
-        cls: "harness-model-check-icon"
-      });
-      if (isSelected) {
-        (0, import_obsidian26.setIcon)(checkIconSpan, "check");
-      }
-      optionEl.addEventListener("mouseenter", () => {
-        this.setHighlightedIndex(i3, false);
-      });
-      optionEl.addEventListener("mousedown", (e2) => {
-        e2.preventDefault();
-      });
-      optionEl.addEventListener("click", (e2) => {
-        e2.preventDefault();
-        e2.stopPropagation();
-        this.selectModel(model);
-      });
-    }
-  }
-  setHighlightedIndex(index2, scrollIntoView = false) {
-    if (this.filteredModels.length === 0) {
-      this.highlightedIndex = -1;
-      return;
-    }
-    this.highlightedIndex = Math.max(0, Math.min(index2, this.filteredModels.length - 1));
-    const optionEls = this.optionsListEl.querySelectorAll(".harness-model-option");
-    optionEls.forEach((opt, i3) => {
-      if (i3 === this.highlightedIndex) {
-        opt.addClass("is-highlighted");
-        if (scrollIntoView) {
-          opt.scrollIntoView({ block: "nearest" });
-        }
-      } else {
-        opt.removeClass("is-highlighted");
-      }
-    });
-  }
-  updatePopoverPosition() {
-    if (!this.isOpen)
-      return;
-    const rect = this.triggerEl.getBoundingClientRect();
-    const popoverWidth = Math.max(rect.width, 240);
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-    let left = rect.left;
-    if (left + popoverWidth > viewportWidth - 8) {
-      left = Math.max(8, viewportWidth - popoverWidth - 8);
-    }
-    if (left < 8)
-      left = 8;
-    const spaceBelow = viewportHeight - rect.bottom;
-    const spaceAbove = rect.top;
-    this.popoverEl.style.position = "fixed";
-    this.popoverEl.style.left = `${left}px`;
-    this.popoverEl.style.width = `${popoverWidth}px`;
-    this.popoverEl.style.zIndex = "9999";
-    if (spaceBelow < 220 && spaceAbove > spaceBelow) {
-      this.popoverEl.style.top = "auto";
-      this.popoverEl.style.bottom = `${viewportHeight - rect.top + 4}px`;
-    } else {
-      this.popoverEl.style.top = `${rect.bottom + 4}px`;
-      this.popoverEl.style.bottom = "auto";
-    }
-  }
-  onDocPointerDown(e2) {
-    if (!this.isOpen)
-      return;
-    const target = e2.target;
-    if (this.popoverEl.contains(target) || this.triggerEl.contains(target)) {
-      return;
-    }
-    this.close();
-  }
-  async selectModel(model) {
-    this.setValue(model);
-    this.close();
-    this.triggerEl.focus();
-    if (this.options.onChange) {
-      try {
-        await this.options.onChange(model);
-      } catch (err2) {
-        console.error("Error in SearchableModelSelect onChange callback:", err2);
-      }
-    }
-  }
-  open() {
-    if (this.isOpen)
-      return;
-    this.isOpen = true;
-    this.triggerEl.setAttribute("aria-expanded", "true");
-    this.triggerEl.addClass("is-open");
-    this.searchQuery = "";
-    this.searchInputEl.value = "";
-    this.clearBtnEl.style.display = "none";
-    this.renderOptions();
-    this.popoverEl.style.display = "flex";
-    this.updatePopoverPosition();
-    if (this.highlightedIndex >= 0) {
-      const activeOpt = this.optionsListEl.querySelector(".is-highlighted");
-      if (activeOpt) {
-        activeOpt.scrollIntoView({ block: "nearest" });
-      }
-    }
-    setTimeout(() => {
-      this.searchInputEl.focus();
-      this.searchInputEl.select();
-    }, 0);
-    document.addEventListener("pointerdown", this.boundOnDocPointerDown, true);
-    window.addEventListener("resize", this.boundOnWindowResize);
-    window.addEventListener("scroll", this.boundOnWindowResize, true);
-  }
-  close() {
-    if (!this.isOpen)
-      return;
-    this.isOpen = false;
-    this.triggerEl.setAttribute("aria-expanded", "false");
-    this.triggerEl.removeClass("is-open");
-    this.popoverEl.style.display = "none";
-    document.removeEventListener("pointerdown", this.boundOnDocPointerDown, true);
-    window.removeEventListener("resize", this.boundOnWindowResize);
-    window.removeEventListener("scroll", this.boundOnWindowResize, true);
-  }
-  setModels(models, selectedModel) {
-    this.models = [...models];
-    if (selectedModel !== void 0) {
-      this.selectedModel = selectedModel;
-    } else if (!this.models.includes(this.selectedModel)) {
-      this.selectedModel = this.models[0] || "";
-    }
-    this.updateTriggerText();
-    if (this.isOpen) {
-      this.renderOptions();
-      this.updatePopoverPosition();
-    }
-  }
-  setValue(model) {
-    this.selectedModel = model;
-    this.updateTriggerText();
-    if (this.isOpen) {
-      this.renderOptions();
-    }
-  }
-  getValue() {
-    return this.selectedModel;
-  }
-  destroy() {
-    this.close();
-    this.triggerEl.removeEventListener("click", this.boundOnTriggerClick);
-    this.triggerEl.removeEventListener("keydown", this.boundOnTriggerKeyDown);
-    this.searchInputEl.removeEventListener("input", this.boundOnSearchInput);
-    this.searchInputEl.removeEventListener("keydown", this.boundOnSearchKeyDown);
-    this.clearBtnEl.removeEventListener("click", this.boundOnClearClick);
-    this.triggerEl.remove();
-    this.popoverEl.remove();
   }
 };
 
@@ -40543,7 +40597,7 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
       e2.preventDefault();
       e2.stopPropagation();
       const formatted = this.formatContentForCard(argsStr);
-      this.copyToClipboard(formatted, copyBtn, "Tool output copied to clipboard");
+      this.copyToClipboard(formatted, copyBtn, "Tool arguments copied to clipboard");
     });
     rightEl.createEl("span", { text: "Args", cls: "harness-collapsible-badge" });
     const bodyEl = detailsEl.createEl("div", { cls: "harness-collapsible-body" });

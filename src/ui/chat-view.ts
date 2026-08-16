@@ -544,7 +544,7 @@ export class HarnessChatView extends ItemView {
       e.preventDefault();
       e.stopPropagation();
       const formatted = this.formatContentForCard(argsStr);
-      this.copyToClipboard(formatted, copyBtn, 'Tool output copied to clipboard');
+      this.copyToClipboard(formatted, copyBtn, 'Tool arguments copied to clipboard');
     });
 
     rightEl.createEl('span', { text: 'Args', cls: 'harness-collapsible-badge' });

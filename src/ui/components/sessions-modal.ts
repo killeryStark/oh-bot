@@ -42,6 +42,8 @@ export class SessionsModal extends Modal {
     topSetting.addButton((btn) => {
       btn.setButtonText('+ New Session');
       btn.setCta();
+      btn.buttonEl.setAttribute('aria-label', 'New chat session');
+      btn.buttonEl.setAttribute('title', 'New session');
       btn.onClick(() => {
         this.onNewSession();
         this.close();
@@ -68,7 +70,7 @@ export class SessionsModal extends Modal {
 
     for (const session of sorted) {
       const isCurrent = session.id === this.currentSessionId;
-      const sessionRow = listEl.createEl('div');
+      const sessionRow = listEl.createEl('div', { cls: 'harness-session-row' });
       sessionRow.style.display = 'flex';
       sessionRow.style.alignItems = 'center';
       sessionRow.style.justifyContent = 'space-between';
@@ -80,6 +82,9 @@ export class SessionsModal extends Modal {
       const infoEl = sessionRow.createEl('div');
       infoEl.style.cursor = 'pointer';
       infoEl.style.flex = '1';
+      infoEl.setAttribute('tabindex', '0');
+      infoEl.setAttribute('role', 'button');
+      infoEl.setAttribute('aria-label', `Select session: ${session.title}`);
 
       const titleEl = infoEl.createEl('div', { text: session.title, cls: 'harness-session-title' });
       titleEl.style.fontWeight = 'bold';
@@ -92,9 +97,17 @@ export class SessionsModal extends Modal {
       });
       metaEl.style.fontSize = '0.75em';
 
-      infoEl.addEventListener('click', () => {
+      const handleSelect = () => {
         this.onSelect(session.id);
         this.close();
+      };
+
+      infoEl.addEventListener('click', handleSelect);
+      infoEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          handleSelect();
+        }
       });
 
       const actionsEl = sessionRow.createEl('div');
@@ -104,6 +117,7 @@ export class SessionsModal extends Modal {
       const delBtn = actionsEl.createEl('button', { cls: 'harness-btn-icon-round' });
       setIcon(delBtn, 'trash');
       delBtn.setAttribute('aria-label', 'Delete session');
+      delBtn.setAttribute('title', 'Delete session');
       delBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         this.onDelete(session.id);
