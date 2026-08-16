@@ -10,6 +10,7 @@ import { parseThoughts } from '../utils/thought-helper';
 import { ConfirmationModal } from './components/confirmation-modal';
 import { SessionsModal } from './components/sessions-modal';
 import { SearchableModelSelect } from './components/searchable-model-select';
+import { SubagentCard } from './components/subagent-card';
 import { SkillsModal } from './skills-modal';
 import { McpModal } from './mcp-modal';
 
@@ -44,6 +45,7 @@ export class HarnessChatView extends ItemView {
   private selectedSuggestIndex = 0;
   private currentSuggestItems: Array<{ label: string; onSelect: () => void }> = [];
   private currentAbortController: AbortController | null = null;
+  private activeSubagentCards: Map<string, SubagentCard> = new Map();
 
   constructor(leaf: WorkspaceLeaf, plugin: HarnessPlugin) {
     super(leaf);
@@ -411,6 +413,7 @@ export class HarnessChatView extends ItemView {
 
       // Set generating state (Stop icon)
       this.currentAbortController = new AbortController();
+      this.activeSubagentCards.clear();
       this.setSendButtonState(true);
 
       // Set auto-title on first message
@@ -469,7 +472,18 @@ export class HarnessChatView extends ItemView {
         const updatedHistory = await this.agentHarness.runTurn(
           this.currentSession.messages,
           (event) => {
-            if (event.type === 'chunk' && event.content) {
+            if (event.subagentContext) {
+              let card = this.activeSubagentCards.get(event.subagentContext.taskId);
+              if (!card) {
+                card = new SubagentCard(streamingMsgEl || this.messagesContainerEl, event.subagentContext, this.app, this);
+                this.activeSubagentCards.set(event.subagentContext.taskId, card);
+              }
+              card.handleEvent(event);
+              if (event.type === 'finish' || event.type === 'error') {
+                card.finalize(event.content);
+              }
+              this.messagesContainerEl.scrollTop = this.messagesContainerEl.scrollHeight;
+            } else if (event.type === 'chunk' && event.content) {
               const parsed = parseThoughts(event.content);
               if (parsed.thoughts.length > 0) {
                 textContentEl.empty();
@@ -1201,7 +1215,37 @@ export class HarnessChatView extends ItemView {
         // Render Tool Calls
         if (msg.tool_calls) {
           for (const tc of msg.tool_calls) {
-            this.renderToolCallCard(bodyEl, tc.function.name, tc.function.arguments, false);
+            if (tc.function.name === 'invoke_subagent') {
+              let parsedArgs: Record<string, any> = {};
+              try {
+                parsedArgs = JSON.parse(tc.function.arguments || '{}');
+              } catch (e) {
+                parsedArgs = {};
+              }
+              const agentConfig = this.plugin.agentManager?.getAgent(parsedArgs.agent_id);
+              const workspacePath = agentConfig?.workspacePath;
+              const agentName = agentConfig?.name || parsedArgs.agent_id;
+              const toolResultMsg = this.currentSession.messages.find(
+                (m) => m.role === 'tool' && (m.tool_call_id === tc.id || (m.name === 'invoke_subagent' && !m.tool_call_id))
+              );
+              const toolOutput = typeof toolResultMsg?.content === 'string'
+                ? toolResultMsg.content
+                : toolResultMsg?.content
+                ? JSON.stringify(toolResultMsg.content)
+                : undefined;
+
+              await SubagentCard.renderHistorical(
+                bodyEl,
+                this.app,
+                this,
+                tc,
+                toolOutput,
+                workspacePath,
+                agentName
+              );
+            } else {
+              this.renderToolCallCard(bodyEl, tc.function.name, tc.function.arguments, false);
+            }
           }
         }
 
@@ -1212,6 +1256,12 @@ export class HarnessChatView extends ItemView {
           this.enhanceCodeBlocksWithCopyButton(answerContainer);
         }
       } else if (msg.role === 'tool') {
+        const isRenderedByAssistant = this.currentSession.messages.some(
+          (m) => m.role === 'assistant' && m.tool_calls?.some((tc) => (msg.tool_call_id && tc.id === msg.tool_call_id) || tc.function.name === 'invoke_subagent')
+        );
+        if (msg.name === 'invoke_subagent' && isRenderedByAssistant) {
+          continue;
+        }
         const rawContent = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content || '');
         this.renderToolOutputCard(this.messagesContainerEl, msg.name || 'tool', rawContent, false);
       }

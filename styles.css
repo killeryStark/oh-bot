@@ -338,6 +338,90 @@
   border-left: 3px solid var(--text-accent);
 }
 
+.harness-collapsible-card.harness-subagent-card {
+  border-left: 3px solid var(--color-purple, #8b5cf6);
+  background-color: var(--background-secondary);
+  margin: 8px 0;
+}
+
+.harness-subagent-summary {
+  background-color: var(--background-secondary);
+  font-weight: 600;
+}
+
+.harness-subagent-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-purple, #8b5cf6);
+}
+
+.harness-subagent-title {
+  font-weight: 600;
+  color: var(--text-normal);
+}
+
+.harness-subagent-status {
+  font-size: 0.75em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.harness-subagent-status.harness-status-running {
+  background-color: rgba(139, 92, 246, 0.15);
+  color: var(--color-purple, #8b5cf6);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  animation: harness-pulse 1.8s infinite ease-in-out;
+}
+
+.harness-subagent-status.harness-status-completed {
+  background-color: rgba(46, 160, 67, 0.15);
+  color: #2ea043;
+  border: 1px solid rgba(46, 160, 67, 0.3);
+}
+
+.harness-subagent-status.harness-status-error {
+  background-color: rgba(218, 54, 51, 0.15);
+  color: #da3633;
+  border: 1px solid rgba(218, 54, 51, 0.3);
+}
+
+@keyframes harness-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.harness-subagent-body {
+  padding: 10px 12px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+}
+
+.harness-subagent-thinking-container,
+.harness-subagent-tools-container,
+.harness-subagent-output-container {
+  width: 100%;
+}
+
+.harness-subagent-error-box {
+  background-color: rgba(218, 54, 51, 0.1);
+  border-left: 3px solid #da3633;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 0.85em;
+  color: #da3633;
+  word-break: break-word;
+}
+
 .harness-collapsible-summary {
   padding: 8px 10px;
   cursor: pointer;
