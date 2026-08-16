@@ -128,7 +128,11 @@ var DEFAULT_SETTINGS = {
   installedSkills: [],
   customMarketplaceUrl: "",
   scanVaultSkills: true,
-  mcpServers: []
+  mcpServers: [],
+  searchProvider: "duckduckgo",
+  searxngUrl: "http://localhost:8080",
+  tavilyApiKeySecretName: "oh_bot_secret_tavily",
+  defaultPdfFolder: "Documents/Generated"
 };
 
 // src/ui/settings-tab.ts

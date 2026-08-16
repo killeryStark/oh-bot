@@ -26,15 +26,15 @@
     - `defaultPdfFolder: 'Documents/Generated'`.
 
 ### Task 3: Search Engine Adapters & Router
-- [ ] Create `src/tools/web/types.ts` for search results and provider interfaces.
-- [ ] Implement `src/tools/web/adapters/duckduckgo.ts`:
+- [x] Create `src/tools/web/types.ts` for search results and provider interfaces.
+- [x] Implement `src/tools/web/adapters/duckduckgo.ts`:
   - Free, zero-config HTML parsing via `requestUrl` and `DOMParser`.
   - Extract titles, direct URLs, and snippets.
-- [ ] Implement `src/tools/web/adapters/searxng.ts`:
+- [x] Implement `src/tools/web/adapters/searxng.ts`:
   - Self-hosted / custom SearXNG JSON API adapter.
-- [ ] Implement `src/tools/web/adapters/tavily.ts`:
+- [x] Implement `src/tools/web/adapters/tavily.ts`:
   - Optional Tavily Search API adapter with secret key resolution.
-- [ ] Implement `src/tools/web/router.ts`:
+- [x] Implement `src/tools/web/router.ts`:
   - Dynamic routing based on plugin settings.
 
 ### Task 4: Web Content Extractor (`fetch_web_page`)
