@@ -8,6 +8,8 @@
   box-sizing: border-box;
   position: relative;
   overflow: hidden;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .harness-chat-header {
@@ -34,6 +36,10 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+  user-select: text;
+  -webkit-user-select: text;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
 }
 
 .harness-message {
@@ -46,12 +52,16 @@
   box-sizing: border-box;
   word-break: break-word;
   overflow-wrap: anywhere;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .harness-message-user {
   align-self: flex-end;
   background-color: var(--interactive-accent);
   color: var(--text-on-accent);
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .harness-message-assistant {
@@ -61,13 +71,16 @@
   border: 1px solid var(--background-modifier-border);
   width: 100%;
   max-width: 100%;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .harness-message-header {
   font-size: 0.75em;
-  opacity: 0.7;
+  opacity: 0.8;
   margin-bottom: 6px;
   display: flex;
+  justify-content: space-between;
   align-items: center;
   gap: 6px;
 }
@@ -77,10 +90,19 @@
   font-size: 0.92em;
   word-break: break-word;
   overflow-wrap: anywhere;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.harness-answer-text {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .harness-message-body p {
   margin: 0 0 8px 0;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .harness-message-body p:last-child {
@@ -93,25 +115,36 @@
 .harness-message-body h4 {
   margin: 10px 0 6px 0;
   line-height: 1.3;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .harness-message-body ul,
 .harness-message-body ol {
   margin: 4px 0 8px 18px;
   padding: 0;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .harness-message-body li {
   margin-bottom: 3px;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .harness-message-body pre {
+  position: relative;
   margin: 6px 0;
   padding: 8px 10px;
   border-radius: 6px;
   background-color: var(--background-primary);
   border: 1px solid var(--background-modifier-border);
   overflow-x: auto;
+  user-select: text;
+  -webkit-user-select: text;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
 }
 
 .harness-message-body code {
@@ -120,16 +153,121 @@
   padding: 2px 4px;
   border-radius: 4px;
   background-color: var(--background-primary-alt);
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .harness-message-user code {
   background-color: rgba(255, 255, 255, 0.25);
   color: inherit;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .harness-message-user a {
   color: inherit;
   text-decoration: underline;
+}
+
+/* Code Block Wrapper & Copy Button */
+.harness-code-block-wrapper {
+  position: relative;
+  margin: 6px 0;
+  width: 100%;
+}
+
+.harness-code-copy-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 6px;
+  font-size: 0.75em;
+  border-radius: 4px;
+  background-color: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0.65;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: opacity 0.15s ease, background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.harness-code-copy-btn:hover {
+  opacity: 1;
+  color: var(--text-normal);
+  background-color: var(--background-modifier-hover);
+  border-color: var(--background-modifier-border-hover);
+}
+
+.harness-code-copy-btn.is-copied {
+  color: var(--text-success, #2ea043);
+  border-color: var(--text-success, #2ea043);
+  opacity: 1;
+}
+
+/* Message Header Copy Button */
+.harness-msg-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  padding: 2px 5px;
+  font-size: 0.78em;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0.6;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: opacity 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+}
+
+.harness-msg-copy-btn:hover {
+  opacity: 1;
+  color: var(--text-normal);
+  background-color: var(--background-modifier-hover);
+}
+
+.harness-msg-copy-btn.is-copied {
+  color: var(--text-success, #2ea043);
+  opacity: 1;
+}
+
+/* Tool Card Copy Button */
+.harness-tool-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 2px 4px;
+  font-size: 0.75em;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0.6;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: opacity 0.15s ease, color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.harness-tool-copy-btn:hover {
+  opacity: 1;
+  color: var(--text-normal);
+  background-color: var(--background-modifier-hover);
+  border-color: var(--background-modifier-border);
+}
+
+.harness-tool-copy-btn.is-copied {
+  color: var(--text-success, #2ea043);
+  border-color: var(--text-success, #2ea043);
+  opacity: 1;
 }
 
 /* Collapsible Cards (Tools, Reasoning, Logs) */
@@ -162,6 +300,7 @@
   font-size: 0.85em;
   font-weight: 500;
   user-select: none;
+  -webkit-user-select: none;
   background-color: var(--background-secondary-alt);
   list-style: none;
 }
@@ -185,6 +324,8 @@
   padding: 2px 6px;
   border-radius: 4px;
   background-color: var(--background-primary);
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .harness-collapsible-body {
@@ -196,6 +337,8 @@
   width: 100% !important;
   max-width: 100% !important;
   box-sizing: border-box !important;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .harness-collapsible-body pre {
@@ -219,6 +362,9 @@
   font-family: var(--font-monospace);
   font-size: 0.85em;
   line-height: 1.45;
+  user-select: text;
+  -webkit-user-select: text;
+  position: relative;
 }
 
 .harness-collapsible-body pre code {
@@ -226,6 +372,8 @@
   white-space: inherit;
   word-break: inherit;
   overflow-wrap: inherit;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .harness-thinking-text {
@@ -236,6 +384,9 @@
   max-height: 380px;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 /* Chat Input Area & Clean Layout */
@@ -369,6 +520,7 @@
   font-size: 0.82em;
   cursor: pointer;
   user-select: none;
+  -webkit-user-select: none;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
@@ -381,7 +533,8 @@
 .harness-model-select-trigger.is-open {
   border-color: var(--interactive-accent);
   box-shadow: 0 0 0 2px var(--interactive-accent-transparent, rgba(120, 100, 240, 0.2));
-  outline: none;
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 2px;
 }
 
 .harness-model-select-label {
@@ -1235,8 +1388,110 @@
   margin-left: 6px;
 }
 
-/* Mobile Responsive Optimization */
+/* ==========================================================================
+   Universal Keyboard Focus Indicators (:focus-visible)
+   ========================================================================== */
+.harness-chat-container button:focus-visible,
+.harness-chat-container input:focus-visible,
+.harness-chat-container textarea:focus-visible,
+.harness-chat-container select:focus-visible,
+.harness-chat-container summary:focus-visible,
+.harness-model-select-trigger:focus-visible,
+.harness-model-search-input:focus-visible,
+.harness-model-option:focus-visible,
+.harness-search-clear-btn:focus-visible,
+.harness-suggest-item:focus-visible,
+.harness-skills-modal button:focus-visible,
+.harness-skills-modal input:focus-visible,
+.harness-mcp-modal button:focus-visible,
+.harness-mcp-modal input:focus-visible,
+.harness-settings-container button:focus-visible,
+.harness-settings-container input:focus-visible,
+.harness-settings-container select:focus-visible,
+.harness-settings-container textarea:focus-visible,
+.harness-btn-icon-round:focus-visible,
+.harness-btn-sm:focus-visible,
+.harness-expand-btn:focus-visible,
+.harness-send-btn:focus-visible,
+.harness-msg-copy-btn:focus-visible,
+.harness-code-copy-btn:focus-visible,
+.harness-tool-copy-btn:focus-visible,
+.harness-tab-btn:focus-visible,
+.harness-session-card:focus-visible,
+.harness-skill-card:focus-visible,
+.harness-mcp-card:focus-visible {
+  outline: 2px solid var(--interactive-accent) !important;
+  outline-offset: 2px !important;
+  border-radius: 4px;
+}
+
+/* ==========================================================================
+   Mobile Responsive & Narrow Sidebar Optimizations
+   ========================================================================== */
 @media (max-width: 600px) {
+  .harness-chat-container {
+    padding: 6px 4px;
+  }
+
+  .harness-chat-header {
+    gap: 6px;
+  }
+
+  .harness-chat-messages {
+    padding: 8px 2px;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x pan-y;
+  }
+
+  .harness-message {
+    max-width: 98%;
+  }
+
+  .harness-chat-bottom-row {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .harness-chat-bottom-row .harness-model-select,
+  .harness-chat-bottom-row .harness-model-select-trigger {
+    min-height: 40px;
+    height: 40px;
+    font-size: 14px;
+    flex: 1 1 calc(100% - 50px);
+    min-width: 0;
+  }
+
+  .harness-chat-bottom-row .harness-send-btn {
+    min-width: 44px !important;
+    min-height: 40px !important;
+    height: 40px !important;
+    flex-shrink: 0;
+  }
+
+  .harness-expand-btn {
+    min-width: 36px !important;
+    min-height: 36px !important;
+    width: 36px !important;
+    height: 36px !important;
+    top: 4px;
+    right: 4px;
+  }
+
+  .harness-msg-copy-btn,
+  .harness-code-copy-btn,
+  .harness-tool-copy-btn {
+    min-height: 36px;
+    min-width: 36px;
+    padding: 6px 8px;
+  }
+
+  .harness-btn-icon-round {
+    min-width: 38px !important;
+    min-height: 38px !important;
+    width: 38px !important;
+    height: 38px !important;
+  }
+
   .harness-settings-container .setting-item {
     flex-direction: column;
     align-items: stretch;
@@ -1299,6 +1554,7 @@
     max-height: 86vh !important;
     overflow-y: auto !important;
     -webkit-overflow-scrolling: touch !important;
+    touch-action: pan-x pan-y;
     padding: 14px !important;
   }
 
@@ -1370,6 +1626,19 @@
   .harness-skills-modal {
     width: 96vw !important;
     max-height: 88vh !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    touch-action: pan-x pan-y;
+  }
+
+  .harness-skills-body {
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x pan-y;
+  }
+
+  .harness-mcp-tools-list {
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x pan-y;
   }
 
   .harness-skill-actions .harness-btn-sm {
@@ -1378,18 +1647,6 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-  }
-
-  .harness-chat-bottom-row .harness-send-btn {
-    min-width: 44px !important;
-    min-height: 44px !important;
-    height: 44px !important;
-  }
-
-  .harness-chat-bottom-row .harness-model-select,
-  .harness-chat-bottom-row .harness-model-select-trigger {
-    min-height: 44px;
-    font-size: 14px;
   }
 }
 
@@ -1419,6 +1676,27 @@
   .harness-model-option {
     min-height: 40px;
     padding: 10px 12px;
+  }
+
+  .harness-expand-btn {
+    min-width: 36px !important;
+    min-height: 36px !important;
+    width: 36px !important;
+    height: 36px !important;
+  }
+
+  .harness-send-btn {
+    min-width: 44px !important;
+    min-height: 44px !important;
+    height: 44px !important;
+  }
+
+  .harness-msg-copy-btn,
+  .harness-code-copy-btn,
+  .harness-tool-copy-btn {
+    min-height: 36px;
+    min-width: 36px;
+    padding: 6px 8px;
   }
 }
 
