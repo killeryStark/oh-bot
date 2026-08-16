@@ -20194,7 +20194,7 @@ __export(main_exports, {
   default: () => HarnessPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian36 = require("obsidian");
+var import_obsidian37 = require("obsidian");
 
 // src/types.ts
 var DEFAULT_PROVIDERS = [
@@ -22856,7 +22856,7 @@ var HarnessSettingTab = class extends import_obsidian11.PluginSettingTab {
 };
 
 // src/ui/chat-view.ts
-var import_obsidian29 = require("obsidian");
+var import_obsidian30 = require("obsidian");
 
 // src/engine/providers/base.ts
 var LLMProvider = class {
@@ -41351,9 +41351,387 @@ var SessionsModal = class extends import_obsidian28.Modal {
   }
 };
 
+// src/ui/components/subagent-card.ts
+var import_obsidian29 = require("obsidian");
+var SubagentCard = class _SubagentCard {
+  constructor(parentEl, context, app, ownerComponent) {
+    this.parentEl = parentEl;
+    this.context = context;
+    this.app = app;
+    this.ownerComponent = ownerComponent;
+    this.accumulatedContent = "";
+    this.toolCalls = /* @__PURE__ */ new Map();
+    this.isFinalized = false;
+    this.hasError = false;
+    this.detailsEl = this.parentEl.createEl("details", {
+      cls: "harness-collapsible-card harness-subagent-card"
+    });
+    this.detailsEl.open = true;
+    this.summaryEl = this.detailsEl.createEl("summary", {
+      cls: "harness-collapsible-summary harness-subagent-summary"
+    });
+    const leftEl = this.summaryEl.createEl("div", {
+      cls: "harness-collapsible-summary-left"
+    });
+    const iconSpan = leftEl.createEl("span", { cls: "harness-subagent-icon" });
+    (0, import_obsidian29.setIcon)(iconSpan, "zap");
+    leftEl.createEl("span", {
+      text: `Subagent: ${this.context.agentName}`,
+      cls: "harness-subagent-title"
+    });
+    if (this.context.workspacePath && this.context.workspacePath.trim().length > 0) {
+      const cleanPath = this.context.workspacePath.trim();
+      const wsBadge = leftEl.createEl("span", {
+        text: `\u{1F4C1} ${cleanPath}`,
+        cls: "harness-workspace-badge"
+      });
+      wsBadge.setAttribute("title", `Workspace Scope: ${cleanPath}`);
+    }
+    const rightEl = this.summaryEl.createEl("div", {
+      cls: "harness-collapsible-summary-right"
+    });
+    this.statusBadgeEl = rightEl.createEl("span", {
+      text: "\u26A1 Running...",
+      cls: "harness-subagent-status harness-status-running"
+    });
+    this.copyBtnEl = rightEl.createEl("button", {
+      cls: "harness-tool-copy-btn"
+    });
+    this.copyBtnEl.setAttribute("aria-label", "Copy subagent thoughts and text");
+    this.copyBtnEl.setAttribute("title", "Copy subagent thoughts and text");
+    (0, import_obsidian29.setIcon)(this.copyBtnEl, "copy");
+    this.copyBtnEl.addEventListener("click", async (e2) => {
+      e2.preventDefault();
+      e2.stopPropagation();
+      await this.copyAllToClipboard();
+    });
+    rightEl.createEl("span", {
+      text: "Subagent",
+      cls: "harness-collapsible-badge"
+    });
+    this.bodyEl = this.detailsEl.createEl("div", {
+      cls: "harness-collapsible-body harness-subagent-body"
+    });
+    this.thinkingContainerEl = this.bodyEl.createEl("div", {
+      cls: "harness-subagent-thinking-container"
+    });
+    this.thinkingContainerEl.style.display = "none";
+    this.toolsContainerEl = this.bodyEl.createEl("div", {
+      cls: "harness-subagent-tools-container"
+    });
+    this.outputContainerEl = this.bodyEl.createEl("div", {
+      cls: "harness-subagent-output-container"
+    });
+  }
+  getTaskId() {
+    return this.context.taskId;
+  }
+  getAgentName() {
+    return this.context.agentName;
+  }
+  getContext() {
+    return this.context;
+  }
+  handleEvent(event) {
+    if (event.type === "chunk" && event.content) {
+      this.accumulatedContent = event.content;
+      const parsed = parseThoughts(this.accumulatedContent);
+      if (parsed.thoughts.length > 0) {
+        this.thinkingContainerEl.style.display = "block";
+        this.thinkingContainerEl.empty();
+        for (const thought of parsed.thoughts) {
+          const thoughtCard = this.thinkingContainerEl.createEl("details", {
+            cls: "harness-collapsible-card harness-thinking-card"
+          });
+          const summary = thoughtCard.createEl("summary", { cls: "harness-collapsible-summary" });
+          const left = summary.createEl("div", { cls: "harness-collapsible-summary-left" });
+          const iconSpan = left.createEl("span");
+          (0, import_obsidian29.setIcon)(iconSpan, "sparkles");
+          left.createEl("span", { text: "Subagent Reasoning" });
+          const right = summary.createEl("div", { cls: "harness-collapsible-summary-right" });
+          const copyThoughtBtn = right.createEl("button", { cls: "harness-tool-copy-btn" });
+          copyThoughtBtn.setAttribute("aria-label", "Copy reasoning");
+          copyThoughtBtn.setAttribute("title", "Copy reasoning");
+          (0, import_obsidian29.setIcon)(copyThoughtBtn, "copy");
+          copyThoughtBtn.addEventListener("click", (e2) => {
+            e2.preventDefault();
+            e2.stopPropagation();
+            this.copyText(thought, copyThoughtBtn, "Reasoning copied to clipboard");
+          });
+          right.createEl("span", { text: "View", cls: "harness-collapsible-badge" });
+          const tBody = thoughtCard.createEl("div", { cls: "harness-collapsible-body harness-thinking-text" });
+          tBody.setText(thought);
+        }
+      }
+      if (parsed.finalAnswer) {
+        this.outputContainerEl.setText(parsed.finalAnswer);
+      } else if (parsed.thoughts.length === 0) {
+        this.outputContainerEl.setText(this.accumulatedContent);
+      }
+    } else if (event.type === "tool_call" && event.toolCall) {
+      const tc = event.toolCall;
+      const toolId = tc.id || `tc_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+      this.renderToolCall(toolId, tc.function.name, tc.function.arguments);
+    } else if (event.type === "tool_result" && event.toolResult) {
+      const { toolCallId, result } = event.toolResult;
+      const resultStr = result.success ? result.output : `Error: ${result.error}`;
+      this.renderToolResult(toolCallId, resultStr);
+    } else if (event.type === "finish") {
+      if (!this.hasError) {
+        this.statusBadgeEl.setText("\u2705 Completed");
+        this.statusBadgeEl.className = "harness-subagent-status harness-status-completed";
+      }
+    } else if (event.type === "error") {
+      this.hasError = true;
+      this.statusBadgeEl.setText("\u274C Error");
+      this.statusBadgeEl.className = "harness-subagent-status harness-status-error";
+      if (event.error) {
+        const errorBox = this.outputContainerEl.createEl("div", { cls: "harness-subagent-error-box" });
+        errorBox.setText(`Error: ${event.error}`);
+      }
+    }
+  }
+  async finalize(content) {
+    if (this.isFinalized)
+      return;
+    this.isFinalized = true;
+    const rawText = content !== void 0 ? content : this.accumulatedContent;
+    if (!this.hasError) {
+      this.statusBadgeEl.setText("\u2705 Completed");
+      this.statusBadgeEl.className = "harness-subagent-status harness-status-completed";
+    }
+    if (!rawText && !this.outputContainerEl.textContent) {
+      return;
+    }
+    const parsed = parseThoughts(rawText || "");
+    if (parsed.thoughts.length > 0) {
+      this.thinkingContainerEl.style.display = "block";
+      this.thinkingContainerEl.empty();
+      for (const thought of parsed.thoughts) {
+        const thoughtCard = this.thinkingContainerEl.createEl("details", {
+          cls: "harness-collapsible-card harness-thinking-card"
+        });
+        const summary = thoughtCard.createEl("summary", { cls: "harness-collapsible-summary" });
+        const left = summary.createEl("div", { cls: "harness-collapsible-summary-left" });
+        const iconSpan = left.createEl("span");
+        (0, import_obsidian29.setIcon)(iconSpan, "sparkles");
+        left.createEl("span", { text: "Subagent Reasoning" });
+        const right = summary.createEl("div", { cls: "harness-collapsible-summary-right" });
+        const copyThoughtBtn = right.createEl("button", { cls: "harness-tool-copy-btn" });
+        copyThoughtBtn.setAttribute("aria-label", "Copy reasoning");
+        copyThoughtBtn.setAttribute("title", "Copy reasoning");
+        (0, import_obsidian29.setIcon)(copyThoughtBtn, "copy");
+        copyThoughtBtn.addEventListener("click", (e2) => {
+          e2.preventDefault();
+          e2.stopPropagation();
+          this.copyText(thought, copyThoughtBtn, "Reasoning copied to clipboard");
+        });
+        right.createEl("span", { text: "View", cls: "harness-collapsible-badge" });
+        const tBody = thoughtCard.createEl("div", { cls: "harness-collapsible-body harness-thinking-text" });
+        await import_obsidian29.MarkdownRenderer.render(this.app, thought, tBody, "", this.ownerComponent);
+        this.enhanceCodeBlocksWithCopyButton(tBody);
+      }
+    }
+    const answerToRender = parsed.finalAnswer || (parsed.thoughts.length === 0 ? rawText : "");
+    if (answerToRender) {
+      this.outputContainerEl.empty();
+      const answerEl = this.outputContainerEl.createEl("div", { cls: "harness-answer-text" });
+      await import_obsidian29.MarkdownRenderer.render(this.app, answerToRender, answerEl, "", this.ownerComponent);
+      this.enhanceCodeBlocksWithCopyButton(answerEl);
+    }
+  }
+  renderToolCall(toolId, toolName, argsStr) {
+    const cardEl = this.toolsContainerEl.createEl("details", {
+      cls: "harness-collapsible-card harness-tool-card"
+    });
+    cardEl.open = true;
+    const summaryEl = cardEl.createEl("summary", { cls: "harness-collapsible-summary" });
+    const leftEl = summaryEl.createEl("div", { cls: "harness-collapsible-summary-left" });
+    const iconSpan = leftEl.createEl("span");
+    (0, import_obsidian29.setIcon)(iconSpan, "wrench");
+    leftEl.createEl("span", { text: `Tool: ${toolName}` });
+    const rightEl = summaryEl.createEl("div", { cls: "harness-collapsible-summary-right" });
+    const copyBtn = rightEl.createEl("button", { cls: "harness-tool-copy-btn" });
+    copyBtn.setAttribute("aria-label", "Copy tool arguments");
+    copyBtn.setAttribute("title", "Copy tool arguments");
+    (0, import_obsidian29.setIcon)(copyBtn, "copy");
+    copyBtn.addEventListener("click", (e2) => {
+      e2.preventDefault();
+      e2.stopPropagation();
+      const formatted = this.formatContentForCard(argsStr);
+      this.copyText(formatted, copyBtn, "Tool arguments copied to clipboard");
+    });
+    rightEl.createEl("span", { text: "Args", cls: "harness-collapsible-badge" });
+    const bodyEl = cardEl.createEl("div", { cls: "harness-collapsible-body" });
+    const pre = bodyEl.createEl("pre");
+    pre.createEl("code", { text: this.formatContentForCard(argsStr) });
+    this.enhanceCodeBlocksWithCopyButton(bodyEl);
+    this.toolCalls.set(toolId, {
+      name: toolName,
+      args: argsStr,
+      cardEl
+    });
+  }
+  renderToolResult(toolCallId, outputText) {
+    const toolEntry = this.toolCalls.get(toolCallId);
+    const toolName = toolEntry?.name || "tool";
+    const cardEl = this.toolsContainerEl.createEl("details", {
+      cls: "harness-collapsible-card harness-tool-card"
+    });
+    cardEl.open = true;
+    const summaryEl = cardEl.createEl("summary", { cls: "harness-collapsible-summary" });
+    const leftEl = summaryEl.createEl("div", { cls: "harness-collapsible-summary-left" });
+    const iconSpan = leftEl.createEl("span");
+    (0, import_obsidian29.setIcon)(iconSpan, "file-text");
+    leftEl.createEl("span", { text: `Output: ${toolName}` });
+    const rightEl = summaryEl.createEl("div", { cls: "harness-collapsible-summary-right" });
+    const copyBtn = rightEl.createEl("button", { cls: "harness-tool-copy-btn" });
+    copyBtn.setAttribute("aria-label", "Copy tool output");
+    copyBtn.setAttribute("title", "Copy tool output");
+    (0, import_obsidian29.setIcon)(copyBtn, "copy");
+    copyBtn.addEventListener("click", (e2) => {
+      e2.preventDefault();
+      e2.stopPropagation();
+      const formatted = this.formatContentForCard(outputText);
+      this.copyText(formatted, copyBtn, "Tool output copied to clipboard");
+    });
+    rightEl.createEl("span", { text: "Result", cls: "harness-collapsible-badge" });
+    const bodyEl = cardEl.createEl("div", { cls: "harness-collapsible-body" });
+    const pre = bodyEl.createEl("pre");
+    pre.createEl("code", { text: this.formatContentForCard(outputText) });
+    this.enhanceCodeBlocksWithCopyButton(bodyEl);
+    if (toolEntry) {
+      toolEntry.result = outputText;
+    }
+  }
+  formatContentForCard(rawStr) {
+    if (!rawStr || rawStr.trim() === "")
+      return "(empty)";
+    try {
+      const parsed = JSON.parse(rawStr);
+      return JSON.stringify(parsed, null, 2);
+    } catch (e2) {
+      return rawStr;
+    }
+  }
+  async copyAllToClipboard() {
+    const parts = [];
+    const parsed = parseThoughts(this.accumulatedContent);
+    if (parsed.thoughts.length > 0) {
+      for (const t3 of parsed.thoughts) {
+        parts.push(`[Reasoning]
+${t3}`);
+      }
+    }
+    for (const [_3, tc] of this.toolCalls) {
+      parts.push(`[Tool: ${tc.name}]
+Args: ${tc.args}${tc.result ? `
+Output: ${tc.result}` : ""}`);
+    }
+    if (parsed.finalAnswer) {
+      parts.push(`[Response]
+${parsed.finalAnswer}`);
+    } else if (this.accumulatedContent && parsed.thoughts.length === 0) {
+      parts.push(this.accumulatedContent);
+    }
+    const fullText = parts.length > 0 ? parts.join("\n\n") : this.bodyEl.innerText || "";
+    await this.copyText(fullText, this.copyBtnEl, "Subagent content copied to clipboard");
+  }
+  async copyText(text2, btnEl, noticeText) {
+    try {
+      await navigator.clipboard.writeText(text2);
+      (0, import_obsidian29.setIcon)(btnEl, "check");
+      btnEl.addClass("is-copied");
+      new import_obsidian29.Notice(noticeText);
+      setTimeout(() => {
+        (0, import_obsidian29.setIcon)(btnEl, "copy");
+        btnEl.removeClass("is-copied");
+      }, 2e3);
+    } catch (e2) {
+      new import_obsidian29.Notice("Failed to copy to clipboard");
+    }
+  }
+  enhanceCodeBlocksWithCopyButton(containerEl) {
+    const preElements = Array.from(containerEl.querySelectorAll("pre"));
+    for (const pre of preElements) {
+      if (pre.parentElement?.classList.contains("harness-code-block-wrapper")) {
+        continue;
+      }
+      const wrapper = document.createElement("div");
+      wrapper.className = "harness-code-block-wrapper";
+      pre.parentNode?.insertBefore(wrapper, pre);
+      wrapper.appendChild(pre);
+      const copyBtn = wrapper.createEl("button", {
+        cls: "harness-code-copy-btn"
+      });
+      copyBtn.setAttribute("aria-label", "Copy code");
+      copyBtn.setAttribute("title", "Copy code");
+      (0, import_obsidian29.setIcon)(copyBtn, "copy");
+      copyBtn.addEventListener("click", (e2) => {
+        e2.preventDefault();
+        e2.stopPropagation();
+        const codeEl = pre.querySelector("code");
+        const codeText = codeEl ? codeEl.innerText : pre.innerText;
+        this.copyText(codeText, copyBtn, "Code copied to clipboard");
+      });
+    }
+  }
+  /**
+   * Static helper to render historical invoke_subagent tool calls and results.
+   */
+  static async renderHistorical(parentEl, app, ownerComponent, toolCall, toolResultOutput, workspacePath, agentName) {
+    let parsedArgs = {};
+    try {
+      parsedArgs = JSON.parse(toolCall.function.arguments || "{}");
+    } catch (e2) {
+      parsedArgs = {};
+    }
+    const resolvedAgentName = agentName || parsedArgs.agent_id || "Subagent";
+    const context = {
+      agentId: parsedArgs.agent_id || "subagent",
+      agentName: resolvedAgentName,
+      taskId: toolCall.id || `subtask_${Date.now()}`,
+      workspacePath
+    };
+    const card = new _SubagentCard(parentEl, context, app, ownerComponent);
+    card.detailsEl.open = false;
+    if (parsedArgs.task) {
+      const taskCard = card.toolsContainerEl.createEl("details", {
+        cls: "harness-collapsible-card harness-tool-card"
+      });
+      const summary = taskCard.createEl("summary", { cls: "harness-collapsible-summary" });
+      const left = summary.createEl("div", { cls: "harness-collapsible-summary-left" });
+      const iconSpan = left.createEl("span");
+      (0, import_obsidian29.setIcon)(iconSpan, "zap");
+      left.createEl("span", { text: "Task Prompt" });
+      const right = summary.createEl("div", { cls: "harness-collapsible-summary-right" });
+      const copyTaskBtn = right.createEl("button", { cls: "harness-tool-copy-btn" });
+      copyTaskBtn.setAttribute("aria-label", "Copy task prompt");
+      copyTaskBtn.setAttribute("title", "Copy task prompt");
+      (0, import_obsidian29.setIcon)(copyTaskBtn, "copy");
+      copyTaskBtn.addEventListener("click", (e2) => {
+        e2.preventDefault();
+        e2.stopPropagation();
+        card.copyText(parsedArgs.task, copyTaskBtn, "Task prompt copied to clipboard");
+      });
+      right.createEl("span", { text: "Task", cls: "harness-collapsible-badge" });
+      const body = taskCard.createEl("div", { cls: "harness-collapsible-body" });
+      await import_obsidian29.MarkdownRenderer.render(app, parsedArgs.task, body, "", ownerComponent);
+      card.enhanceCodeBlocksWithCopyButton(body);
+    }
+    if (toolResultOutput) {
+      card.accumulatedContent = toolResultOutput;
+      await card.finalize(toolResultOutput);
+    } else {
+      await card.finalize();
+    }
+    return card;
+  }
+};
+
 // src/ui/chat-view.ts
 var HARNESS_VIEW_TYPE = "harness-chat-view";
-var HarnessChatView = class extends import_obsidian29.ItemView {
+var HarnessChatView = class extends import_obsidian30.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.isInputExpanded = false;
@@ -41361,6 +41739,7 @@ var HarnessChatView = class extends import_obsidian29.ItemView {
     this.selectedSuggestIndex = 0;
     this.currentSuggestItems = [];
     this.currentAbortController = null;
+    this.activeSubagentCards = /* @__PURE__ */ new Map();
     this.plugin = plugin;
     this.toolRegistry = this.plugin.toolRegistry || new ToolRegistry(this.plugin.skillManager, this.plugin.mcpManager, this.plugin.settings);
     this.agentHarness = new AgentHarness(this.app, this.plugin.settings, this.toolRegistry, this.plugin.agentManager);
@@ -41425,7 +41804,7 @@ var HarnessChatView = class extends import_obsidian29.ItemView {
     }
     const activeAgent = this.plugin.agentManager ? this.plugin.agentManager.getActiveAgent(this.agentSelectEl.value) : void 0;
     if (this.agentIconEl) {
-      (0, import_obsidian29.setIcon)(this.agentIconEl, !activeAgent || activeAgent.isDefaultMain || activeAgent.id === "main" ? "bot" : "user");
+      (0, import_obsidian30.setIcon)(this.agentIconEl, !activeAgent || activeAgent.isDefaultMain || activeAgent.id === "main" ? "bot" : "user");
     }
     this.updateWorkspaceBadge(activeAgent);
   }
@@ -41451,7 +41830,7 @@ var HarnessChatView = class extends import_obsidian29.ItemView {
     const titleEl = headerEl.createEl("div", { cls: "harness-title-container" });
     const agentSelectContainer = titleEl.createEl("div", { cls: "harness-agent-select-container" });
     this.agentIconEl = agentSelectContainer.createEl("span", { cls: "harness-agent-icon" });
-    (0, import_obsidian29.setIcon)(this.agentIconEl, "bot");
+    (0, import_obsidian30.setIcon)(this.agentIconEl, "bot");
     this.agentSelectEl = agentSelectContainer.createEl("select", { cls: "dropdown harness-agent-select" });
     this.agentSelectEl.setAttribute("aria-label", "Select Active Agent");
     this.agentSelectEl.addEventListener("change", async () => {
@@ -41460,7 +41839,7 @@ var HarnessChatView = class extends import_obsidian29.ItemView {
       this.currentSession.activeAgentId = selectedAgent ? selectedAgent.id : "main";
       this.plugin.settings.activeAgentId = this.currentSession.activeAgentId;
       if (this.agentIconEl) {
-        (0, import_obsidian29.setIcon)(this.agentIconEl, !selectedAgent || selectedAgent.isDefaultMain || selectedAgent.id === "main" ? "bot" : "user");
+        (0, import_obsidian30.setIcon)(this.agentIconEl, !selectedAgent || selectedAgent.isDefaultMain || selectedAgent.id === "main" ? "bot" : "user");
       }
       if (selectedAgent?.model) {
         this.currentSession.model = selectedAgent.model;
@@ -41476,38 +41855,38 @@ var HarnessChatView = class extends import_obsidian29.ItemView {
     const newSessionBtn = headerActionsEl.createEl("button", { cls: "clickable-icon" });
     newSessionBtn.setAttribute("aria-label", "New Session");
     newSessionBtn.setAttribute("title", "New Session");
-    (0, import_obsidian29.setIcon)(newSessionBtn, "plus");
+    (0, import_obsidian30.setIcon)(newSessionBtn, "plus");
     newSessionBtn.addEventListener("click", () => {
       this.createNewSession();
     });
     const sessionsBtn = headerActionsEl.createEl("button", { cls: "clickable-icon" });
     sessionsBtn.setAttribute("aria-label", "View Saved Sessions (/sessions)");
     sessionsBtn.setAttribute("title", "View Saved Sessions (/sessions)");
-    (0, import_obsidian29.setIcon)(sessionsBtn, "history");
+    (0, import_obsidian30.setIcon)(sessionsBtn, "history");
     sessionsBtn.addEventListener("click", () => {
       this.openSessionsModal();
     });
     const skillsBtn = headerActionsEl.createEl("button", { cls: "clickable-icon" });
     skillsBtn.setAttribute("aria-label", "Manage Skills (/skills)");
     skillsBtn.setAttribute("title", "Manage Skills (/skills)");
-    (0, import_obsidian29.setIcon)(skillsBtn, "zap");
+    (0, import_obsidian30.setIcon)(skillsBtn, "zap");
     skillsBtn.addEventListener("click", () => {
       new SkillsModal(this.app, this.plugin).open();
     });
     const mcpBtn = headerActionsEl.createEl("button", { cls: "clickable-icon" });
     mcpBtn.setAttribute("aria-label", "Manage MCP Servers (/mcp)");
     mcpBtn.setAttribute("title", "Manage MCP Servers (/mcp)");
-    (0, import_obsidian29.setIcon)(mcpBtn, "server");
+    (0, import_obsidian30.setIcon)(mcpBtn, "server");
     mcpBtn.addEventListener("click", () => {
       new McpModal(this.app, this.plugin).open();
     });
     const exportBtn = headerActionsEl.createEl("button", { cls: "clickable-icon" });
     exportBtn.setAttribute("aria-label", "Export Chat to Markdown (/export)");
     exportBtn.setAttribute("title", "Export Chat to Markdown (/export)");
-    (0, import_obsidian29.setIcon)(exportBtn, "upload");
+    (0, import_obsidian30.setIcon)(exportBtn, "upload");
     exportBtn.addEventListener("click", async () => {
       if (this.currentSession.messages.length === 0) {
-        new import_obsidian29.Notice("No chat history to export.");
+        new import_obsidian30.Notice("No chat history to export.");
         return;
       }
       try {
@@ -41515,15 +41894,15 @@ var HarnessChatView = class extends import_obsidian29.ItemView {
           this.currentSession.messages,
           this.currentSession.model || this.plugin.settings.activeModel || "default"
         );
-        new import_obsidian29.Notice(`Chat exported to ${exportedPath}`);
+        new import_obsidian30.Notice(`Chat exported to ${exportedPath}`);
       } catch (e2) {
-        new import_obsidian29.Notice(`Export failed: ${e2.message}`);
+        new import_obsidian30.Notice(`Export failed: ${e2.message}`);
       }
     });
     const clearBtn = headerActionsEl.createEl("button", { cls: "clickable-icon" });
     clearBtn.setAttribute("aria-label", "Clear Messages in Session (/clear)");
     clearBtn.setAttribute("title", "Clear Messages in Session (/clear)");
-    (0, import_obsidian29.setIcon)(clearBtn, "trash");
+    (0, import_obsidian30.setIcon)(clearBtn, "trash");
     clearBtn.addEventListener("click", async () => {
       this.currentSession.messages = [];
       await this.saveSessionState();
@@ -41543,7 +41922,7 @@ var HarnessChatView = class extends import_obsidian29.ItemView {
     this.expandBtnEl.setAttribute("aria-label", "Expand to full view");
     this.expandBtnEl.setAttribute("title", "Expand to full view");
     this.expandBtnEl.style.display = "none";
-    (0, import_obsidian29.setIcon)(this.expandBtnEl, "maximize-2");
+    (0, import_obsidian30.setIcon)(this.expandBtnEl, "maximize-2");
     this.expandBtnEl.addEventListener("click", () => {
       this.toggleInputExpand();
     });
@@ -41565,7 +41944,7 @@ var HarnessChatView = class extends import_obsidian29.ItemView {
         this.currentAbortController.abort();
         this.currentAbortController = null;
         this.setSendButtonState(false);
-        new import_obsidian29.Notice("Generation stopped.");
+        new import_obsidian30.Notice("Generation stopped.");
         return;
       }
       const text2 = this.inputTextAreaEl.value.trim();
@@ -41625,7 +42004,7 @@ var HarnessChatView = class extends import_obsidian29.ItemView {
             }
             this.refreshAgentDropdown();
             await this.saveSessionState();
-            new import_obsidian29.Notice(`Switched to agent: ${targetAgent.name}`);
+            new import_obsidian30.Notice(`Switched to agent: ${targetAgent.name}`);
             return;
           }
         }
@@ -41636,7 +42015,7 @@ var HarnessChatView = class extends import_obsidian29.ItemView {
         (p3) => p3.id === this.plugin.settings.activeProviderId
       );
       if (!activeProv) {
-        new import_obsidian29.Notice("Please configure and select an AI provider in Settings first.");
+        new import_obsidian30.Notice("Please configure and select an AI provider in Settings first.");
         return;
       }
       this.inputTextAreaEl.value = "";
@@ -41661,6 +42040,7 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
       const availableSkillsDirectives = this.plugin.skillManager?.generateSystemPromptDirectives() || "";
       const extraSystemDirectives = [availableSkillsDirectives, activeSkillDirective].filter(Boolean).join("\n\n");
       this.currentAbortController = new AbortController();
+      this.activeSubagentCards.clear();
       this.setSendButtonState(true);
       if (this.currentSession.messages.length === 0) {
         this.currentSession.title = SessionManager.generateTitle(processedUserText);
@@ -41694,7 +42074,7 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
       const streamCopyBtn = streamHeaderEl.createEl("button", { cls: "harness-msg-copy-btn" });
       streamCopyBtn.setAttribute("aria-label", "Copy response");
       streamCopyBtn.setAttribute("title", "Copy response");
-      (0, import_obsidian29.setIcon)(streamCopyBtn, "copy");
+      (0, import_obsidian30.setIcon)(streamCopyBtn, "copy");
       streamCopyBtn.addEventListener("click", (e2) => {
         e2.stopPropagation();
         const currentText = textContentEl.innerText || "";
@@ -41705,7 +42085,18 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
         const updatedHistory = await this.agentHarness.runTurn(
           this.currentSession.messages,
           (event) => {
-            if (event.type === "chunk" && event.content) {
+            if (event.subagentContext) {
+              let card = this.activeSubagentCards.get(event.subagentContext.taskId);
+              if (!card) {
+                card = new SubagentCard(streamingMsgEl || this.messagesContainerEl, event.subagentContext, this.app, this);
+                this.activeSubagentCards.set(event.subagentContext.taskId, card);
+              }
+              card.handleEvent(event);
+              if (event.type === "finish" || event.type === "error") {
+                card.finalize(event.content);
+              }
+              this.messagesContainerEl.scrollTop = this.messagesContainerEl.scrollHeight;
+            } else if (event.type === "chunk" && event.content) {
               const parsed = parseThoughts(event.content);
               if (parsed.thoughts.length > 0) {
                 textContentEl.empty();
@@ -41741,7 +42132,7 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
         if (err2.message && err2.message.includes("stopped")) {
           textContentEl.setText(textContentEl.innerText + " [Stopped]");
         } else {
-          new import_obsidian29.Notice(`Agent error: ${err2.message}`);
+          new import_obsidian30.Notice(`Agent error: ${err2.message}`);
           textContentEl.setText(`Error: ${err2.message}`);
         }
       } finally {
@@ -41795,15 +42186,15 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
   async copyToClipboard(text2, btnEl, noticeText) {
     try {
       await navigator.clipboard.writeText(text2);
-      (0, import_obsidian29.setIcon)(btnEl, "check");
+      (0, import_obsidian30.setIcon)(btnEl, "check");
       btnEl.addClass("is-copied");
-      new import_obsidian29.Notice(noticeText);
+      new import_obsidian30.Notice(noticeText);
       setTimeout(() => {
-        (0, import_obsidian29.setIcon)(btnEl, "copy");
+        (0, import_obsidian30.setIcon)(btnEl, "copy");
         btnEl.removeClass("is-copied");
       }, 2e3);
     } catch (e2) {
-      new import_obsidian29.Notice("Failed to copy to clipboard");
+      new import_obsidian30.Notice("Failed to copy to clipboard");
     }
   }
   enhanceCodeBlocksWithCopyButton(containerEl) {
@@ -41821,7 +42212,7 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
       });
       copyBtn.setAttribute("aria-label", "Copy code");
       copyBtn.setAttribute("title", "Copy code");
-      (0, import_obsidian29.setIcon)(copyBtn, "copy");
+      (0, import_obsidian30.setIcon)(copyBtn, "copy");
       copyBtn.addEventListener("click", (e2) => {
         e2.preventDefault();
         e2.stopPropagation();
@@ -41838,13 +42229,13 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
     const summaryEl = detailsEl.createEl("summary", { cls: "harness-collapsible-summary" });
     const leftEl = summaryEl.createEl("div", { cls: "harness-collapsible-summary-left" });
     const iconSpan = leftEl.createEl("span");
-    (0, import_obsidian29.setIcon)(iconSpan, "sparkles");
+    (0, import_obsidian30.setIcon)(iconSpan, "sparkles");
     leftEl.createEl("span", { text: "Reasoning / \u0420\u0430\u0441\u0441\u0443\u0436\u0434\u0435\u043D\u0438\u044F" });
     const rightEl = summaryEl.createEl("div", { cls: "harness-collapsible-summary-right" });
     const copyBtn = rightEl.createEl("button", { cls: "harness-tool-copy-btn" });
     copyBtn.setAttribute("aria-label", "Copy reasoning");
     copyBtn.setAttribute("title", "Copy reasoning");
-    (0, import_obsidian29.setIcon)(copyBtn, "copy");
+    (0, import_obsidian30.setIcon)(copyBtn, "copy");
     copyBtn.addEventListener("click", (e2) => {
       e2.preventDefault();
       e2.stopPropagation();
@@ -41852,7 +42243,7 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
     });
     rightEl.createEl("span", { text: "View", cls: "harness-collapsible-badge" });
     const bodyEl = detailsEl.createEl("div", { cls: "harness-collapsible-body harness-thinking-text" });
-    await import_obsidian29.MarkdownRenderer.render(this.app, thoughtText, bodyEl, "", this);
+    await import_obsidian30.MarkdownRenderer.render(this.app, thoughtText, bodyEl, "", this);
     this.enhanceCodeBlocksWithCopyButton(bodyEl);
   }
   formatContentForCard(rawStr) {
@@ -41872,13 +42263,13 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
     const summaryEl = detailsEl.createEl("summary", { cls: "harness-collapsible-summary" });
     const leftEl = summaryEl.createEl("div", { cls: "harness-collapsible-summary-left" });
     const iconSpan = leftEl.createEl("span");
-    (0, import_obsidian29.setIcon)(iconSpan, "wrench");
+    (0, import_obsidian30.setIcon)(iconSpan, "wrench");
     leftEl.createEl("span", { text: `Tool: ${toolName}` });
     const rightEl = summaryEl.createEl("div", { cls: "harness-collapsible-summary-right" });
     const copyBtn = rightEl.createEl("button", { cls: "harness-tool-copy-btn" });
     copyBtn.setAttribute("aria-label", "Copy tool arguments");
     copyBtn.setAttribute("title", "Copy tool arguments");
-    (0, import_obsidian29.setIcon)(copyBtn, "copy");
+    (0, import_obsidian30.setIcon)(copyBtn, "copy");
     copyBtn.addEventListener("click", (e2) => {
       e2.preventDefault();
       e2.stopPropagation();
@@ -41898,13 +42289,13 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
     const summaryEl = detailsEl.createEl("summary", { cls: "harness-collapsible-summary" });
     const leftEl = summaryEl.createEl("div", { cls: "harness-collapsible-summary-left" });
     const iconSpan = leftEl.createEl("span");
-    (0, import_obsidian29.setIcon)(iconSpan, "file-text");
+    (0, import_obsidian30.setIcon)(iconSpan, "file-text");
     leftEl.createEl("span", { text: `Output: ${toolName}` });
     const rightEl = summaryEl.createEl("div", { cls: "harness-collapsible-summary-right" });
     const copyBtn = rightEl.createEl("button", { cls: "harness-tool-copy-btn" });
     copyBtn.setAttribute("aria-label", "Copy tool output");
     copyBtn.setAttribute("title", "Copy tool output");
-    (0, import_obsidian29.setIcon)(copyBtn, "copy");
+    (0, import_obsidian30.setIcon)(copyBtn, "copy");
     copyBtn.addEventListener("click", (e2) => {
       e2.preventDefault();
       e2.stopPropagation();
@@ -41937,14 +42328,14 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
     this.isInputExpanded = !this.isInputExpanded;
     if (this.isInputExpanded) {
       this.inputAreaEl.addClass("is-expanded");
-      (0, import_obsidian29.setIcon)(this.expandBtnEl, "minimize-2");
+      (0, import_obsidian30.setIcon)(this.expandBtnEl, "minimize-2");
       this.expandBtnEl.setAttribute("aria-label", "Restore compact view");
       this.expandBtnEl.setAttribute("title", "Restore compact view");
       this.expandBtnEl.style.display = "flex";
       this.inputTextAreaEl.focus();
     } else {
       this.inputAreaEl.removeClass("is-expanded");
-      (0, import_obsidian29.setIcon)(this.expandBtnEl, "maximize-2");
+      (0, import_obsidian30.setIcon)(this.expandBtnEl, "maximize-2");
       this.expandBtnEl.setAttribute("aria-label", "Expand to full view");
       this.expandBtnEl.setAttribute("title", "Expand to full view");
       this.autoResizeTextarea();
@@ -41956,13 +42347,13 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
       return;
     this.sendButtonEl.empty();
     if (isGenerating) {
-      (0, import_obsidian29.setIcon)(this.sendButtonEl, "square");
+      (0, import_obsidian30.setIcon)(this.sendButtonEl, "square");
       this.sendButtonEl.addClass("mod-warning");
       this.sendButtonEl.removeClass("mod-cta");
       this.sendButtonEl.setAttribute("aria-label", "Stop generation");
       this.sendButtonEl.setAttribute("title", "Stop generation");
     } else {
-      (0, import_obsidian29.setIcon)(this.sendButtonEl, "send");
+      (0, import_obsidian30.setIcon)(this.sendButtonEl, "send");
       this.sendButtonEl.addClass("mod-cta");
       this.sendButtonEl.removeClass("mod-warning");
       this.sendButtonEl.setAttribute("aria-label", "Send message");
@@ -42139,7 +42530,7 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
       if (index2 === 0)
         itemEl.addClass("is-selected");
       const iconSpan = itemEl.createEl("span", { cls: "harness-suggest-icon" });
-      (0, import_obsidian29.setIcon)(iconSpan, item.isFolder ? "folder" : "file-text");
+      (0, import_obsidian30.setIcon)(iconSpan, item.isFolder ? "folder" : "file-text");
       itemEl.createEl("span", { text: ` ${item.path}` });
       itemEl.addEventListener("click", onSelect);
     });
@@ -42174,10 +42565,10 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
           setting.openTabById(this.plugin.manifest.id);
         }
       } else {
-        new import_obsidian29.Notice("Please open Settings -> Obsidian Harness Bot to manage agents.");
+        new import_obsidian30.Notice("Please open Settings -> Obsidian Harness Bot to manage agents.");
       }
     } catch (e2) {
-      new import_obsidian29.Notice("Please open Settings -> Obsidian Harness Bot to manage agents.");
+      new import_obsidian30.Notice("Please open Settings -> Obsidian Harness Bot to manage agents.");
     }
   }
   async switchSession(session) {
@@ -42204,7 +42595,7 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
     this.renderMessages();
     this.refreshModelDropdown();
     this.refreshAgentDropdown();
-    new import_obsidian29.Notice("Started new chat session");
+    new import_obsidian30.Notice("Started new chat session");
   }
   openSessionsModal() {
     new SessionsModal(
@@ -42316,13 +42707,13 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
         const copyBtn = headerEl.createEl("button", { cls: "harness-msg-copy-btn" });
         copyBtn.setAttribute("aria-label", "Copy message");
         copyBtn.setAttribute("title", "Copy message");
-        (0, import_obsidian29.setIcon)(copyBtn, "copy");
+        (0, import_obsidian30.setIcon)(copyBtn, "copy");
         copyBtn.addEventListener("click", (e2) => {
           e2.stopPropagation();
           this.copyToClipboard(rawContent, copyBtn, "Message copied to clipboard");
         });
         const bodyEl = msgEl.createEl("div", { cls: "harness-message-body" });
-        await import_obsidian29.MarkdownRenderer.render(this.app, rawContent, bodyEl, "", this);
+        await import_obsidian30.MarkdownRenderer.render(this.app, rawContent, bodyEl, "", this);
         this.enhanceCodeBlocksWithCopyButton(bodyEl);
       } else if (msg.role === "assistant") {
         const msgEl = this.messagesContainerEl.createEl("div", { cls: "harness-message harness-message-assistant" });
@@ -42338,7 +42729,7 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
         const copyBtn = headerEl.createEl("button", { cls: "harness-msg-copy-btn" });
         copyBtn.setAttribute("aria-label", "Copy response");
         copyBtn.setAttribute("title", "Copy response");
-        (0, import_obsidian29.setIcon)(copyBtn, "copy");
+        (0, import_obsidian30.setIcon)(copyBtn, "copy");
         copyBtn.addEventListener("click", (e2) => {
           e2.stopPropagation();
           const textToCopy = parsed.finalAnswer || rawContent;
@@ -42352,15 +42743,46 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
         }
         if (msg.tool_calls) {
           for (const tc of msg.tool_calls) {
-            this.renderToolCallCard(bodyEl, tc.function.name, tc.function.arguments, false);
+            if (tc.function.name === "invoke_subagent") {
+              let parsedArgs = {};
+              try {
+                parsedArgs = JSON.parse(tc.function.arguments || "{}");
+              } catch (e2) {
+                parsedArgs = {};
+              }
+              const agentConfig = this.plugin.agentManager?.getAgent(parsedArgs.agent_id);
+              const workspacePath = agentConfig?.workspacePath;
+              const agentName = agentConfig?.name || parsedArgs.agent_id;
+              const toolResultMsg = this.currentSession.messages.find(
+                (m4) => m4.role === "tool" && (m4.tool_call_id === tc.id || m4.name === "invoke_subagent" && !m4.tool_call_id)
+              );
+              const toolOutput = typeof toolResultMsg?.content === "string" ? toolResultMsg.content : toolResultMsg?.content ? JSON.stringify(toolResultMsg.content) : void 0;
+              await SubagentCard.renderHistorical(
+                bodyEl,
+                this.app,
+                this,
+                tc,
+                toolOutput,
+                workspacePath,
+                agentName
+              );
+            } else {
+              this.renderToolCallCard(bodyEl, tc.function.name, tc.function.arguments, false);
+            }
           }
         }
         if (parsed.finalAnswer) {
           const answerContainer = bodyEl.createEl("div", { cls: "harness-answer-text" });
-          await import_obsidian29.MarkdownRenderer.render(this.app, parsed.finalAnswer, answerContainer, "", this);
+          await import_obsidian30.MarkdownRenderer.render(this.app, parsed.finalAnswer, answerContainer, "", this);
           this.enhanceCodeBlocksWithCopyButton(answerContainer);
         }
       } else if (msg.role === "tool") {
+        const isRenderedByAssistant = this.currentSession.messages.some(
+          (m4) => m4.role === "assistant" && m4.tool_calls?.some((tc) => msg.tool_call_id && tc.id === msg.tool_call_id || tc.function.name === "invoke_subagent")
+        );
+        if (msg.name === "invoke_subagent" && isRenderedByAssistant) {
+          continue;
+        }
         const rawContent = typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content || "");
         this.renderToolOutputCard(this.messagesContainerEl, msg.name || "tool", rawContent, false);
       }
@@ -42378,10 +42800,10 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
 };
 
 // src/skills/skill-manager.ts
-var import_obsidian31 = require("obsidian");
+var import_obsidian32 = require("obsidian");
 
 // src/skills/git-resolver.ts
-var import_obsidian30 = require("obsidian");
+var import_obsidian31 = require("obsidian");
 
 // src/skills/frontmatter.ts
 function parseSkillContent(rawContent, fallbackId) {
@@ -42496,7 +42918,7 @@ var SkillGitResolver = class {
     let successfulUrl = "";
     for (const candUrl of rawCandidates) {
       try {
-        const res = await (0, import_obsidian30.requestUrl)({ url: candUrl, method: "GET" });
+        const res = await (0, import_obsidian31.requestUrl)({ url: candUrl, method: "GET" });
         if (res.status === 200 && res.text && res.text.trim().length > 0) {
           fetchedContent = res.text;
           successfulUrl = candUrl;
@@ -42863,7 +43285,7 @@ var SkillManager = class {
     this.settings.installedSkills = this.settings.installedSkills.filter((s3) => s3.id !== resolved.id);
     this.settings.installedSkills.push(resolved);
     await this.saveSettingsCallback();
-    new import_obsidian31.Notice(`Skill "${resolved.name}" successfully installed!`);
+    new import_obsidian32.Notice(`Skill "${resolved.name}" successfully installed!`);
     return resolved;
   }
   /**
@@ -42880,7 +43302,7 @@ var SkillManager = class {
       return;
     this.settings.installedSkills = this.settings.installedSkills.filter((s3) => s3.id !== id);
     await this.saveSettingsCallback();
-    new import_obsidian31.Notice(`Skill uninstalled.`);
+    new import_obsidian32.Notice(`Skill uninstalled.`);
   }
   /**
    * Toggles skill enabled status.
@@ -42938,10 +43360,10 @@ ${skill.content}
 };
 
 // src/mcp/mcp-manager.ts
-var import_obsidian34 = require("obsidian");
+var import_obsidian35 = require("obsidian");
 
 // src/mcp/client.ts
-var import_obsidian32 = require("obsidian");
+var import_obsidian33 = require("obsidian");
 function parseJsonSafely(str) {
   try {
     return JSON.parse(str);
@@ -43009,7 +43431,7 @@ var McpClient = class {
       return this.postUrl;
     }
     try {
-      const res = await (0, import_obsidian32.requestUrl)({
+      const res = await (0, import_obsidian33.requestUrl)({
         url: this.url,
         method: "GET",
         headers: { ...this.getHeaders(), "Accept": "text/event-stream, text/plain, */*" },
@@ -43059,7 +43481,7 @@ var McpClient = class {
       body: JSON.stringify(payload),
       throw: false
     };
-    const res = await (0, import_obsidian32.requestUrl)(reqOptions);
+    const res = await (0, import_obsidian33.requestUrl)(reqOptions);
     if (res.status === 401 || res.status === 403) {
       throw new Error(`Authentication error (${res.status}): Please check API Token or OAuth permissions.`);
     }
@@ -43111,7 +43533,7 @@ var McpClient = class {
     });
     try {
       const postEndpoint = await this.discoverEndpoint();
-      await (0, import_obsidian32.requestUrl)({
+      await (0, import_obsidian33.requestUrl)({
         url: postEndpoint,
         method: "POST",
         headers: this.getHeaders(),
@@ -43204,7 +43626,7 @@ var McpClient = class {
 };
 
 // src/mcp/oauth.ts
-var import_obsidian33 = require("obsidian");
+var import_obsidian34 = require("obsidian");
 var McpOAuthHelper = class {
   /**
    * Generates a cryptographically random string for PKCE and state verification.
@@ -43305,7 +43727,7 @@ var McpOAuthHelper = class {
         bodyParams.client_id = pending.clientId;
       }
       const formBody = new URLSearchParams(bodyParams).toString();
-      const response = await (0, import_obsidian33.requestUrl)({
+      const response = await (0, import_obsidian34.requestUrl)({
         url: pending.tokenUrl,
         method: "POST",
         headers: {
@@ -43522,7 +43944,7 @@ var McpManager = class {
     }
     const authUrl = await McpOAuthHelper.startOAuthFlow(server);
     openExternalUrl(authUrl);
-    new import_obsidian34.Notice(`Opening browser for ${server.name} authorization...`);
+    new import_obsidian35.Notice(`Opening browser for ${server.name} authorization...`);
   }
   /**
    * Handles incoming OAuth deep link callback.
@@ -43535,10 +43957,10 @@ var McpManager = class {
         if (server) {
           server.enabled = true;
           await this.testAndSyncServer(result.serverId);
-          new import_obsidian34.Notice(`\u2713 Successfully connected to ${server.name}!`);
+          new import_obsidian35.Notice(`\u2713 Successfully connected to ${server.name}!`);
         }
       } catch (err2) {
-        new import_obsidian34.Notice(`Connected, but tool discovery failed: ${err2.message}`);
+        new import_obsidian35.Notice(`Connected, but tool discovery failed: ${err2.message}`);
       }
     }
     return result;
@@ -43582,7 +44004,7 @@ var McpManager = class {
 };
 
 // src/engine/agent-manager.ts
-var import_obsidian35 = require("obsidian");
+var import_obsidian36 = require("obsidian");
 var AgentManager = class {
   constructor(app, settings, onSaveSettings) {
     this.app = app;
@@ -43757,9 +44179,9 @@ var AgentManager = class {
     if (agent.workspacePath && agent.workspacePath.trim().length > 0) {
       const ws = agent.workspacePath.trim().replace(/^\/+/, "").replace(/\/+$/, "");
       const mdFileName = (agent.agentMdFile || "AGENT.md").trim().replace(/^\/+/, "");
-      const targetPath = (0, import_obsidian35.normalizePath)(ws ? `${ws}/${mdFileName}` : mdFileName);
+      const targetPath = (0, import_obsidian36.normalizePath)(ws ? `${ws}/${mdFileName}` : mdFileName);
       const file = this.app.vault.getAbstractFileByPath(targetPath);
-      if (file instanceof import_obsidian35.TFile) {
+      if (file instanceof import_obsidian36.TFile) {
         try {
           const agentMdContent = await this.app.vault.cachedRead(file);
           if (agentMdContent && agentMdContent.trim().length > 0) {
@@ -43800,7 +44222,7 @@ ${agentMdContent}`;
         }
       }
     }
-    const agentMdPath = (0, import_obsidian35.normalizePath)(cleanWorkspace ? `${cleanWorkspace}/AGENT.md` : "AGENT.md");
+    const agentMdPath = (0, import_obsidian36.normalizePath)(cleanWorkspace ? `${cleanWorkspace}/AGENT.md` : "AGENT.md");
     let fileCreated = false;
     const existingFile = this.app.vault.getAbstractFileByPath(agentMdPath);
     if (!existingFile) {
@@ -43816,7 +44238,7 @@ Write specialized instructions, objectives, constraints, and custom workflows fo
 };
 
 // src/main.ts
-var HarnessPlugin = class extends import_obsidian36.Plugin {
+var HarnessPlugin = class extends import_obsidian37.Plugin {
   constructor() {
     super(...arguments);
     this.settings = DEFAULT_SETTINGS;
