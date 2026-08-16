@@ -38,7 +38,8 @@ export default class HarnessPlugin extends Plugin {
     await this.mcpManager.init();
 
     // Initialize Tool Registry
-    this.toolRegistry = new ToolRegistry(this.skillManager, this.mcpManager, this.settings);
+    this.toolRegistry = new ToolRegistry(this.skillManager, this.mcpManager, this.settings, this.agentManager);
+    this.toolRegistry.setAgentManager(this.agentManager);
 
     // Register Obsidian deep link protocol handler for OAuth 2.1 PKCE (obsidian://oh-bot-mcp-auth)
     this.registerObsidianProtocolHandler('oh-bot-mcp-auth', async (params) => {

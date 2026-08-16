@@ -13,6 +13,10 @@ import { ListSkillsTool } from './skills/list-skills';
 import { WebSearchTool } from './web/search-tool';
 import { FetchWebPageTool } from './web/fetch-page-tool';
 import { GeneratePdfTool } from './pdf/generate-pdf-tool';
+import { InvokeSubagentTool } from './agents/invoke-subagent';
+import { ManageAgentsTool } from './agents/manage-agents';
+import { SubagentRunner } from './agents/types';
+import { AgentManager } from '../engine/agent-manager';
 import { SkillManager } from '../skills/skill-manager';
 import { McpManager } from '../mcp/mcp-manager';
 import { McpBridgeTool } from './mcp/bridge-tool';
@@ -25,9 +29,17 @@ export class ToolRegistry {
   private webSearchTool = new WebSearchTool();
   private fetchWebPageTool = new FetchWebPageTool();
   private generatePdfTool = new GeneratePdfTool();
+  private invokeSubagentTool = new InvokeSubagentTool();
+  private manageAgentsTool = new ManageAgentsTool();
   private mcpManager?: McpManager;
+  private agentManager?: AgentManager;
 
-  constructor(skillManager?: SkillManager, mcpManager?: McpManager, settings?: HarnessSettings) {
+  constructor(
+    skillManager?: SkillManager,
+    mcpManager?: McpManager,
+    settings?: HarnessSettings,
+    agentManager?: AgentManager
+  ) {
     // Register V1 Vault Tools
     this.registerTool(new VaultReadFileTool());
     this.registerTool(new VaultCreateFileTool());
@@ -45,6 +57,10 @@ export class ToolRegistry {
     this.registerTool(this.fetchWebPageTool);
     this.registerTool(this.generatePdfTool);
 
+    // Register Agent Tools
+    this.registerTool(this.invokeSubagentTool);
+    this.registerTool(this.manageAgentsTool);
+
     if (skillManager) {
       this.setSkillManager(skillManager);
     }
@@ -53,6 +69,9 @@ export class ToolRegistry {
     }
     if (settings) {
       this.setSettings(settings);
+    }
+    if (agentManager) {
+      this.setAgentManager(agentManager);
     }
   }
 
@@ -70,6 +89,17 @@ export class ToolRegistry {
     this.webSearchTool.setSettings(settings);
     this.generatePdfTool.setSettings(settings);
   }
+
+  setAgentManager(agentManager: AgentManager): void {
+    this.agentManager = agentManager;
+    this.invokeSubagentTool.setAgentManager(agentManager);
+    this.manageAgentsTool.setAgentManager(agentManager);
+  }
+
+  setSubagentRunner(runner: SubagentRunner): void {
+    this.invokeSubagentTool.setSubagentRunner(runner);
+  }
+
 
   registerTool(tool: AgentTool): void {
     this.tools.set(tool.name, tool);

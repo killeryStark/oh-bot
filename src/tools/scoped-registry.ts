@@ -4,6 +4,8 @@ import { AgentTool } from './base';
 import { ToolRegistry } from './registry';
 import { SkillManager } from '../skills/skill-manager';
 import { McpManager } from '../mcp/mcp-manager';
+import { AgentManager } from '../engine/agent-manager';
+import { SubagentRunner } from './agents/types';
 
 export class ScopedToolRegistry {
   public workspacePath: string;
@@ -194,6 +196,11 @@ export class ScopedToolRegistry {
         }
       } else if (name === 'vault_search_notes' || name === 'search_notes') {
         cloned.description = `${cloned.description} [Scoped to notes within workspace: "${this.workspacePath}"]`;
+      } else if (name === 'generate_pdf') {
+        cloned.description = `${cloned.description} [Scoped to workspace: "${this.workspacePath}"]`;
+        if (cloned.parameters?.properties?.filePath) {
+          cloned.parameters.properties.filePath.description = `${cloned.parameters.properties.filePath.description || ''} (Must reside within workspace "${this.workspacePath}")`.trim();
+        }
       }
 
       return cloned;
@@ -214,6 +221,8 @@ export class ScopedToolRegistry {
    * Executes a tool with sandboxing and workspace permission enforcement.
    */
   async executeTool(name: string, args: Record<string, any>, app: App): Promise<ToolResult> {
+    const safeArgs = args || {};
+
     if (!this.isToolAllowed(name)) {
       return {
         success: false,
@@ -232,7 +241,7 @@ export class ScopedToolRegistry {
         name === 'patch_file';
 
       if (isFileTool) {
-        const targetPath = args?.path;
+        const targetPath = safeArgs.path;
         if (!targetPath || !this.isPathWithinWorkspace(targetPath)) {
           return {
             success: false,
@@ -242,12 +251,35 @@ export class ScopedToolRegistry {
         }
       }
 
+      if (name === 'generate_pdf') {
+        const targetPath = safeArgs.filePath;
+        if (!targetPath || typeof targetPath !== 'string') {
+          return {
+            success: false,
+            output: '',
+            error: 'Missing required parameter: "filePath" is required.',
+          };
+        }
+        if (!this.isPathWithinWorkspace(targetPath)) {
+          const candidate = `${this.workspacePath}/${targetPath.replace(/^\/+/, '')}`;
+          if (this.isPathWithinWorkspace(candidate)) {
+            safeArgs.filePath = candidate;
+          } else {
+            return {
+              success: false,
+              output: '',
+              error: `Access denied: filePath "${targetPath}" is outside the assigned workspace "${this.workspacePath}".`,
+            };
+          }
+        }
+      }
+
       const isListDir = name === 'vault_list_dir' || name === 'list_dir';
       if (isListDir) {
-        const rawTarget = args?.dir_path !== undefined ? args.dir_path : args?.path;
+        const rawTarget = safeArgs.dir_path !== undefined ? safeArgs.dir_path : safeArgs.path;
         if (!rawTarget || rawTarget === '.' || rawTarget === '/' || rawTarget === '') {
-          args.dir_path = this.workspacePath;
-          args.path = this.workspacePath;
+          safeArgs.dir_path = this.workspacePath;
+          safeArgs.path = this.workspacePath;
         } else {
           if (!this.isPathWithinWorkspace(rawTarget)) {
             return {
@@ -256,14 +288,14 @@ export class ScopedToolRegistry {
               error: `Access denied: dir_path "${rawTarget}" is outside the assigned workspace "${this.workspacePath}".`,
             };
           }
-          args.dir_path = rawTarget;
-          args.path = rawTarget;
+          safeArgs.dir_path = rawTarget;
+          safeArgs.path = rawTarget;
         }
       }
 
       const isSearchNotes = name === 'vault_search_notes' || name === 'search_notes';
       if (isSearchNotes) {
-        const result = await this.baseRegistry.executeTool(name, args, app);
+        const result = await this.baseRegistry.executeTool(name, safeArgs, app);
         if (result.success && result.output) {
           try {
             const parsed = JSON.parse(result.output);
@@ -286,7 +318,7 @@ export class ScopedToolRegistry {
       }
     }
 
-    return await this.baseRegistry.executeTool(name, args, app);
+    return await this.baseRegistry.executeTool(name, safeArgs, app);
   }
 
   setSettings(settings: HarnessSettings): void {
@@ -301,6 +333,14 @@ export class ScopedToolRegistry {
     this.baseRegistry.setMcpManager(mcpManager);
   }
 
+  setAgentManager(agentManager: AgentManager): void {
+    this.baseRegistry.setAgentManager(agentManager);
+  }
+
+  setSubagentRunner(runner: SubagentRunner): void {
+    this.baseRegistry.setSubagentRunner(runner);
+  }
+
   getAgent(): AgentConfig {
     return this.agent;
   }
@@ -313,3 +353,4 @@ export class ScopedToolRegistry {
     return this.baseRegistry;
   }
 }
+
