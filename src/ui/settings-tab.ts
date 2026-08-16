@@ -1,6 +1,6 @@
 import { App, PluginSettingTab, Setting, Notice, setIcon } from 'obsidian';
 import type HarnessPlugin from '../main';
-import { SafetyMode } from '../types';
+import { SafetyMode, SearchProviderType } from '../types';
 import { AddProviderModal } from './components/add-provider-modal';
 import { EditModelsModal } from './components/edit-models-modal';
 import { fetchAvailableModels } from '../utils/model-fetcher';
@@ -18,6 +18,13 @@ export class HarnessSettingTab extends PluginSettingTab {
     this.plugin = plugin;
     this.secretManager = new SecretManager(app);
     this.selectedConfigProviderId = this.plugin.settings.activeProviderId || this.plugin.settings.providers[0]?.id || 'openrouter';
+  }
+
+  private async saveSettings(): Promise<void> {
+    await this.plugin.saveSettings();
+    if (this.plugin.toolRegistry) {
+      this.plugin.toolRegistry.setSettings(this.plugin.settings);
+    }
   }
 
   display(): void {
@@ -47,7 +54,7 @@ export class HarnessSettingTab extends PluginSettingTab {
           } else {
             this.plugin.settings.activeModel = '';
           }
-          await this.plugin.saveSettings();
+          await this.saveSettings();
           this.display();
         });
       });
@@ -74,7 +81,7 @@ export class HarnessSettingTab extends PluginSettingTab {
         }
         dropdown.onChange(async (val) => {
           this.plugin.settings.activeModel = val;
-          await this.plugin.saveSettings();
+          await this.saveSettings();
         });
       });
     } else {
@@ -112,7 +119,7 @@ export class HarnessSettingTab extends PluginSettingTab {
             this.plugin.settings.activeProviderId = newProvider.id;
             this.plugin.settings.activeModel = newProvider.models[0] || '';
           }
-          await this.plugin.saveSettings();
+          await this.saveSettings();
           this.display();
         }).open();
       });
@@ -139,7 +146,7 @@ export class HarnessSettingTab extends PluginSettingTab {
         .addText((text) =>
           text.setValue(configProvider.baseUrl).onChange(async (val) => {
             configProvider.baseUrl = val.trim();
-            await this.plugin.saveSettings();
+            await this.saveSettings();
           })
         );
 
@@ -160,7 +167,7 @@ export class HarnessSettingTab extends PluginSettingTab {
               this.plugin.settings.activeProviderId = configProvider.id;
               this.plugin.settings.activeModel = configProvider.models[0] || '';
             }
-            await this.plugin.saveSettings();
+            await this.saveSettings();
             new Notice(`API Key saved for ${configProvider.name}`);
           }
         });
@@ -210,7 +217,7 @@ export class HarnessSettingTab extends PluginSettingTab {
             if (this.plugin.settings.activeProviderId === configProvider.id && fetched.length > 0) {
               this.plugin.settings.activeModel = fetched[0];
             }
-            await this.plugin.saveSettings();
+            await this.saveSettings();
             new Notice(`Updated ${configProvider.name} with ${fetched.length} models!`);
             this.display();
           } else {
@@ -232,7 +239,7 @@ export class HarnessSettingTab extends PluginSettingTab {
                 this.plugin.settings.activeModel = updatedModels[0] || '';
               }
             }
-            await this.plugin.saveSettings();
+            await this.saveSettings();
             this.display();
           }).open();
         });
@@ -257,7 +264,7 @@ export class HarnessSettingTab extends PluginSettingTab {
               this.plugin.settings.activeProviderId = '';
               this.plugin.settings.activeModel = '';
             }
-            await this.plugin.saveSettings();
+            await this.saveSettings();
             new Notice(`Deleted provider "${configProvider.name}".`);
             this.display();
           });
@@ -278,9 +285,98 @@ export class HarnessSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.safetyMode)
           .onChange(async (value) => {
             this.plugin.settings.safetyMode = value as SafetyMode;
-            await this.plugin.saveSettings();
+            await this.saveSettings();
           })
       );
+
+    containerEl.createEl('h3', { text: 'Web Search & Document Tools' });
+
+    // Search Provider Dropdown
+    new Setting(containerEl)
+      .setName('Search Provider')
+      .setDesc('Select the web search provider used by the web_search tool')
+      .addDropdown((dropdown) => {
+        dropdown
+          .addOption('duckduckgo', 'DuckDuckGo (Free / Zero-Config)')
+          .addOption('searxng', 'SearXNG (Self-Hosted / Custom URL)')
+          .addOption('tavily', 'Tavily Search (API Key)')
+          .setValue(this.plugin.settings.searchProvider || 'duckduckgo')
+          .onChange(async (val) => {
+            this.plugin.settings.searchProvider = val as SearchProviderType;
+            await this.saveSettings();
+            this.display();
+          });
+      });
+
+    // SearXNG Instance URL (only when searchProvider === 'searxng')
+    if (this.plugin.settings.searchProvider === 'searxng') {
+      new Setting(containerEl)
+        .setName('SearXNG URL')
+        .setDesc('Base URL of your SearXNG instance (e.g. http://localhost:8080 or https://searx.example.com)')
+        .addText((text) => {
+          text
+            .setPlaceholder('http://localhost:8080')
+            .setValue(this.plugin.settings.searxngUrl || '')
+            .onChange(async (val) => {
+              this.plugin.settings.searxngUrl = val.trim();
+              await this.saveSettings();
+            });
+        });
+    }
+
+    // Tavily API Key (only when searchProvider === 'tavily')
+    if (this.plugin.settings.searchProvider === 'tavily') {
+      const tavilySecretName = this.plugin.settings.tavilyApiKeySecretName || 'oh_bot_secret_tavily';
+      const hasTavilyKey = this.secretManager.hasSecret(tavilySecretName);
+
+      const tavilySetting = new Setting(containerEl)
+        .setName('Tavily API Key')
+        .setDesc(
+          hasTavilyKey
+            ? 'Key is configured in SecretStorage'
+            : 'Enter Tavily API Key to store securely'
+        );
+
+      tavilySetting.addText((text) => {
+        text.inputEl.type = 'password';
+        text.setPlaceholder(hasTavilyKey ? '••••••••••••••••' : 'Enter Tavily API Key');
+        text.onChange(async (val) => {
+          const trimmed = val.trim();
+          if (trimmed) {
+            this.secretManager.setSecret(tavilySecretName, trimmed);
+            await this.saveSettings();
+            new Notice('Tavily API Key saved');
+          }
+        });
+      });
+
+      if (hasTavilyKey) {
+        tavilySetting.addButton((btn) => {
+          btn.setButtonText('Clear Key');
+          btn.setWarning();
+          btn.onClick(async () => {
+            this.secretManager.setSecret(tavilySecretName, '');
+            new Notice('Tavily API Key cleared');
+            await this.saveSettings();
+            this.display();
+          });
+        });
+      }
+    }
+
+    // Default PDF Folder
+    new Setting(containerEl)
+      .setName('Default PDF Folder')
+      .setDesc('Default folder path in the vault for generated PDF documents')
+      .addText((text) => {
+        text
+          .setPlaceholder('Documents/Generated')
+          .setValue(this.plugin.settings.defaultPdfFolder || '')
+          .onChange(async (val) => {
+            this.plugin.settings.defaultPdfFolder = val.trim();
+            await this.saveSettings();
+          });
+      });
 
     containerEl.createEl('h3', { text: 'Skills & Marketplace' });
 
@@ -306,7 +402,7 @@ export class HarnessSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.scanVaultSkills !== false)
           .onChange(async (val) => {
             this.plugin.settings.scanVaultSkills = val;
-            await this.plugin.saveSettings();
+            await this.saveSettings();
             await this.plugin.skillManager.refreshLocalSkills();
           })
       );
@@ -321,7 +417,7 @@ export class HarnessSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.customMarketplaceUrl || '')
           .onChange(async (val) => {
             this.plugin.settings.customMarketplaceUrl = val.trim();
-            await this.plugin.saveSettings();
+            await this.saveSettings();
           })
       );
 

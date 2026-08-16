@@ -68,6 +68,7 @@ export class ToolRegistry {
 
   setSettings(settings: HarnessSettings): void {
     this.webSearchTool.setSettings(settings);
+    this.generatePdfTool.setSettings(settings);
   }
 
   registerTool(tool: AgentTool): void {

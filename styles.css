@@ -1040,6 +1040,57 @@
 
 /* Mobile Responsive Optimization */
 @media (max-width: 600px) {
+  .harness-settings-container .setting-item {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 12px 0;
+  }
+
+  .harness-settings-container .setting-item-info {
+    width: 100%;
+    margin-bottom: 2px;
+  }
+
+  .harness-settings-container .setting-item-control {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-start;
+  }
+
+  .harness-settings-container .setting-item-control input[type="text"],
+  .harness-settings-container .setting-item-control input[type="password"],
+  .harness-settings-container .setting-item-control select,
+  .harness-settings-container .setting-item-control .dropdown {
+    min-height: 44px;
+    font-size: 16px;
+    box-sizing: border-box;
+    flex: 1 1 200px;
+  }
+
+  .harness-settings-container .setting-item-control button {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 8px 14px;
+    font-size: 0.9em;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .harness-settings-container .harness-btn-icon-round {
+    min-width: 44px !important;
+    min-height: 44px !important;
+    width: 44px !important;
+    height: 44px !important;
+  }
+
+  .harness-provider-card {
+    padding: 12px 10px !important;
+  }
+
   .harness-mcp-grid {
     grid-template-columns: 1fr;
   }
@@ -1070,19 +1121,24 @@
   .harness-mcp-edit-modal .setting-item-control input[type="text"],
   .harness-mcp-edit-modal .setting-item-control input[type="password"] {
     flex: 1 1 180px;
-    min-height: 40px;
+    min-height: 44px;
+    font-size: 16px;
   }
 
   .harness-mcp-edit-modal .setting-item-control button {
-    min-height: 40px;
-    padding: 6px 12px;
+    min-height: 44px;
+    min-width: 44px;
+    padding: 8px 14px;
   }
 
   .harness-mcp-actions .harness-btn-sm {
-    min-height: 40px;
-    padding: 6px 12px !important;
+    min-height: 44px;
+    padding: 8px 14px !important;
     flex: 1 1 auto;
     text-align: center;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .harness-mcp-controls-row {
@@ -1098,9 +1154,66 @@
   .harness-tab-btn {
     flex: 1;
     text-align: center;
-    padding: 8px 6px;
+    padding: 10px 8px;
     min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .harness-skills-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .harness-skills-controls-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .harness-skills-modal {
+    width: 96vw !important;
+    max-height: 88vh !important;
+  }
+
+  .harness-skill-actions .harness-btn-sm {
+    min-height: 44px;
+    padding: 8px 14px !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .harness-chat-bottom-row .harness-send-btn {
+    min-width: 44px !important;
+    min-height: 44px !important;
+    height: 44px !important;
+  }
+
+  .harness-chat-bottom-row .harness-model-select {
+    min-height: 44px;
+    font-size: 14px;
   }
 }
+
+/* Touch-friendly optimizations for touch devices via pointer media query */
+@media (pointer: coarse) {
+  .harness-btn-icon-round {
+    min-width: 44px !important;
+    min-height: 44px !important;
+    width: 44px !important;
+    height: 44px !important;
+  }
+
+  .harness-tab-btn {
+    min-height: 44px;
+    padding: 8px 12px;
+  }
+
+  .harness-suggest-item {
+    min-height: 44px;
+    padding: 10px 12px;
+  }
+}
+
 
 

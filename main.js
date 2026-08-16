@@ -21647,6 +21647,12 @@ var HarnessSettingTab = class extends import_obsidian9.PluginSettingTab {
     this.secretManager = new SecretManager(app);
     this.selectedConfigProviderId = this.plugin.settings.activeProviderId || this.plugin.settings.providers[0]?.id || "openrouter";
   }
+  async saveSettings() {
+    await this.plugin.saveSettings();
+    if (this.plugin.toolRegistry) {
+      this.plugin.toolRegistry.setSettings(this.plugin.settings);
+    }
+  }
   display() {
     const { containerEl } = this;
     containerEl.empty();
@@ -21668,7 +21674,7 @@ var HarnessSettingTab = class extends import_obsidian9.PluginSettingTab {
         } else {
           this.plugin.settings.activeModel = "";
         }
-        await this.plugin.saveSettings();
+        await this.saveSettings();
         this.display();
       });
     });
@@ -21689,7 +21695,7 @@ var HarnessSettingTab = class extends import_obsidian9.PluginSettingTab {
         }
         dropdown.onChange(async (val) => {
           this.plugin.settings.activeModel = val;
-          await this.plugin.saveSettings();
+          await this.saveSettings();
         });
       });
     } else {
@@ -21720,7 +21726,7 @@ var HarnessSettingTab = class extends import_obsidian9.PluginSettingTab {
             this.plugin.settings.activeProviderId = newProvider.id;
             this.plugin.settings.activeModel = newProvider.models[0] || "";
           }
-          await this.plugin.saveSettings();
+          await this.saveSettings();
           this.display();
         }).open();
       });
@@ -21739,7 +21745,7 @@ var HarnessSettingTab = class extends import_obsidian9.PluginSettingTab {
       new import_obsidian9.Setting(providerCardEl).setName("Base URL").setDesc("API Endpoint URL").addText(
         (text2) => text2.setValue(configProvider.baseUrl).onChange(async (val) => {
           configProvider.baseUrl = val.trim();
-          await this.plugin.saveSettings();
+          await this.saveSettings();
         })
       );
       const hasKey = this.secretManager.hasSecret(configProvider.apiKeySecretName);
@@ -21755,7 +21761,7 @@ var HarnessSettingTab = class extends import_obsidian9.PluginSettingTab {
               this.plugin.settings.activeProviderId = configProvider.id;
               this.plugin.settings.activeModel = configProvider.models[0] || "";
             }
-            await this.plugin.saveSettings();
+            await this.saveSettings();
             new import_obsidian9.Notice(`API Key saved for ${configProvider.name}`);
           }
         });
@@ -21797,7 +21803,7 @@ var HarnessSettingTab = class extends import_obsidian9.PluginSettingTab {
             if (this.plugin.settings.activeProviderId === configProvider.id && fetched.length > 0) {
               this.plugin.settings.activeModel = fetched[0];
             }
-            await this.plugin.saveSettings();
+            await this.saveSettings();
             new import_obsidian9.Notice(`Updated ${configProvider.name} with ${fetched.length} models!`);
             this.display();
           } else {
@@ -21817,7 +21823,7 @@ var HarnessSettingTab = class extends import_obsidian9.PluginSettingTab {
                 this.plugin.settings.activeModel = updatedModels[0] || "";
               }
             }
-            await this.plugin.saveSettings();
+            await this.saveSettings();
             this.display();
           }).open();
         });
@@ -21837,7 +21843,7 @@ var HarnessSettingTab = class extends import_obsidian9.PluginSettingTab {
               this.plugin.settings.activeProviderId = "";
               this.plugin.settings.activeModel = "";
             }
-            await this.plugin.saveSettings();
+            await this.saveSettings();
             new import_obsidian9.Notice(`Deleted provider "${configProvider.name}".`);
             this.display();
           });
@@ -21848,9 +21854,62 @@ var HarnessSettingTab = class extends import_obsidian9.PluginSettingTab {
     new import_obsidian9.Setting(containerEl).setName("Vault Modification Safety Mode").setDesc("Strict mode prompts for user confirmation before writing or modifying any Vault file").addDropdown(
       (dropdown) => dropdown.addOption("strict", "Strict (Prompt before file edits)").addOption("auto", "Auto (Auto-approve file edits)").setValue(this.plugin.settings.safetyMode).onChange(async (value) => {
         this.plugin.settings.safetyMode = value;
-        await this.plugin.saveSettings();
+        await this.saveSettings();
       })
     );
+    containerEl.createEl("h3", { text: "Web Search & Document Tools" });
+    new import_obsidian9.Setting(containerEl).setName("Search Provider").setDesc("Select the web search provider used by the web_search tool").addDropdown((dropdown) => {
+      dropdown.addOption("duckduckgo", "DuckDuckGo (Free / Zero-Config)").addOption("searxng", "SearXNG (Self-Hosted / Custom URL)").addOption("tavily", "Tavily Search (API Key)").setValue(this.plugin.settings.searchProvider || "duckduckgo").onChange(async (val) => {
+        this.plugin.settings.searchProvider = val;
+        await this.saveSettings();
+        this.display();
+      });
+    });
+    if (this.plugin.settings.searchProvider === "searxng") {
+      new import_obsidian9.Setting(containerEl).setName("SearXNG URL").setDesc("Base URL of your SearXNG instance (e.g. http://localhost:8080 or https://searx.example.com)").addText((text2) => {
+        text2.setPlaceholder("http://localhost:8080").setValue(this.plugin.settings.searxngUrl || "").onChange(async (val) => {
+          this.plugin.settings.searxngUrl = val.trim();
+          await this.saveSettings();
+        });
+      });
+    }
+    if (this.plugin.settings.searchProvider === "tavily") {
+      const tavilySecretName = this.plugin.settings.tavilyApiKeySecretName || "oh_bot_secret_tavily";
+      const hasTavilyKey = this.secretManager.hasSecret(tavilySecretName);
+      const tavilySetting = new import_obsidian9.Setting(containerEl).setName("Tavily API Key").setDesc(
+        hasTavilyKey ? "Key is configured in SecretStorage" : "Enter Tavily API Key to store securely"
+      );
+      tavilySetting.addText((text2) => {
+        text2.inputEl.type = "password";
+        text2.setPlaceholder(hasTavilyKey ? "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" : "Enter Tavily API Key");
+        text2.onChange(async (val) => {
+          const trimmed = val.trim();
+          if (trimmed) {
+            this.secretManager.setSecret(tavilySecretName, trimmed);
+            await this.saveSettings();
+            new import_obsidian9.Notice("Tavily API Key saved");
+          }
+        });
+      });
+      if (hasTavilyKey) {
+        tavilySetting.addButton((btn) => {
+          btn.setButtonText("Clear Key");
+          btn.setWarning();
+          btn.onClick(async () => {
+            this.secretManager.setSecret(tavilySecretName, "");
+            new import_obsidian9.Notice("Tavily API Key cleared");
+            await this.saveSettings();
+            this.display();
+          });
+        });
+      }
+    }
+    new import_obsidian9.Setting(containerEl).setName("Default PDF Folder").setDesc("Default folder path in the vault for generated PDF documents").addText((text2) => {
+      text2.setPlaceholder("Documents/Generated").setValue(this.plugin.settings.defaultPdfFolder || "").onChange(async (val) => {
+        this.plugin.settings.defaultPdfFolder = val.trim();
+        await this.saveSettings();
+      });
+    });
     containerEl.createEl("h3", { text: "Skills & Marketplace" });
     new import_obsidian9.Setting(containerEl).setName("Manage Skills & Marketplace").setDesc("Install skills from GitHub, browse the marketplace, or manage local vault skills").addButton(
       (btn) => btn.setButtonText("Open Skills Manager").setCta().onClick(() => {
@@ -21860,14 +21919,14 @@ var HarnessSettingTab = class extends import_obsidian9.PluginSettingTab {
     new import_obsidian9.Setting(containerEl).setName("Auto-scan Vault Folders").setDesc("Scan .agents/skills/, .skills/, .claude/skills/, .gemini/skills/ in Vault for local skills").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.scanVaultSkills !== false).onChange(async (val) => {
         this.plugin.settings.scanVaultSkills = val;
-        await this.plugin.saveSettings();
+        await this.saveSettings();
         await this.plugin.skillManager.refreshLocalSkills();
       })
     );
     new import_obsidian9.Setting(containerEl).setName("Custom Marketplace Manifest URL").setDesc("Optional URL to load custom community skills manifest JSON").addText(
       (text2) => text2.setPlaceholder("https://raw.githubusercontent.com/.../skills.json").setValue(this.plugin.settings.customMarketplaceUrl || "").onChange(async (val) => {
         this.plugin.settings.customMarketplaceUrl = val.trim();
-        await this.plugin.saveSettings();
+        await this.saveSettings();
       })
     );
     containerEl.createEl("h3", { text: "Model Context Protocol (MCP) Servers" });
@@ -39101,9 +39160,18 @@ var GeneratePdfTool = class extends AgentTool {
     };
     this.isMutation = true;
   }
+  setSettings(settings) {
+    this.settings = settings;
+  }
   async execute(args, app) {
     try {
-      const filePath = (args?.filePath || "").trim();
+      let filePath = (args?.filePath || "").trim();
+      if (filePath && !filePath.includes("/") && !filePath.includes("\\") && this.settings?.defaultPdfFolder) {
+        const folder = this.settings.defaultPdfFolder.replace(/^[\\\/]+|[\\\/]+$/g, "");
+        if (folder) {
+          filePath = `${folder}/${filePath}`;
+        }
+      }
       const content = args?.content;
       if (!filePath) {
         return {
@@ -39231,6 +39299,7 @@ var ToolRegistry = class {
   }
   setSettings(settings) {
     this.webSearchTool.setSettings(settings);
+    this.generatePdfTool.setSettings(settings);
   }
   registerTool(tool) {
     this.tools.set(tool.name, tool);
@@ -39642,7 +39711,7 @@ var HarnessChatView = class extends import_obsidian26.ItemView {
     this.currentSuggestItems = [];
     this.currentAbortController = null;
     this.plugin = plugin;
-    this.toolRegistry = new ToolRegistry(this.plugin.skillManager, this.plugin.mcpManager, this.plugin.settings);
+    this.toolRegistry = this.plugin.toolRegistry || new ToolRegistry(this.plugin.skillManager, this.plugin.mcpManager, this.plugin.settings);
     this.agentHarness = new AgentHarness(this.app, this.plugin.settings, this.toolRegistry);
     this.exporter = new MarkdownExporter(this.app);
     this.initSession();
@@ -41602,6 +41671,7 @@ var HarnessPlugin = class extends import_obsidian32.Plugin {
       await this.saveSettings();
     });
     await this.mcpManager.init();
+    this.toolRegistry = new ToolRegistry(this.skillManager, this.mcpManager, this.settings);
     this.registerObsidianProtocolHandler("oh-bot-mcp-auth", async (params) => {
       await this.mcpManager.handleOAuthCallback(params);
     });
@@ -41661,6 +41731,9 @@ var HarnessPlugin = class extends import_obsidian32.Plugin {
   }
   async saveSettings() {
     await this.saveData(this.settings);
+    if (this.toolRegistry) {
+      this.toolRegistry.setSettings(this.settings);
+    }
   }
 };
 /*! Bundled license information:

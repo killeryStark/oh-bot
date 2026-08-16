@@ -1,6 +1,6 @@
 import { App } from 'obsidian';
 import { AgentTool } from '../base';
-import { ToolResult, ToolSchema } from '../../types';
+import { HarnessSettings, ToolResult, ToolSchema } from '../../types';
 import { PdfOrientation, PdfPageSize, PdfTheme } from './types';
 import { generatePdf } from './generator';
 
@@ -44,6 +44,12 @@ export class GeneratePdfTool extends AgentTool {
 
   isMutation = true;
 
+  private settings?: HarnessSettings;
+
+  setSettings(settings: HarnessSettings): void {
+    this.settings = settings;
+  }
+
   async execute(
     args: {
       filePath: string;
@@ -56,7 +62,13 @@ export class GeneratePdfTool extends AgentTool {
     app: App
   ): Promise<ToolResult> {
     try {
-      const filePath = (args?.filePath || '').trim();
+      let filePath = (args?.filePath || '').trim();
+      if (filePath && !filePath.includes('/') && !filePath.includes('\\') && this.settings?.defaultPdfFolder) {
+        const folder = this.settings.defaultPdfFolder.replace(/^[\\\/]+|[\\\/]+$/g, '');
+        if (folder) {
+          filePath = `${folder}/${filePath}`;
+        }
+      }
       const content = args?.content;
 
       if (!filePath) {

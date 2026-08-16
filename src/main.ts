@@ -6,11 +6,13 @@ import { SkillManager } from './skills/skill-manager';
 import { SkillsModal } from './ui/skills-modal';
 import { McpManager } from './mcp/mcp-manager';
 import { McpModal } from './ui/mcp-modal';
+import { ToolRegistry } from './tools/registry';
 
 export default class HarnessPlugin extends Plugin {
   settings: HarnessSettings = DEFAULT_SETTINGS;
   skillManager!: SkillManager;
   mcpManager!: McpManager;
+  toolRegistry!: ToolRegistry;
 
   async onload() {
     await this.loadSettings();
@@ -26,6 +28,9 @@ export default class HarnessPlugin extends Plugin {
       await this.saveSettings();
     });
     await this.mcpManager.init();
+
+    // Initialize Tool Registry
+    this.toolRegistry = new ToolRegistry(this.skillManager, this.mcpManager, this.settings);
 
     // Register Obsidian deep link protocol handler for OAuth 2.1 PKCE (obsidian://oh-bot-mcp-auth)
     this.registerObsidianProtocolHandler('oh-bot-mcp-auth', async (params) => {
@@ -104,5 +109,8 @@ export default class HarnessPlugin extends Plugin {
 
   async saveSettings() {
     await this.saveData(this.settings);
+    if (this.toolRegistry) {
+      this.toolRegistry.setSettings(this.settings);
+    }
   }
 }
