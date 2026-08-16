@@ -61,6 +61,16 @@
       "downloadUrl": "https://raw.githubusercontent.com/killeryStark/oh-bot/main/marketplace/skills/markdown-stylist/SKILL.md",
       "version": "1.0.0",
       "tags": ["formatting", "markdown", "typography"]
+    },
+    {
+      "id": "subagent-management",
+      "name": "Subagent & Multi-Agent Management",
+      "description": "Создание, настройка и координация специализированных субагентов с изолированными рабочими папками (AGENT.md) и делегирование задач через invoke_subagent. Используйте всякий раз, когда пользователю нужно организовать многоагентную систему, создать нового агента-помощника, настроить рабочую область или делегировать сложную задачу.",
+      "author": "Obsidian Harness Contributors",
+      "homepage": "https://github.com/killeryStark/oh-bot",
+      "downloadUrl": "https://raw.githubusercontent.com/killeryStark/oh-bot/main/marketplace/skills/subagent-management/SKILL.md",
+      "version": "1.0.0",
+      "tags": ["agents", "subagents", "orchestration", "multi-agent", "workflow"]
     }
   ]
 }
