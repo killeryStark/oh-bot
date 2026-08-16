@@ -352,6 +352,203 @@
   border-radius: 6px;
 }
 
+/* Searchable Model Select */
+.harness-model-select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  padding: 0 10px;
+  background-color: var(--background-modifier-form-field);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  color: var(--text-normal);
+  font-size: 0.82em;
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.harness-model-select-trigger:hover {
+  border-color: var(--background-modifier-border-hover);
+  background-color: var(--background-modifier-hover);
+}
+
+.harness-model-select-trigger:focus-visible,
+.harness-model-select-trigger.is-open {
+  border-color: var(--interactive-accent);
+  box-shadow: 0 0 0 2px var(--interactive-accent-transparent, rgba(120, 100, 240, 0.2));
+  outline: none;
+}
+
+.harness-model-select-label {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+
+.harness-model-select-label.is-placeholder {
+  color: var(--text-muted);
+}
+
+.harness-model-select-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.harness-model-select-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Searchable Model Select Popover */
+.harness-model-select-popover {
+  display: flex;
+  flex-direction: column;
+  background-color: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  max-height: 280px;
+  overflow: hidden;
+  font-size: 0.85em;
+  z-index: 9999;
+}
+
+.harness-model-search-container {
+  display: flex;
+  align-items: center;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  background-color: var(--background-secondary-alt);
+  gap: 6px;
+  position: relative;
+}
+
+.harness-model-search-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.harness-model-search-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.harness-model-search-input {
+  flex: 1;
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  color: var(--text-normal);
+  font-size: 0.9em;
+  padding: 2px 4px;
+  min-width: 0;
+}
+
+.harness-search-clear-btn {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.85em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.harness-search-clear-btn:hover {
+  color: var(--text-normal);
+  background-color: var(--background-modifier-hover);
+}
+
+.harness-model-options-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 220px;
+}
+
+.harness-model-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-normal);
+  gap: 8px;
+  transition: background-color 0.1s ease;
+  user-select: none;
+}
+
+.harness-model-option:hover,
+.harness-model-option.is-highlighted {
+  background-color: var(--background-modifier-hover);
+}
+
+.harness-model-option.is-selected {
+  color: var(--interactive-accent);
+  font-weight: 500;
+}
+
+.harness-model-option-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.harness-search-highlight {
+  background-color: var(--text-highlight-bg, rgba(255, 208, 0, 0.4));
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+  font-weight: 600;
+}
+
+.harness-model-check-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--interactive-accent);
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+}
+
+.harness-model-check-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.harness-model-empty {
+  padding: 16px 12px;
+  text-align: center;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
 .harness-send-btn {
   width: 34px !important;
   height: 32px !important;
@@ -1189,7 +1386,8 @@
     height: 44px !important;
   }
 
-  .harness-chat-bottom-row .harness-model-select {
+  .harness-chat-bottom-row .harness-model-select,
+  .harness-chat-bottom-row .harness-model-select-trigger {
     min-height: 44px;
     font-size: 14px;
   }
@@ -1211,6 +1409,15 @@
 
   .harness-suggest-item {
     min-height: 44px;
+    padding: 10px 12px;
+  }
+
+  .harness-model-select-trigger {
+    min-height: 44px;
+  }
+
+  .harness-model-option {
+    min-height: 40px;
     padding: 10px 12px;
   }
 }
