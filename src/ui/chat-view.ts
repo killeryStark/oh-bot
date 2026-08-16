@@ -46,7 +46,7 @@ export class HarnessChatView extends ItemView {
     super(leaf);
     this.plugin = plugin;
     this.toolRegistry = this.plugin.toolRegistry || new ToolRegistry(this.plugin.skillManager, this.plugin.mcpManager, this.plugin.settings);
-    this.agentHarness = new AgentHarness(this.app, this.plugin.settings, this.toolRegistry);
+    this.agentHarness = new AgentHarness(this.app, this.plugin.settings, this.toolRegistry, this.plugin.agentManager);
     this.exporter = new MarkdownExporter(this.app);
     this.initSession();
   }
