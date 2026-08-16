@@ -8,6 +8,7 @@ import { SecretManager } from '../utils/secrets';
 import { SkillsModal } from './skills-modal';
 import { McpModal } from './mcp-modal';
 import { SearchableModelSelect } from './components/searchable-model-select';
+import { AgentEditModal } from './agent-edit-modal';
 
 export class HarnessSettingTab extends PluginSettingTab {
   plugin: HarnessPlugin;
@@ -317,6 +318,163 @@ export class HarnessSettingTab extends PluginSettingTab {
             await this.saveSettings();
           })
       );
+
+    containerEl.createEl('h3', { text: 'Agents & Subagents (Multi-Agent System)' });
+
+    const agentsHeaderSetting = new Setting(containerEl)
+      .setName('Configured Agents')
+      .setDesc(
+        'Autonomous primary agents and specialized subagents with scoped workspaces, custom system prompts, and tool permissions.'
+      )
+      .addButton((btn) => {
+        btn.setButtonText('+ Add New Agent');
+        btn.setCta();
+        setIcon(btn.buttonEl, 'plus');
+        btn.buttonEl.setAttribute('aria-label', 'Add new agent');
+        btn.buttonEl.setAttribute('title', 'Add new agent');
+        btn.onClick(() => {
+          new AgentEditModal(this.app, this.plugin, undefined, () => this.display()).open();
+        });
+      });
+
+    const agents = this.plugin.settings.agents || [];
+    const agentsListContainer = containerEl.createEl('div', { cls: 'harness-agents-list' });
+    agentsListContainer.style.display = 'flex';
+    agentsListContainer.style.flexDirection = 'column';
+    agentsListContainer.style.gap = '10px';
+    agentsListContainer.style.marginBottom = '20px';
+
+    if (agents.length === 0) {
+      const emptyEl = agentsListContainer.createEl('div', {
+        cls: 'harness-agents-empty',
+        text: 'No agents configured. Click "+ Add New Agent" to create one.',
+      });
+      emptyEl.style.padding = '12px';
+      emptyEl.style.color = 'var(--text-muted)';
+      emptyEl.style.fontStyle = 'italic';
+    }
+
+    for (const agent of agents) {
+      const cardEl = agentsListContainer.createEl('div', { cls: 'harness-agent-card' });
+      cardEl.style.border = '1px solid var(--background-modifier-border)';
+      cardEl.style.borderRadius = '8px';
+      cardEl.style.padding = '12px 14px';
+      cardEl.style.backgroundColor = 'var(--background-secondary)';
+      cardEl.style.display = 'flex';
+      cardEl.style.flexDirection = 'column';
+      cardEl.style.gap = '8px';
+
+      // Header row
+      const cardHeader = cardEl.createEl('div', { cls: 'harness-agent-card-header' });
+      cardHeader.style.display = 'flex';
+      cardHeader.style.justifyContent = 'space-between';
+      cardHeader.style.alignItems = 'center';
+      cardHeader.style.gap = '8px';
+
+      // Left title & badge
+      const titleWrapper = cardHeader.createEl('div', { cls: 'harness-agent-title-wrapper' });
+      titleWrapper.style.display = 'flex';
+      titleWrapper.style.alignItems = 'center';
+      titleWrapper.style.gap = '8px';
+
+      const iconSpan = titleWrapper.createEl('span', {
+        text: agent.isDefaultMain ? '🤖' : '👤',
+      });
+      iconSpan.style.fontSize = '1.2em';
+
+      const nameEl = titleWrapper.createEl('span', {
+        text: agent.name,
+      });
+      nameEl.style.fontWeight = '600';
+      nameEl.style.fontSize = '1.05em';
+
+      const idEl = titleWrapper.createEl('span', {
+        text: `(${agent.id})`,
+      });
+      idEl.style.fontSize = '0.85em';
+      idEl.style.color = 'var(--text-muted)';
+
+      if (agent.isDefaultMain) {
+        const badge = titleWrapper.createEl('span', {
+          cls: 'harness-badge harness-badge-main',
+          text: 'Default Main',
+        });
+        badge.style.fontSize = '0.75em';
+        badge.style.padding = '2px 6px';
+        badge.style.borderRadius = '4px';
+        badge.style.backgroundColor = 'var(--interactive-accent)';
+        badge.style.color = 'var(--text-on-accent)';
+        badge.style.fontWeight = '500';
+      }
+
+      // Actions (Edit, Delete)
+      const actionsWrapper = cardHeader.createEl('div', { cls: 'harness-agent-card-actions' });
+      actionsWrapper.style.display = 'flex';
+      actionsWrapper.style.gap = '6px';
+      actionsWrapper.style.alignItems = 'center';
+
+      const editBtn = actionsWrapper.createEl('button', {
+        cls: 'clickable-icon harness-btn-icon-round',
+      });
+      editBtn.setAttribute('aria-label', `Edit agent ${agent.name}`);
+      editBtn.setAttribute('title', `Edit agent ${agent.name}`);
+      setIcon(editBtn, 'pencil');
+      editBtn.addEventListener('click', () => {
+        new AgentEditModal(this.app, this.plugin, agent, () => this.display()).open();
+      });
+
+      if (!agent.isDefaultMain) {
+        const deleteBtn = actionsWrapper.createEl('button', {
+          cls: 'clickable-icon harness-btn-icon-round is-destructive',
+        });
+        deleteBtn.setAttribute('aria-label', `Delete agent ${agent.name}`);
+        deleteBtn.setAttribute('title', `Delete agent ${agent.name}`);
+        setIcon(deleteBtn, 'trash');
+        deleteBtn.addEventListener('click', async () => {
+          if (confirm(`Are you sure you want to delete agent "${agent.name}"?`)) {
+            const deleted = await this.plugin.agentManager.deleteAgent(agent.id);
+            if (deleted) {
+              new Notice(`Deleted agent "${agent.name}".`);
+              this.display();
+            } else {
+              new Notice('Could not delete agent.');
+            }
+          }
+        });
+      }
+
+      // Description
+      if (agent.description) {
+        const descEl = cardEl.createEl('div', {
+          cls: 'harness-agent-desc',
+          text: agent.description,
+        });
+        descEl.style.fontSize = '0.88em';
+        descEl.style.color = 'var(--text-normal)';
+        descEl.style.lineHeight = '1.4';
+      }
+
+      // Info badges row
+      const badgesRow = cardEl.createEl('div', { cls: 'harness-agent-badges-row' });
+      badgesRow.style.display = 'flex';
+      badgesRow.style.flexWrap = 'wrap';
+      badgesRow.style.gap = '6px';
+      badgesRow.style.fontSize = '0.8em';
+
+      const createBadge = (text: string) => {
+        const b = badgesRow.createEl('span', { cls: 'harness-agent-badge', text });
+        b.style.padding = '2px 8px';
+        b.style.borderRadius = '4px';
+        b.style.backgroundColor = 'var(--background-primary)';
+        b.style.border = '1px solid var(--background-modifier-border)';
+        b.style.color = 'var(--text-muted)';
+        return b;
+      };
+
+      createBadge(`📁 Workspace: ${agent.workspacePath || 'Full Vault'}`);
+      createBadge(`🧠 Model: ${agent.model || 'Inherit'}`);
+      createBadge(`🛠 Allowed Tools: ${agent.allowedTools?.join(', ') || '*'}`);
+    }
 
     containerEl.createEl('h3', { text: 'Web Search & Document Tools' });
 
