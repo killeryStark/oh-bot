@@ -1,5 +1,6 @@
 import { App, Component, MarkdownRenderer, TFile, TFolder } from 'obsidian';
 import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
 import { PdfGenerateOptions, PdfGenerateResult, PdfOrientation, PdfPageSize, PdfTheme } from './types';
 import { getThemeCss } from './themes';
 
@@ -91,6 +92,7 @@ async function renderContentToElement(
 /**
  * Generates a PDF from Markdown or HTML content, applying the selected theme,
  * and writes the binary output to the Obsidian Vault.
+ * Uses html2canvas + jsPDF canvas slicing for 100% native Unicode/Cyrillic font rendering.
  */
 export async function generatePdf(
   options: PdfGenerateOptions,
@@ -103,20 +105,23 @@ export async function generatePdf(
 
   const dims = PAGE_SIZES[pageSize] || PAGE_SIZES.a4;
   const pageWidth = orientation === 'landscape' ? dims.height : dims.width;
+  const pageHeight = orientation === 'landscape' ? dims.width : dims.height;
   const margin: [number, number, number, number] = [30, 30, 30, 30]; // top, right, bottom, left
   const contentWidth = pageWidth - (margin[1] + margin[3]);
+  const contentHeight = pageHeight - (margin[0] + margin[2]);
 
   // Create offscreen container for DOM rendering
   const container = document.createElement('div');
   container.id = `pdf-render-container-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-  container.style.position = 'absolute';
+  container.style.position = 'fixed';
   container.style.left = '-9999px';
   container.style.top = '0';
-  container.style.width = '800px';
+  container.style.width = '750px';
   container.style.backgroundColor = '#ffffff';
-  container.style.color = '#000000';
+  container.style.color = '#1a1a1a';
   container.style.zIndex = '-9999';
-  container.style.visibility = 'visible';
+  container.style.opacity = '1';
+  container.style.pointerEvents = 'none';
 
   try {
     // Inject Theme CSS
@@ -160,51 +165,69 @@ export async function generatePdf(
     container.appendChild(wrapperEl);
     document.body.appendChild(container);
 
-    // Initialize jsPDF
+    // Render DOM to high-DPI canvas via html2canvas (native Unicode / Cyrillic font support)
+    const h2c = (html2canvas as any).default || html2canvas;
+    const canvas: HTMLCanvasElement = await h2c(wrapperEl, {
+      scale: 2, // 2x Retina resolution
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+      windowWidth: 750,
+    });
+
+    // Ratio of PDF pt to canvas pixels
+    const ptPerPx = contentWidth / canvas.width;
+    const pageCanvasHeightPx = Math.floor(contentHeight / ptPerPx);
+    const totalPages = Math.max(1, Math.ceil(canvas.height / pageCanvasHeightPx));
+
     const doc = new jsPDF({
       orientation: orientation === 'landscape' ? 'landscape' : 'portrait',
       unit: 'pt',
       format: pageSize === 'letter' ? 'letter' : 'a4',
     });
 
-    // Render HTML container to PDF pages
-    await new Promise<void>((resolve, reject) => {
-      let settled = false;
-      const finish = () => {
-        if (!settled) {
-          settled = true;
-          resolve();
-        }
-      };
-      const fail = (err: any) => {
-        if (!settled) {
-          settled = true;
-          reject(err);
-        }
-      };
+    for (let i = 0; i < totalPages; i++) {
+      const sourceY = i * pageCanvasHeightPx;
+      const sourceHeight = Math.min(pageCanvasHeightPx, canvas.height - sourceY);
+      if (sourceHeight <= 0) break;
 
-      try {
-        const worker = doc.html(wrapperEl, {
-          callback: () => finish(),
-          x: margin[3],
-          y: margin[0],
-          width: contentWidth,
-          windowWidth: 800,
-          margin: margin,
-          autoPaging: 'text',
-          html2canvas: {
-            useCORS: true,
-            logging: false,
-          },
-        });
-
-        if (worker && typeof (worker as any).then === 'function') {
-          (worker as any).then(() => finish()).catch(fail);
-        }
-      } catch (err) {
-        fail(err);
+      if (i > 0) {
+        doc.addPage();
       }
-    });
+
+      const sliceCanvas = document.createElement('canvas');
+      sliceCanvas.width = canvas.width;
+      sliceCanvas.height = sourceHeight;
+      const ctx = sliceCanvas.getContext('2d');
+      if (ctx) {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+        ctx.drawImage(
+          canvas,
+          0,
+          sourceY,
+          canvas.width,
+          sourceHeight,
+          0,
+          0,
+          canvas.width,
+          sourceHeight
+        );
+      }
+
+      const imgData = sliceCanvas.toDataURL('image/jpeg', 0.95);
+      const slicePdfHeight = sourceHeight * ptPerPx;
+      doc.addImage(
+        imgData,
+        'JPEG',
+        margin[3],
+        margin[0],
+        contentWidth,
+        slicePdfHeight,
+        undefined,
+        'FAST'
+      );
+    }
 
     const pagesCount = doc.getNumberOfPages();
     const arrayBuffer = doc.output('arraybuffer');
