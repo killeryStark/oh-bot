@@ -105,6 +105,11 @@ export default class HarnessPlugin extends Plugin {
     if (!this.settings.providers || this.settings.providers.length === 0) {
       this.settings.providers = DEFAULT_SETTINGS.providers;
     }
+    // Auto-upgrade legacy default system prompt if user hasn't customized it
+    const legacyDefaultPrompt = 'You are an autonomous AI Agent inside Obsidian. You have tools to read, create, patch, search, and inspect notes in the vault. Use these tools step-by-step to fulfill the user request.';
+    if (this.settings.systemPrompt === legacyDefaultPrompt) {
+      this.settings.systemPrompt = DEFAULT_SETTINGS.systemPrompt;
+    }
   }
 
   async saveSettings() {

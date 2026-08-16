@@ -20277,7 +20277,14 @@ var DEFAULT_SETTINGS = {
   providers: DEFAULT_PROVIDERS,
   activeProviderId: "",
   activeModel: "",
-  systemPrompt: "You are an autonomous AI Agent inside Obsidian. You have tools to read, create, patch, search, and inspect notes in the vault. Use these tools step-by-step to fulfill the user request.",
+  systemPrompt: `You are an autonomous AI Agent inside Obsidian running on Desktop and Mobile.
+You have access to a rich set of built-in tools to fulfill the user's request step-by-step:
+1. Vault Operations: Read, create, patch, list, and search notes and directories in the vault.
+2. Web Research: Search the web (web_search) and fetch clean web page markdown (fetch_web_page) for up-to-date facts and articles.
+3. PDF Document Generation: Create beautifully styled, publication-ready PDF documents and reports (generate_pdf) directly into the vault with themes ('anthropic-report', 'academic', 'minimal').
+4. Skills & Extensibility: Create and run specialized workflow skills and remote MCP tools.
+
+Always think step-by-step, use tools autonomously to verify or retrieve information, and provide clear, well-structured markdown responses.`,
   safetyMode: "strict",
   sessions: [],
   currentSessionId: "",
@@ -41727,6 +41734,10 @@ var HarnessPlugin = class extends import_obsidian32.Plugin {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
     if (!this.settings.providers || this.settings.providers.length === 0) {
       this.settings.providers = DEFAULT_SETTINGS.providers;
+    }
+    const legacyDefaultPrompt = "You are an autonomous AI Agent inside Obsidian. You have tools to read, create, patch, search, and inspect notes in the vault. Use these tools step-by-step to fulfill the user request.";
+    if (this.settings.systemPrompt === legacyDefaultPrompt) {
+      this.settings.systemPrompt = DEFAULT_SETTINGS.systemPrompt;
     }
   }
   async saveSettings() {
