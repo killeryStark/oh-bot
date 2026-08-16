@@ -9,6 +9,7 @@ import { MentionHelper } from '../utils/mention-helper';
 import { parseThoughts } from '../utils/thought-helper';
 import { ConfirmationModal } from './components/confirmation-modal';
 import { SessionsModal } from './components/sessions-modal';
+import { SearchableModelSelect } from './components/searchable-model-select';
 import { SkillsModal } from './skills-modal';
 import { McpModal } from './mcp-modal';
 
@@ -32,7 +33,7 @@ export class HarnessChatView extends ItemView {
   private inputTextAreaEl!: HTMLTextAreaElement;
   private expandBtnEl!: HTMLButtonElement;
   private sendButtonEl!: HTMLButtonElement;
-  private modelSelectEl!: HTMLSelectElement;
+  private searchableModelSelect!: SearchableModelSelect;
   private suggestPopupEl!: HTMLElement;
 
   private isInputExpanded = false;
@@ -102,6 +103,7 @@ export class HarnessChatView extends ItemView {
     // New Session Button
     const newSessionBtn = headerActionsEl.createEl('button', { cls: 'clickable-icon' });
     newSessionBtn.setAttribute('aria-label', 'New Session');
+    newSessionBtn.setAttribute('title', 'New Session');
     setIcon(newSessionBtn, 'plus');
     newSessionBtn.addEventListener('click', () => {
       this.createNewSession();
@@ -110,14 +112,34 @@ export class HarnessChatView extends ItemView {
     // Sessions List Button
     const sessionsBtn = headerActionsEl.createEl('button', { cls: 'clickable-icon' });
     sessionsBtn.setAttribute('aria-label', 'View Saved Sessions (/sessions)');
+    sessionsBtn.setAttribute('title', 'View Saved Sessions (/sessions)');
     setIcon(sessionsBtn, 'history');
     sessionsBtn.addEventListener('click', () => {
       this.openSessionsModal();
     });
 
+    // Skills Button
+    const skillsBtn = headerActionsEl.createEl('button', { cls: 'clickable-icon' });
+    skillsBtn.setAttribute('aria-label', 'Manage Skills (/skills)');
+    skillsBtn.setAttribute('title', 'Manage Skills (/skills)');
+    setIcon(skillsBtn, 'zap');
+    skillsBtn.addEventListener('click', () => {
+      new SkillsModal(this.app, this.plugin).open();
+    });
+
+    // MCP Button
+    const mcpBtn = headerActionsEl.createEl('button', { cls: 'clickable-icon' });
+    mcpBtn.setAttribute('aria-label', 'Manage MCP Servers (/mcp)');
+    mcpBtn.setAttribute('title', 'Manage MCP Servers (/mcp)');
+    setIcon(mcpBtn, 'server');
+    mcpBtn.addEventListener('click', () => {
+      new McpModal(this.app, this.plugin).open();
+    });
+
     // Export Button
     const exportBtn = headerActionsEl.createEl('button', { cls: 'clickable-icon' });
-    exportBtn.setAttribute('aria-label', 'Export Chat to Markdown');
+    exportBtn.setAttribute('aria-label', 'Export Chat to Markdown (/export)');
+    exportBtn.setAttribute('title', 'Export Chat to Markdown (/export)');
     setIcon(exportBtn, 'upload');
     exportBtn.addEventListener('click', async () => {
       if (this.currentSession.messages.length === 0) {
@@ -137,7 +159,8 @@ export class HarnessChatView extends ItemView {
 
     // Clear Button
     const clearBtn = headerActionsEl.createEl('button', { cls: 'clickable-icon' });
-    clearBtn.setAttribute('aria-label', 'Clear Messages in Session');
+    clearBtn.setAttribute('aria-label', 'Clear Messages in Session (/clear)');
+    clearBtn.setAttribute('title', 'Clear Messages in Session (/clear)');
     setIcon(clearBtn, 'trash');
     clearBtn.addEventListener('click', async () => {
       this.currentSession.messages = [];
@@ -161,10 +184,12 @@ export class HarnessChatView extends ItemView {
       cls: 'harness-chat-textarea',
       placeholder: "Ask Harness Bot... ('/' for commands, '@' for notes)",
     });
+    this.inputTextAreaEl.setAttribute('aria-label', 'Chat message input');
 
     // Expand / Fullview button in top-right corner of textarea
     this.expandBtnEl = textareaWrapperEl.createEl('button', { cls: 'harness-expand-btn clickable-icon' });
     this.expandBtnEl.setAttribute('aria-label', 'Expand to full view');
+    this.expandBtnEl.setAttribute('title', 'Expand to full view');
     this.expandBtnEl.style.display = 'none';
     setIcon(this.expandBtnEl, 'maximize-2');
 
@@ -174,15 +199,17 @@ export class HarnessChatView extends ItemView {
 
     const bottomRowEl = this.inputAreaEl.createEl('div', { cls: 'harness-chat-bottom-row' });
 
-    // Model Selector on the left of bottom row
-    this.modelSelectEl = bottomRowEl.createEl('select', { cls: 'harness-model-select' });
-    this.refreshModelDropdown();
-
-    this.modelSelectEl.addEventListener('change', async () => {
-      this.currentSession.model = this.modelSelectEl.value;
-      this.plugin.settings.activeModel = this.modelSelectEl.value;
-      await this.saveSessionState();
+    // Searchable Model Selector on the left of bottom row
+    this.searchableModelSelect = new SearchableModelSelect(bottomRowEl, {
+      models: [],
+      selectedModel: '',
+      onChange: async (val: string) => {
+        this.currentSession.model = val;
+        this.plugin.settings.activeModel = val;
+        await this.saveSessionState();
+      },
     });
+    this.refreshModelDropdown();
 
     // Send / Stop button as an icon
     this.sendButtonEl = bottomRowEl.createEl('button', { cls: 'harness-send-btn mod-cta clickable-icon' });
@@ -297,10 +324,24 @@ export class HarnessChatView extends ItemView {
       const streamingMsgEl = this.messagesContainerEl.createEl('div', {
         cls: 'harness-message harness-message-assistant',
       });
-      streamingMsgEl.createEl('div', {
-        text: `Harness Bot (${this.currentSession.model || this.plugin.settings.activeModel})`,
+      const streamHeaderEl = streamingMsgEl.createEl('div', {
         cls: 'harness-message-header',
       });
+      streamHeaderEl.createSpan({
+        text: `Harness Bot (${this.currentSession.model || this.plugin.settings.activeModel})`,
+        cls: 'harness-message-header-title',
+      });
+
+      const streamCopyBtn = streamHeaderEl.createEl('button', { cls: 'harness-msg-copy-btn' });
+      streamCopyBtn.setAttribute('aria-label', 'Copy response');
+      streamCopyBtn.setAttribute('title', 'Copy response');
+      setIcon(streamCopyBtn, 'copy');
+      streamCopyBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const currentText = textContentEl.innerText || '';
+        this.copyToClipboard(currentText, streamCopyBtn, 'Response copied to clipboard');
+      });
+
       const textContentEl = streamingMsgEl.createEl('div', { cls: 'harness-message-body' });
 
       try {
@@ -401,6 +442,51 @@ export class HarnessChatView extends ItemView {
     this.renderMessages();
   }
 
+  private async copyToClipboard(text: string, btnEl: HTMLElement, noticeText: string): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(text);
+      setIcon(btnEl, 'check');
+      btnEl.addClass('is-copied');
+      new Notice(noticeText);
+      setTimeout(() => {
+        setIcon(btnEl, 'copy');
+        btnEl.removeClass('is-copied');
+      }, 2000);
+    } catch (e) {
+      new Notice('Failed to copy to clipboard');
+    }
+  }
+
+  private enhanceCodeBlocksWithCopyButton(containerEl: HTMLElement): void {
+    const preElements = Array.from(containerEl.querySelectorAll('pre'));
+    for (const pre of preElements) {
+      if (pre.parentElement?.classList.contains('harness-code-block-wrapper')) {
+        continue;
+      }
+
+      const wrapper = document.createElement('div');
+      wrapper.className = 'harness-code-block-wrapper';
+
+      pre.parentNode?.insertBefore(wrapper, pre);
+      wrapper.appendChild(pre);
+
+      const copyBtn = wrapper.createEl('button', {
+        cls: 'harness-code-copy-btn',
+      });
+      copyBtn.setAttribute('aria-label', 'Copy code');
+      copyBtn.setAttribute('title', 'Copy code');
+      setIcon(copyBtn, 'copy');
+
+      copyBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const codeEl = pre.querySelector('code');
+        const codeText = codeEl ? codeEl.innerText : pre.innerText;
+        this.copyToClipboard(codeText, copyBtn, 'Code copied to clipboard');
+      });
+    }
+  }
+
   private async renderThinkingCard(parentEl: HTMLElement, thoughtText: string, open = false) {
     const detailsEl = parentEl.createEl('details', { cls: 'harness-collapsible-card harness-thinking-card' });
     if (open) detailsEl.open = true;
@@ -411,10 +497,22 @@ export class HarnessChatView extends ItemView {
     setIcon(iconSpan, 'sparkles');
     leftEl.createEl('span', { text: 'Reasoning / Рассуждения' });
 
-    summaryEl.createEl('span', { text: 'View', cls: 'harness-collapsible-badge' });
+    const rightEl = summaryEl.createEl('div', { cls: 'harness-collapsible-summary-right' });
+    const copyBtn = rightEl.createEl('button', { cls: 'harness-tool-copy-btn' });
+    copyBtn.setAttribute('aria-label', 'Copy reasoning');
+    copyBtn.setAttribute('title', 'Copy reasoning');
+    setIcon(copyBtn, 'copy');
+    copyBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.copyToClipboard(thoughtText, copyBtn, 'Reasoning copied to clipboard');
+    });
+
+    rightEl.createEl('span', { text: 'View', cls: 'harness-collapsible-badge' });
 
     const bodyEl = detailsEl.createEl('div', { cls: 'harness-collapsible-body harness-thinking-text' });
     await MarkdownRenderer.render(this.app, thoughtText, bodyEl, '', this);
+    this.enhanceCodeBlocksWithCopyButton(bodyEl);
   }
 
   private formatContentForCard(rawStr: string): string {
@@ -437,11 +535,24 @@ export class HarnessChatView extends ItemView {
     setIcon(iconSpan, 'wrench');
     leftEl.createEl('span', { text: `Tool: ${toolName}` });
 
-    summaryEl.createEl('span', { text: 'Args', cls: 'harness-collapsible-badge' });
+    const rightEl = summaryEl.createEl('div', { cls: 'harness-collapsible-summary-right' });
+    const copyBtn = rightEl.createEl('button', { cls: 'harness-tool-copy-btn' });
+    copyBtn.setAttribute('aria-label', 'Copy tool arguments');
+    copyBtn.setAttribute('title', 'Copy tool arguments');
+    setIcon(copyBtn, 'copy');
+    copyBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const formatted = this.formatContentForCard(argsStr);
+      this.copyToClipboard(formatted, copyBtn, 'Tool output copied to clipboard');
+    });
+
+    rightEl.createEl('span', { text: 'Args', cls: 'harness-collapsible-badge' });
 
     const bodyEl = detailsEl.createEl('div', { cls: 'harness-collapsible-body' });
     const pre = bodyEl.createEl('pre');
     pre.createEl('code', { text: this.formatContentForCard(argsStr) });
+    this.enhanceCodeBlocksWithCopyButton(bodyEl);
   }
 
   private renderToolOutputCard(parentEl: HTMLElement, toolName: string, outputText: string, open = false) {
@@ -454,11 +565,24 @@ export class HarnessChatView extends ItemView {
     setIcon(iconSpan, 'file-text');
     leftEl.createEl('span', { text: `Output: ${toolName}` });
 
-    summaryEl.createEl('span', { text: 'Result', cls: 'harness-collapsible-badge' });
+    const rightEl = summaryEl.createEl('div', { cls: 'harness-collapsible-summary-right' });
+    const copyBtn = rightEl.createEl('button', { cls: 'harness-tool-copy-btn' });
+    copyBtn.setAttribute('aria-label', 'Copy tool output');
+    copyBtn.setAttribute('title', 'Copy tool output');
+    setIcon(copyBtn, 'copy');
+    copyBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const formatted = this.formatContentForCard(outputText);
+      this.copyToClipboard(formatted, copyBtn, 'Tool output copied to clipboard');
+    });
+
+    rightEl.createEl('span', { text: 'Result', cls: 'harness-collapsible-badge' });
 
     const bodyEl = detailsEl.createEl('div', { cls: 'harness-collapsible-body' });
     const pre = bodyEl.createEl('pre');
     pre.createEl('code', { text: this.formatContentForCard(outputText) });
+    this.enhanceCodeBlocksWithCopyButton(bodyEl);
   }
 
   private autoResizeTextarea() {
@@ -484,13 +608,15 @@ export class HarnessChatView extends ItemView {
     if (this.isInputExpanded) {
       this.inputAreaEl.addClass('is-expanded');
       setIcon(this.expandBtnEl, 'minimize-2');
-      this.expandBtnEl.setAttribute('aria-label', 'Collapse view');
+      this.expandBtnEl.setAttribute('aria-label', 'Restore compact view');
+      this.expandBtnEl.setAttribute('title', 'Restore compact view');
       this.expandBtnEl.style.display = 'flex';
       this.inputTextAreaEl.focus();
     } else {
       this.inputAreaEl.removeClass('is-expanded');
       setIcon(this.expandBtnEl, 'maximize-2');
       this.expandBtnEl.setAttribute('aria-label', 'Expand to full view');
+      this.expandBtnEl.setAttribute('title', 'Expand to full view');
       this.autoResizeTextarea();
       this.inputTextAreaEl.focus();
     }
@@ -504,11 +630,13 @@ export class HarnessChatView extends ItemView {
       this.sendButtonEl.addClass('mod-warning');
       this.sendButtonEl.removeClass('mod-cta');
       this.sendButtonEl.setAttribute('aria-label', 'Stop generation');
+      this.sendButtonEl.setAttribute('title', 'Stop generation');
     } else {
       setIcon(this.sendButtonEl, 'send');
       this.sendButtonEl.addClass('mod-cta');
       this.sendButtonEl.removeClass('mod-warning');
       this.sendButtonEl.setAttribute('aria-label', 'Send message');
+      this.sendButtonEl.setAttribute('title', 'Send message');
     }
   }
 
@@ -767,8 +895,7 @@ export class HarnessChatView extends ItemView {
   }
 
   private refreshModelDropdown() {
-    if (!this.modelSelectEl) return;
-    this.modelSelectEl.empty();
+    if (!this.searchableModelSelect) return;
 
     const activeProv = this.plugin.settings.providers.find(
       (p) => p.id === this.plugin.settings.activeProviderId
@@ -776,16 +903,11 @@ export class HarnessChatView extends ItemView {
     const models = activeProv?.models || [];
 
     if (models.length === 0) {
-      this.modelSelectEl.createEl('option', { value: '', text: '(No models)' });
+      this.searchableModelSelect.setModels([], '');
       return;
     }
 
-    const selectedModel = this.currentSession.model || this.plugin.settings.activeModel || models[0];
-
-    for (const m of models) {
-      const opt = this.modelSelectEl.createEl('option', { value: m, text: m });
-      if (m === selectedModel) opt.selected = true;
-    }
+    const selectedModel = this.currentSession?.model || this.plugin.settings.activeModel || models[0];
 
     if (!models.includes(selectedModel)) {
       this.currentSession.model = models[0];
@@ -794,6 +916,8 @@ export class HarnessChatView extends ItemView {
       this.currentSession.model = selectedModel;
       this.plugin.settings.activeModel = selectedModel;
     }
+
+    this.searchableModelSelect.setModels(models, this.currentSession.model || this.plugin.settings.activeModel);
   }
 
   private async renderMessages(): Promise<void> {
@@ -859,20 +983,45 @@ export class HarnessChatView extends ItemView {
     for (const msg of this.currentSession.messages) {
       if (msg.role === 'user') {
         const msgEl = this.messagesContainerEl.createEl('div', { cls: 'harness-message harness-message-user' });
-        msgEl.createEl('div', { text: 'You', cls: 'harness-message-header' });
-        const bodyEl = msgEl.createEl('div', { cls: 'harness-message-body' });
+        const headerEl = msgEl.createEl('div', { cls: 'harness-message-header' });
+        headerEl.createSpan({ text: 'You', cls: 'harness-message-header-title' });
+
         const rawContent = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content || '');
+
+        const copyBtn = headerEl.createEl('button', { cls: 'harness-msg-copy-btn' });
+        copyBtn.setAttribute('aria-label', 'Copy message');
+        copyBtn.setAttribute('title', 'Copy message');
+        setIcon(copyBtn, 'copy');
+        copyBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.copyToClipboard(rawContent, copyBtn, 'Message copied to clipboard');
+        });
+
+        const bodyEl = msgEl.createEl('div', { cls: 'harness-message-body' });
         await MarkdownRenderer.render(this.app, rawContent, bodyEl, '', this);
+        this.enhanceCodeBlocksWithCopyButton(bodyEl);
       } else if (msg.role === 'assistant') {
         const msgEl = this.messagesContainerEl.createEl('div', { cls: 'harness-message harness-message-assistant' });
-        msgEl.createEl('div', {
+        const headerEl = msgEl.createEl('div', { cls: 'harness-message-header' });
+        headerEl.createSpan({
           text: `Harness Bot (${this.currentSession.model || this.plugin.settings.activeModel})`,
-          cls: 'harness-message-header',
+          cls: 'harness-message-header-title',
         });
-        const bodyEl = msgEl.createEl('div', { cls: 'harness-message-body' });
 
         const rawContent = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content || '');
         const parsed = parseThoughts(rawContent);
+
+        const copyBtn = headerEl.createEl('button', { cls: 'harness-msg-copy-btn' });
+        copyBtn.setAttribute('aria-label', 'Copy response');
+        copyBtn.setAttribute('title', 'Copy response');
+        setIcon(copyBtn, 'copy');
+        copyBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const textToCopy = parsed.finalAnswer || rawContent;
+          this.copyToClipboard(textToCopy, copyBtn, 'Response copied to clipboard');
+        });
+
+        const bodyEl = msgEl.createEl('div', { cls: 'harness-message-body' });
 
         // Render Reasoning / Thoughts collapsible card
         if (parsed.thoughts.length > 0) {
@@ -892,6 +1041,7 @@ export class HarnessChatView extends ItemView {
         if (parsed.finalAnswer) {
           const answerContainer = bodyEl.createEl('div', { cls: 'harness-answer-text' });
           await MarkdownRenderer.render(this.app, parsed.finalAnswer, answerContainer, '', this);
+          this.enhanceCodeBlocksWithCopyButton(answerContainer);
         }
       } else if (msg.role === 'tool') {
         const rawContent = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content || '');
@@ -905,6 +1055,9 @@ export class HarnessChatView extends ItemView {
   async onClose(): Promise<void> {
     if (this.currentAbortController) {
       this.currentAbortController.abort();
+    }
+    if (this.searchableModelSelect) {
+      this.searchableModelSelect.destroy();
     }
   }
 }

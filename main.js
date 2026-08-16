@@ -20194,7 +20194,7 @@ __export(main_exports, {
   default: () => HarnessPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian32 = require("obsidian");
+var import_obsidian33 = require("obsidian");
 
 // src/types.ts
 var DEFAULT_PROVIDERS = [
@@ -21948,7 +21948,7 @@ var HarnessSettingTab = class extends import_obsidian9.PluginSettingTab {
 };
 
 // src/ui/chat-view.ts
-var import_obsidian26 = require("obsidian");
+var import_obsidian27 = require("obsidian");
 
 // src/engine/providers/base.ts
 var LLMProvider = class {
@@ -39730,9 +39730,391 @@ var SessionsModal = class extends import_obsidian25.Modal {
   }
 };
 
+// src/ui/components/searchable-model-select.ts
+var import_obsidian26 = require("obsidian");
+var SearchableModelSelect = class {
+  constructor(containerEl, options) {
+    this.models = [];
+    this.selectedModel = "";
+    this.placeholder = "Select model...";
+    this.isOpen = false;
+    this.searchQuery = "";
+    this.filteredModels = [];
+    this.highlightedIndex = -1;
+    this.containerEl = containerEl;
+    this.options = options;
+    this.models = options.models ? [...options.models] : [];
+    this.selectedModel = options.selectedModel || "";
+    if (options.placeholder) {
+      this.placeholder = options.placeholder;
+    }
+    this.boundOnDocPointerDown = this.onDocPointerDown.bind(this);
+    this.boundOnWindowResize = this.updatePopoverPosition.bind(this);
+    this.boundOnTriggerClick = this.onTriggerClick.bind(this);
+    this.boundOnTriggerKeyDown = this.onTriggerKeyDown.bind(this);
+    this.boundOnSearchKeyDown = this.onSearchKeyDown.bind(this);
+    this.boundOnSearchInput = this.onSearchInput.bind(this);
+    this.boundOnClearClick = this.onClearClick.bind(this);
+    this.buildTrigger();
+    this.buildPopover();
+    this.updateTriggerText();
+  }
+  buildTrigger() {
+    this.triggerEl = this.containerEl.createEl("div", {
+      cls: "harness-model-select-trigger"
+    });
+    this.triggerEl.setAttribute("role", "combobox");
+    this.triggerEl.setAttribute("aria-haspopup", "listbox");
+    this.triggerEl.setAttribute("aria-expanded", "false");
+    this.triggerEl.setAttribute("aria-label", "Select active model");
+    this.triggerEl.setAttribute("tabindex", "0");
+    this.labelEl = this.triggerEl.createEl("span", {
+      cls: "harness-model-select-label"
+    });
+    this.iconSpanEl = this.triggerEl.createEl("span", {
+      cls: "harness-model-select-icon"
+    });
+    (0, import_obsidian26.setIcon)(this.iconSpanEl, "chevron-down");
+    this.triggerEl.addEventListener("click", this.boundOnTriggerClick);
+    this.triggerEl.addEventListener("keydown", this.boundOnTriggerKeyDown);
+  }
+  buildPopover() {
+    this.popoverEl = document.body.createEl("div", {
+      cls: "harness-model-select-popover"
+    });
+    this.popoverEl.style.display = "none";
+    this.searchContainerEl = this.popoverEl.createEl("div", {
+      cls: "harness-model-search-container"
+    });
+    const searchIconSpan = this.searchContainerEl.createEl("span", {
+      cls: "harness-model-search-icon"
+    });
+    (0, import_obsidian26.setIcon)(searchIconSpan, "search");
+    this.searchInputEl = this.searchContainerEl.createEl("input", {
+      cls: "harness-model-search-input",
+      type: "text",
+      placeholder: "Search model..."
+    });
+    this.searchInputEl.setAttribute("aria-label", "Search model");
+    this.searchInputEl.setAttribute("autocomplete", "off");
+    this.searchInputEl.setAttribute("spellcheck", "false");
+    this.clearBtnEl = this.searchContainerEl.createEl("button", {
+      cls: "harness-search-clear-btn",
+      text: "\u2715"
+    });
+    this.clearBtnEl.setAttribute("aria-label", "Clear search");
+    this.clearBtnEl.setAttribute("tabindex", "-1");
+    this.clearBtnEl.style.display = "none";
+    this.optionsListEl = this.popoverEl.createEl("div", {
+      cls: "harness-model-options-list"
+    });
+    this.optionsListEl.setAttribute("role", "listbox");
+    this.optionsListEl.setAttribute("aria-label", "Models list");
+    this.searchInputEl.addEventListener("input", this.boundOnSearchInput);
+    this.searchInputEl.addEventListener("keydown", this.boundOnSearchKeyDown);
+    this.clearBtnEl.addEventListener("click", this.boundOnClearClick);
+  }
+  updateTriggerText() {
+    if (this.selectedModel) {
+      this.labelEl.setText(this.selectedModel);
+      this.labelEl.removeClass("is-placeholder");
+    } else {
+      this.labelEl.setText(this.placeholder);
+      this.labelEl.addClass("is-placeholder");
+    }
+  }
+  onTriggerClick(e2) {
+    e2.preventDefault();
+    e2.stopPropagation();
+    if (this.isOpen) {
+      this.close();
+    } else {
+      this.open();
+    }
+  }
+  onTriggerKeyDown(e2) {
+    if (e2.key === "Enter" || e2.key === " " || e2.key === "ArrowDown" || e2.key === "ArrowUp") {
+      e2.preventDefault();
+      e2.stopPropagation();
+      this.open();
+    }
+  }
+  onSearchInput(e2) {
+    this.searchQuery = this.searchInputEl.value;
+    this.clearBtnEl.style.display = this.searchQuery ? "inline-flex" : "none";
+    this.highlightedIndex = -1;
+    this.renderOptions();
+  }
+  onClearClick(e2) {
+    e2.preventDefault();
+    e2.stopPropagation();
+    this.searchQuery = "";
+    this.searchInputEl.value = "";
+    this.clearBtnEl.style.display = "none";
+    this.highlightedIndex = -1;
+    this.renderOptions();
+    this.searchInputEl.focus();
+  }
+  onSearchKeyDown(e2) {
+    if (e2.key === "ArrowDown") {
+      e2.preventDefault();
+      if (this.filteredModels.length > 0) {
+        const nextIndex = this.highlightedIndex === -1 ? 0 : (this.highlightedIndex + 1) % this.filteredModels.length;
+        this.setHighlightedIndex(nextIndex, true);
+      }
+    } else if (e2.key === "ArrowUp") {
+      e2.preventDefault();
+      if (this.filteredModels.length > 0) {
+        const prevIndex = this.highlightedIndex <= 0 ? this.filteredModels.length - 1 : this.highlightedIndex - 1;
+        this.setHighlightedIndex(prevIndex, true);
+      }
+    } else if (e2.key === "Enter") {
+      e2.preventDefault();
+      if (this.highlightedIndex >= 0 && this.highlightedIndex < this.filteredModels.length) {
+        this.selectModel(this.filteredModels[this.highlightedIndex]);
+      } else if (this.filteredModels.length === 1) {
+        this.selectModel(this.filteredModels[0]);
+      }
+    } else if (e2.key === "Escape") {
+      e2.preventDefault();
+      this.close();
+      this.triggerEl.focus();
+    } else if (e2.key === "Tab") {
+      this.close();
+    }
+  }
+  highlightMatches(containerEl, text2, query) {
+    if (!query) {
+      containerEl.setText(text2);
+      return;
+    }
+    const lowerText = text2.toLowerCase();
+    const lowerQuery = query.toLowerCase();
+    let startIndex = 0;
+    let matchIndex = lowerText.indexOf(lowerQuery, startIndex);
+    if (matchIndex === -1) {
+      containerEl.setText(text2);
+      return;
+    }
+    while (matchIndex !== -1) {
+      if (matchIndex > startIndex) {
+        containerEl.createSpan({ text: text2.substring(startIndex, matchIndex) });
+      }
+      const matchEnd = matchIndex + lowerQuery.length;
+      containerEl.createEl("mark", {
+        cls: "harness-search-highlight",
+        text: text2.substring(matchIndex, matchEnd)
+      });
+      startIndex = matchEnd;
+      matchIndex = lowerText.indexOf(lowerQuery, startIndex);
+    }
+    if (startIndex < text2.length) {
+      containerEl.createSpan({ text: text2.substring(startIndex) });
+    }
+  }
+  renderOptions() {
+    this.optionsListEl.empty();
+    const query = this.searchQuery.trim().toLowerCase();
+    this.filteredModels = this.models.filter(
+      (m4) => m4.toLowerCase().includes(query)
+    );
+    if (this.filteredModels.length === 0) {
+      const emptyEl = this.optionsListEl.createEl("div", {
+        cls: "harness-model-empty"
+      });
+      if (this.searchQuery.trim()) {
+        emptyEl.setText(`No models found matching "${this.searchQuery.trim()}"`);
+      } else {
+        emptyEl.setText("No models available");
+      }
+      this.highlightedIndex = -1;
+      return;
+    }
+    if (this.highlightedIndex < 0 || this.highlightedIndex >= this.filteredModels.length) {
+      const selectedIdx = this.filteredModels.indexOf(this.selectedModel);
+      this.highlightedIndex = selectedIdx >= 0 ? selectedIdx : 0;
+    }
+    for (let i3 = 0; i3 < this.filteredModels.length; i3++) {
+      const model = this.filteredModels[i3];
+      const isSelected = model === this.selectedModel;
+      const isHighlighted = i3 === this.highlightedIndex;
+      const optionEl = this.optionsListEl.createEl("div", {
+        cls: "harness-model-option"
+      });
+      optionEl.setAttribute("role", "option");
+      optionEl.setAttribute("aria-selected", isSelected ? "true" : "false");
+      optionEl.setAttribute("data-model", model);
+      optionEl.setAttribute("data-index", String(i3));
+      if (isSelected) {
+        optionEl.addClass("is-selected");
+      }
+      if (isHighlighted) {
+        optionEl.addClass("is-highlighted");
+      }
+      const textSpan = optionEl.createEl("span", {
+        cls: "harness-model-option-text"
+      });
+      this.highlightMatches(textSpan, model, this.searchQuery.trim());
+      const checkIconSpan = optionEl.createEl("span", {
+        cls: "harness-model-check-icon"
+      });
+      if (isSelected) {
+        (0, import_obsidian26.setIcon)(checkIconSpan, "check");
+      }
+      optionEl.addEventListener("mouseenter", () => {
+        this.setHighlightedIndex(i3, false);
+      });
+      optionEl.addEventListener("mousedown", (e2) => {
+        e2.preventDefault();
+      });
+      optionEl.addEventListener("click", (e2) => {
+        e2.preventDefault();
+        e2.stopPropagation();
+        this.selectModel(model);
+      });
+    }
+  }
+  setHighlightedIndex(index2, scrollIntoView = false) {
+    if (this.filteredModels.length === 0) {
+      this.highlightedIndex = -1;
+      return;
+    }
+    this.highlightedIndex = Math.max(0, Math.min(index2, this.filteredModels.length - 1));
+    const optionEls = this.optionsListEl.querySelectorAll(".harness-model-option");
+    optionEls.forEach((opt, i3) => {
+      if (i3 === this.highlightedIndex) {
+        opt.addClass("is-highlighted");
+        if (scrollIntoView) {
+          opt.scrollIntoView({ block: "nearest" });
+        }
+      } else {
+        opt.removeClass("is-highlighted");
+      }
+    });
+  }
+  updatePopoverPosition() {
+    if (!this.isOpen)
+      return;
+    const rect = this.triggerEl.getBoundingClientRect();
+    const popoverWidth = Math.max(rect.width, 240);
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    let left = rect.left;
+    if (left + popoverWidth > viewportWidth - 8) {
+      left = Math.max(8, viewportWidth - popoverWidth - 8);
+    }
+    if (left < 8)
+      left = 8;
+    const spaceBelow = viewportHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    this.popoverEl.style.position = "fixed";
+    this.popoverEl.style.left = `${left}px`;
+    this.popoverEl.style.width = `${popoverWidth}px`;
+    this.popoverEl.style.zIndex = "9999";
+    if (spaceBelow < 220 && spaceAbove > spaceBelow) {
+      this.popoverEl.style.top = "auto";
+      this.popoverEl.style.bottom = `${viewportHeight - rect.top + 4}px`;
+    } else {
+      this.popoverEl.style.top = `${rect.bottom + 4}px`;
+      this.popoverEl.style.bottom = "auto";
+    }
+  }
+  onDocPointerDown(e2) {
+    if (!this.isOpen)
+      return;
+    const target = e2.target;
+    if (this.popoverEl.contains(target) || this.triggerEl.contains(target)) {
+      return;
+    }
+    this.close();
+  }
+  async selectModel(model) {
+    this.setValue(model);
+    this.close();
+    this.triggerEl.focus();
+    if (this.options.onChange) {
+      try {
+        await this.options.onChange(model);
+      } catch (err2) {
+        console.error("Error in SearchableModelSelect onChange callback:", err2);
+      }
+    }
+  }
+  open() {
+    if (this.isOpen)
+      return;
+    this.isOpen = true;
+    this.triggerEl.setAttribute("aria-expanded", "true");
+    this.triggerEl.addClass("is-open");
+    this.searchQuery = "";
+    this.searchInputEl.value = "";
+    this.clearBtnEl.style.display = "none";
+    this.renderOptions();
+    this.popoverEl.style.display = "flex";
+    this.updatePopoverPosition();
+    if (this.highlightedIndex >= 0) {
+      const activeOpt = this.optionsListEl.querySelector(".is-highlighted");
+      if (activeOpt) {
+        activeOpt.scrollIntoView({ block: "nearest" });
+      }
+    }
+    setTimeout(() => {
+      this.searchInputEl.focus();
+      this.searchInputEl.select();
+    }, 0);
+    document.addEventListener("pointerdown", this.boundOnDocPointerDown, true);
+    window.addEventListener("resize", this.boundOnWindowResize);
+    window.addEventListener("scroll", this.boundOnWindowResize, true);
+  }
+  close() {
+    if (!this.isOpen)
+      return;
+    this.isOpen = false;
+    this.triggerEl.setAttribute("aria-expanded", "false");
+    this.triggerEl.removeClass("is-open");
+    this.popoverEl.style.display = "none";
+    document.removeEventListener("pointerdown", this.boundOnDocPointerDown, true);
+    window.removeEventListener("resize", this.boundOnWindowResize);
+    window.removeEventListener("scroll", this.boundOnWindowResize, true);
+  }
+  setModels(models, selectedModel) {
+    this.models = [...models];
+    if (selectedModel !== void 0) {
+      this.selectedModel = selectedModel;
+    } else if (!this.models.includes(this.selectedModel)) {
+      this.selectedModel = this.models[0] || "";
+    }
+    this.updateTriggerText();
+    if (this.isOpen) {
+      this.renderOptions();
+      this.updatePopoverPosition();
+    }
+  }
+  setValue(model) {
+    this.selectedModel = model;
+    this.updateTriggerText();
+    if (this.isOpen) {
+      this.renderOptions();
+    }
+  }
+  getValue() {
+    return this.selectedModel;
+  }
+  destroy() {
+    this.close();
+    this.triggerEl.removeEventListener("click", this.boundOnTriggerClick);
+    this.triggerEl.removeEventListener("keydown", this.boundOnTriggerKeyDown);
+    this.searchInputEl.removeEventListener("input", this.boundOnSearchInput);
+    this.searchInputEl.removeEventListener("keydown", this.boundOnSearchKeyDown);
+    this.clearBtnEl.removeEventListener("click", this.boundOnClearClick);
+    this.triggerEl.remove();
+    this.popoverEl.remove();
+  }
+};
+
 // src/ui/chat-view.ts
 var HARNESS_VIEW_TYPE = "harness-chat-view";
-var HarnessChatView = class extends import_obsidian26.ItemView {
+var HarnessChatView = class extends import_obsidian27.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.isInputExpanded = false;
@@ -39781,27 +40163,44 @@ var HarnessChatView = class extends import_obsidian26.ItemView {
     titleEl.style.alignItems = "center";
     titleEl.style.gap = "6px";
     const botIconEl = titleEl.createEl("span");
-    (0, import_obsidian26.setIcon)(botIconEl, "bot");
+    (0, import_obsidian27.setIcon)(botIconEl, "bot");
     titleEl.createEl("span", { text: "Harness Bot", cls: "harness-title" });
     const headerActionsEl = headerEl.createEl("div", { cls: "harness-chat-header-actions" });
     const newSessionBtn = headerActionsEl.createEl("button", { cls: "clickable-icon" });
     newSessionBtn.setAttribute("aria-label", "New Session");
-    (0, import_obsidian26.setIcon)(newSessionBtn, "plus");
+    newSessionBtn.setAttribute("title", "New Session");
+    (0, import_obsidian27.setIcon)(newSessionBtn, "plus");
     newSessionBtn.addEventListener("click", () => {
       this.createNewSession();
     });
     const sessionsBtn = headerActionsEl.createEl("button", { cls: "clickable-icon" });
     sessionsBtn.setAttribute("aria-label", "View Saved Sessions (/sessions)");
-    (0, import_obsidian26.setIcon)(sessionsBtn, "history");
+    sessionsBtn.setAttribute("title", "View Saved Sessions (/sessions)");
+    (0, import_obsidian27.setIcon)(sessionsBtn, "history");
     sessionsBtn.addEventListener("click", () => {
       this.openSessionsModal();
     });
+    const skillsBtn = headerActionsEl.createEl("button", { cls: "clickable-icon" });
+    skillsBtn.setAttribute("aria-label", "Manage Skills (/skills)");
+    skillsBtn.setAttribute("title", "Manage Skills (/skills)");
+    (0, import_obsidian27.setIcon)(skillsBtn, "zap");
+    skillsBtn.addEventListener("click", () => {
+      new SkillsModal(this.app, this.plugin).open();
+    });
+    const mcpBtn = headerActionsEl.createEl("button", { cls: "clickable-icon" });
+    mcpBtn.setAttribute("aria-label", "Manage MCP Servers (/mcp)");
+    mcpBtn.setAttribute("title", "Manage MCP Servers (/mcp)");
+    (0, import_obsidian27.setIcon)(mcpBtn, "server");
+    mcpBtn.addEventListener("click", () => {
+      new McpModal(this.app, this.plugin).open();
+    });
     const exportBtn = headerActionsEl.createEl("button", { cls: "clickable-icon" });
-    exportBtn.setAttribute("aria-label", "Export Chat to Markdown");
-    (0, import_obsidian26.setIcon)(exportBtn, "upload");
+    exportBtn.setAttribute("aria-label", "Export Chat to Markdown (/export)");
+    exportBtn.setAttribute("title", "Export Chat to Markdown (/export)");
+    (0, import_obsidian27.setIcon)(exportBtn, "upload");
     exportBtn.addEventListener("click", async () => {
       if (this.currentSession.messages.length === 0) {
-        new import_obsidian26.Notice("No chat history to export.");
+        new import_obsidian27.Notice("No chat history to export.");
         return;
       }
       try {
@@ -39809,14 +40208,15 @@ var HarnessChatView = class extends import_obsidian26.ItemView {
           this.currentSession.messages,
           this.currentSession.model || this.plugin.settings.activeModel || "default"
         );
-        new import_obsidian26.Notice(`Chat exported to ${exportedPath}`);
+        new import_obsidian27.Notice(`Chat exported to ${exportedPath}`);
       } catch (e2) {
-        new import_obsidian26.Notice(`Export failed: ${e2.message}`);
+        new import_obsidian27.Notice(`Export failed: ${e2.message}`);
       }
     });
     const clearBtn = headerActionsEl.createEl("button", { cls: "clickable-icon" });
-    clearBtn.setAttribute("aria-label", "Clear Messages in Session");
-    (0, import_obsidian26.setIcon)(clearBtn, "trash");
+    clearBtn.setAttribute("aria-label", "Clear Messages in Session (/clear)");
+    clearBtn.setAttribute("title", "Clear Messages in Session (/clear)");
+    (0, import_obsidian27.setIcon)(clearBtn, "trash");
     clearBtn.addEventListener("click", async () => {
       this.currentSession.messages = [];
       await this.saveSessionState();
@@ -39831,21 +40231,26 @@ var HarnessChatView = class extends import_obsidian26.ItemView {
       cls: "harness-chat-textarea",
       placeholder: "Ask Harness Bot... ('/' for commands, '@' for notes)"
     });
+    this.inputTextAreaEl.setAttribute("aria-label", "Chat message input");
     this.expandBtnEl = textareaWrapperEl.createEl("button", { cls: "harness-expand-btn clickable-icon" });
     this.expandBtnEl.setAttribute("aria-label", "Expand to full view");
+    this.expandBtnEl.setAttribute("title", "Expand to full view");
     this.expandBtnEl.style.display = "none";
-    (0, import_obsidian26.setIcon)(this.expandBtnEl, "maximize-2");
+    (0, import_obsidian27.setIcon)(this.expandBtnEl, "maximize-2");
     this.expandBtnEl.addEventListener("click", () => {
       this.toggleInputExpand();
     });
     const bottomRowEl = this.inputAreaEl.createEl("div", { cls: "harness-chat-bottom-row" });
-    this.modelSelectEl = bottomRowEl.createEl("select", { cls: "harness-model-select" });
-    this.refreshModelDropdown();
-    this.modelSelectEl.addEventListener("change", async () => {
-      this.currentSession.model = this.modelSelectEl.value;
-      this.plugin.settings.activeModel = this.modelSelectEl.value;
-      await this.saveSessionState();
+    this.searchableModelSelect = new SearchableModelSelect(bottomRowEl, {
+      models: [],
+      selectedModel: "",
+      onChange: async (val) => {
+        this.currentSession.model = val;
+        this.plugin.settings.activeModel = val;
+        await this.saveSessionState();
+      }
     });
+    this.refreshModelDropdown();
     this.sendButtonEl = bottomRowEl.createEl("button", { cls: "harness-send-btn mod-cta clickable-icon" });
     this.setSendButtonState(false);
     const handleSendOrStop = async () => {
@@ -39853,7 +40258,7 @@ var HarnessChatView = class extends import_obsidian26.ItemView {
         this.currentAbortController.abort();
         this.currentAbortController = null;
         this.setSendButtonState(false);
-        new import_obsidian26.Notice("Generation stopped.");
+        new import_obsidian27.Notice("Generation stopped.");
         return;
       }
       const text2 = this.inputTextAreaEl.value.trim();
@@ -39902,7 +40307,7 @@ var HarnessChatView = class extends import_obsidian26.ItemView {
         (p3) => p3.id === this.plugin.settings.activeProviderId
       );
       if (!activeProv) {
-        new import_obsidian26.Notice("Please configure and select an AI provider in Settings first.");
+        new import_obsidian27.Notice("Please configure and select an AI provider in Settings first.");
         return;
       }
       this.inputTextAreaEl.value = "";
@@ -39940,9 +40345,21 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
       const streamingMsgEl = this.messagesContainerEl.createEl("div", {
         cls: "harness-message harness-message-assistant"
       });
-      streamingMsgEl.createEl("div", {
-        text: `Harness Bot (${this.currentSession.model || this.plugin.settings.activeModel})`,
+      const streamHeaderEl = streamingMsgEl.createEl("div", {
         cls: "harness-message-header"
+      });
+      streamHeaderEl.createSpan({
+        text: `Harness Bot (${this.currentSession.model || this.plugin.settings.activeModel})`,
+        cls: "harness-message-header-title"
+      });
+      const streamCopyBtn = streamHeaderEl.createEl("button", { cls: "harness-msg-copy-btn" });
+      streamCopyBtn.setAttribute("aria-label", "Copy response");
+      streamCopyBtn.setAttribute("title", "Copy response");
+      (0, import_obsidian27.setIcon)(streamCopyBtn, "copy");
+      streamCopyBtn.addEventListener("click", (e2) => {
+        e2.stopPropagation();
+        const currentText = textContentEl.innerText || "";
+        this.copyToClipboard(currentText, streamCopyBtn, "Response copied to clipboard");
       });
       const textContentEl = streamingMsgEl.createEl("div", { cls: "harness-message-body" });
       try {
@@ -39984,7 +40401,7 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
         if (err2.message && err2.message.includes("stopped")) {
           textContentEl.setText(textContentEl.innerText + " [Stopped]");
         } else {
-          new import_obsidian26.Notice(`Agent error: ${err2.message}`);
+          new import_obsidian27.Notice(`Agent error: ${err2.message}`);
           textContentEl.setText(`Error: ${err2.message}`);
         }
       } finally {
@@ -40035,6 +40452,45 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
     });
     this.renderMessages();
   }
+  async copyToClipboard(text2, btnEl, noticeText) {
+    try {
+      await navigator.clipboard.writeText(text2);
+      (0, import_obsidian27.setIcon)(btnEl, "check");
+      btnEl.addClass("is-copied");
+      new import_obsidian27.Notice(noticeText);
+      setTimeout(() => {
+        (0, import_obsidian27.setIcon)(btnEl, "copy");
+        btnEl.removeClass("is-copied");
+      }, 2e3);
+    } catch (e2) {
+      new import_obsidian27.Notice("Failed to copy to clipboard");
+    }
+  }
+  enhanceCodeBlocksWithCopyButton(containerEl) {
+    const preElements = Array.from(containerEl.querySelectorAll("pre"));
+    for (const pre of preElements) {
+      if (pre.parentElement?.classList.contains("harness-code-block-wrapper")) {
+        continue;
+      }
+      const wrapper = document.createElement("div");
+      wrapper.className = "harness-code-block-wrapper";
+      pre.parentNode?.insertBefore(wrapper, pre);
+      wrapper.appendChild(pre);
+      const copyBtn = wrapper.createEl("button", {
+        cls: "harness-code-copy-btn"
+      });
+      copyBtn.setAttribute("aria-label", "Copy code");
+      copyBtn.setAttribute("title", "Copy code");
+      (0, import_obsidian27.setIcon)(copyBtn, "copy");
+      copyBtn.addEventListener("click", (e2) => {
+        e2.preventDefault();
+        e2.stopPropagation();
+        const codeEl = pre.querySelector("code");
+        const codeText = codeEl ? codeEl.innerText : pre.innerText;
+        this.copyToClipboard(codeText, copyBtn, "Code copied to clipboard");
+      });
+    }
+  }
   async renderThinkingCard(parentEl, thoughtText, open2 = false) {
     const detailsEl = parentEl.createEl("details", { cls: "harness-collapsible-card harness-thinking-card" });
     if (open2)
@@ -40042,11 +40498,22 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
     const summaryEl = detailsEl.createEl("summary", { cls: "harness-collapsible-summary" });
     const leftEl = summaryEl.createEl("div", { cls: "harness-collapsible-summary-left" });
     const iconSpan = leftEl.createEl("span");
-    (0, import_obsidian26.setIcon)(iconSpan, "sparkles");
+    (0, import_obsidian27.setIcon)(iconSpan, "sparkles");
     leftEl.createEl("span", { text: "Reasoning / \u0420\u0430\u0441\u0441\u0443\u0436\u0434\u0435\u043D\u0438\u044F" });
-    summaryEl.createEl("span", { text: "View", cls: "harness-collapsible-badge" });
+    const rightEl = summaryEl.createEl("div", { cls: "harness-collapsible-summary-right" });
+    const copyBtn = rightEl.createEl("button", { cls: "harness-tool-copy-btn" });
+    copyBtn.setAttribute("aria-label", "Copy reasoning");
+    copyBtn.setAttribute("title", "Copy reasoning");
+    (0, import_obsidian27.setIcon)(copyBtn, "copy");
+    copyBtn.addEventListener("click", (e2) => {
+      e2.preventDefault();
+      e2.stopPropagation();
+      this.copyToClipboard(thoughtText, copyBtn, "Reasoning copied to clipboard");
+    });
+    rightEl.createEl("span", { text: "View", cls: "harness-collapsible-badge" });
     const bodyEl = detailsEl.createEl("div", { cls: "harness-collapsible-body harness-thinking-text" });
-    await import_obsidian26.MarkdownRenderer.render(this.app, thoughtText, bodyEl, "", this);
+    await import_obsidian27.MarkdownRenderer.render(this.app, thoughtText, bodyEl, "", this);
+    this.enhanceCodeBlocksWithCopyButton(bodyEl);
   }
   formatContentForCard(rawStr) {
     if (!rawStr || rawStr.trim() === "")
@@ -40065,12 +40532,24 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
     const summaryEl = detailsEl.createEl("summary", { cls: "harness-collapsible-summary" });
     const leftEl = summaryEl.createEl("div", { cls: "harness-collapsible-summary-left" });
     const iconSpan = leftEl.createEl("span");
-    (0, import_obsidian26.setIcon)(iconSpan, "wrench");
+    (0, import_obsidian27.setIcon)(iconSpan, "wrench");
     leftEl.createEl("span", { text: `Tool: ${toolName}` });
-    summaryEl.createEl("span", { text: "Args", cls: "harness-collapsible-badge" });
+    const rightEl = summaryEl.createEl("div", { cls: "harness-collapsible-summary-right" });
+    const copyBtn = rightEl.createEl("button", { cls: "harness-tool-copy-btn" });
+    copyBtn.setAttribute("aria-label", "Copy tool arguments");
+    copyBtn.setAttribute("title", "Copy tool arguments");
+    (0, import_obsidian27.setIcon)(copyBtn, "copy");
+    copyBtn.addEventListener("click", (e2) => {
+      e2.preventDefault();
+      e2.stopPropagation();
+      const formatted = this.formatContentForCard(argsStr);
+      this.copyToClipboard(formatted, copyBtn, "Tool output copied to clipboard");
+    });
+    rightEl.createEl("span", { text: "Args", cls: "harness-collapsible-badge" });
     const bodyEl = detailsEl.createEl("div", { cls: "harness-collapsible-body" });
     const pre = bodyEl.createEl("pre");
     pre.createEl("code", { text: this.formatContentForCard(argsStr) });
+    this.enhanceCodeBlocksWithCopyButton(bodyEl);
   }
   renderToolOutputCard(parentEl, toolName, outputText, open2 = false) {
     const detailsEl = parentEl.createEl("details", { cls: "harness-collapsible-card harness-tool-card" });
@@ -40079,12 +40558,24 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
     const summaryEl = detailsEl.createEl("summary", { cls: "harness-collapsible-summary" });
     const leftEl = summaryEl.createEl("div", { cls: "harness-collapsible-summary-left" });
     const iconSpan = leftEl.createEl("span");
-    (0, import_obsidian26.setIcon)(iconSpan, "file-text");
+    (0, import_obsidian27.setIcon)(iconSpan, "file-text");
     leftEl.createEl("span", { text: `Output: ${toolName}` });
-    summaryEl.createEl("span", { text: "Result", cls: "harness-collapsible-badge" });
+    const rightEl = summaryEl.createEl("div", { cls: "harness-collapsible-summary-right" });
+    const copyBtn = rightEl.createEl("button", { cls: "harness-tool-copy-btn" });
+    copyBtn.setAttribute("aria-label", "Copy tool output");
+    copyBtn.setAttribute("title", "Copy tool output");
+    (0, import_obsidian27.setIcon)(copyBtn, "copy");
+    copyBtn.addEventListener("click", (e2) => {
+      e2.preventDefault();
+      e2.stopPropagation();
+      const formatted = this.formatContentForCard(outputText);
+      this.copyToClipboard(formatted, copyBtn, "Tool output copied to clipboard");
+    });
+    rightEl.createEl("span", { text: "Result", cls: "harness-collapsible-badge" });
     const bodyEl = detailsEl.createEl("div", { cls: "harness-collapsible-body" });
     const pre = bodyEl.createEl("pre");
     pre.createEl("code", { text: this.formatContentForCard(outputText) });
+    this.enhanceCodeBlocksWithCopyButton(bodyEl);
   }
   autoResizeTextarea() {
     if (this.isInputExpanded)
@@ -40106,14 +40597,16 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
     this.isInputExpanded = !this.isInputExpanded;
     if (this.isInputExpanded) {
       this.inputAreaEl.addClass("is-expanded");
-      (0, import_obsidian26.setIcon)(this.expandBtnEl, "minimize-2");
-      this.expandBtnEl.setAttribute("aria-label", "Collapse view");
+      (0, import_obsidian27.setIcon)(this.expandBtnEl, "minimize-2");
+      this.expandBtnEl.setAttribute("aria-label", "Restore compact view");
+      this.expandBtnEl.setAttribute("title", "Restore compact view");
       this.expandBtnEl.style.display = "flex";
       this.inputTextAreaEl.focus();
     } else {
       this.inputAreaEl.removeClass("is-expanded");
-      (0, import_obsidian26.setIcon)(this.expandBtnEl, "maximize-2");
+      (0, import_obsidian27.setIcon)(this.expandBtnEl, "maximize-2");
       this.expandBtnEl.setAttribute("aria-label", "Expand to full view");
+      this.expandBtnEl.setAttribute("title", "Expand to full view");
       this.autoResizeTextarea();
       this.inputTextAreaEl.focus();
     }
@@ -40123,15 +40616,17 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
       return;
     this.sendButtonEl.empty();
     if (isGenerating) {
-      (0, import_obsidian26.setIcon)(this.sendButtonEl, "square");
+      (0, import_obsidian27.setIcon)(this.sendButtonEl, "square");
       this.sendButtonEl.addClass("mod-warning");
       this.sendButtonEl.removeClass("mod-cta");
       this.sendButtonEl.setAttribute("aria-label", "Stop generation");
+      this.sendButtonEl.setAttribute("title", "Stop generation");
     } else {
-      (0, import_obsidian26.setIcon)(this.sendButtonEl, "send");
+      (0, import_obsidian27.setIcon)(this.sendButtonEl, "send");
       this.sendButtonEl.addClass("mod-cta");
       this.sendButtonEl.removeClass("mod-warning");
       this.sendButtonEl.setAttribute("aria-label", "Send message");
+      this.sendButtonEl.setAttribute("title", "Send message");
     }
   }
   handleInputSuggest() {
@@ -40284,7 +40779,7 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
       if (index2 === 0)
         itemEl.addClass("is-selected");
       const iconSpan = itemEl.createEl("span", { cls: "harness-suggest-icon" });
-      (0, import_obsidian26.setIcon)(iconSpan, item.isFolder ? "folder" : "file-text");
+      (0, import_obsidian27.setIcon)(iconSpan, item.isFolder ? "folder" : "file-text");
       itemEl.createEl("span", { text: ` ${item.path}` });
       itemEl.addEventListener("click", onSelect);
     });
@@ -40321,7 +40816,7 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
     this.saveSessionState();
     this.renderMessages();
     this.refreshModelDropdown();
-    new import_obsidian26.Notice("Started new chat session");
+    new import_obsidian27.Notice("Started new chat session");
   }
   openSessionsModal() {
     new SessionsModal(
@@ -40362,23 +40857,17 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
     await this.plugin.saveSettings();
   }
   refreshModelDropdown() {
-    if (!this.modelSelectEl)
+    if (!this.searchableModelSelect)
       return;
-    this.modelSelectEl.empty();
     const activeProv = this.plugin.settings.providers.find(
       (p3) => p3.id === this.plugin.settings.activeProviderId
     );
     const models = activeProv?.models || [];
     if (models.length === 0) {
-      this.modelSelectEl.createEl("option", { value: "", text: "(No models)" });
+      this.searchableModelSelect.setModels([], "");
       return;
     }
-    const selectedModel = this.currentSession.model || this.plugin.settings.activeModel || models[0];
-    for (const m4 of models) {
-      const opt = this.modelSelectEl.createEl("option", { value: m4, text: m4 });
-      if (m4 === selectedModel)
-        opt.selected = true;
-    }
+    const selectedModel = this.currentSession?.model || this.plugin.settings.activeModel || models[0];
     if (!models.includes(selectedModel)) {
       this.currentSession.model = models[0];
       this.plugin.settings.activeModel = models[0];
@@ -40386,6 +40875,7 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
       this.currentSession.model = selectedModel;
       this.plugin.settings.activeModel = selectedModel;
     }
+    this.searchableModelSelect.setModels(models, this.currentSession.model || this.plugin.settings.activeModel);
   }
   async renderMessages() {
     if (!this.messagesContainerEl)
@@ -40440,19 +40930,39 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
     for (const msg of this.currentSession.messages) {
       if (msg.role === "user") {
         const msgEl = this.messagesContainerEl.createEl("div", { cls: "harness-message harness-message-user" });
-        msgEl.createEl("div", { text: "You", cls: "harness-message-header" });
-        const bodyEl = msgEl.createEl("div", { cls: "harness-message-body" });
+        const headerEl = msgEl.createEl("div", { cls: "harness-message-header" });
+        headerEl.createSpan({ text: "You", cls: "harness-message-header-title" });
         const rawContent = typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content || "");
-        await import_obsidian26.MarkdownRenderer.render(this.app, rawContent, bodyEl, "", this);
-      } else if (msg.role === "assistant") {
-        const msgEl = this.messagesContainerEl.createEl("div", { cls: "harness-message harness-message-assistant" });
-        msgEl.createEl("div", {
-          text: `Harness Bot (${this.currentSession.model || this.plugin.settings.activeModel})`,
-          cls: "harness-message-header"
+        const copyBtn = headerEl.createEl("button", { cls: "harness-msg-copy-btn" });
+        copyBtn.setAttribute("aria-label", "Copy message");
+        copyBtn.setAttribute("title", "Copy message");
+        (0, import_obsidian27.setIcon)(copyBtn, "copy");
+        copyBtn.addEventListener("click", (e2) => {
+          e2.stopPropagation();
+          this.copyToClipboard(rawContent, copyBtn, "Message copied to clipboard");
         });
         const bodyEl = msgEl.createEl("div", { cls: "harness-message-body" });
+        await import_obsidian27.MarkdownRenderer.render(this.app, rawContent, bodyEl, "", this);
+        this.enhanceCodeBlocksWithCopyButton(bodyEl);
+      } else if (msg.role === "assistant") {
+        const msgEl = this.messagesContainerEl.createEl("div", { cls: "harness-message harness-message-assistant" });
+        const headerEl = msgEl.createEl("div", { cls: "harness-message-header" });
+        headerEl.createSpan({
+          text: `Harness Bot (${this.currentSession.model || this.plugin.settings.activeModel})`,
+          cls: "harness-message-header-title"
+        });
         const rawContent = typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content || "");
         const parsed = parseThoughts(rawContent);
+        const copyBtn = headerEl.createEl("button", { cls: "harness-msg-copy-btn" });
+        copyBtn.setAttribute("aria-label", "Copy response");
+        copyBtn.setAttribute("title", "Copy response");
+        (0, import_obsidian27.setIcon)(copyBtn, "copy");
+        copyBtn.addEventListener("click", (e2) => {
+          e2.stopPropagation();
+          const textToCopy = parsed.finalAnswer || rawContent;
+          this.copyToClipboard(textToCopy, copyBtn, "Response copied to clipboard");
+        });
+        const bodyEl = msgEl.createEl("div", { cls: "harness-message-body" });
         if (parsed.thoughts.length > 0) {
           for (const thought of parsed.thoughts) {
             await this.renderThinkingCard(bodyEl, thought, false);
@@ -40465,7 +40975,8 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
         }
         if (parsed.finalAnswer) {
           const answerContainer = bodyEl.createEl("div", { cls: "harness-answer-text" });
-          await import_obsidian26.MarkdownRenderer.render(this.app, parsed.finalAnswer, answerContainer, "", this);
+          await import_obsidian27.MarkdownRenderer.render(this.app, parsed.finalAnswer, answerContainer, "", this);
+          this.enhanceCodeBlocksWithCopyButton(answerContainer);
         }
       } else if (msg.role === "tool") {
         const rawContent = typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content || "");
@@ -40478,14 +40989,17 @@ ${restText}` : `[\u26A1 Skill: ${skill.name}] Apply skill methodology.`;
     if (this.currentAbortController) {
       this.currentAbortController.abort();
     }
+    if (this.searchableModelSelect) {
+      this.searchableModelSelect.destroy();
+    }
   }
 };
 
 // src/skills/skill-manager.ts
-var import_obsidian28 = require("obsidian");
+var import_obsidian29 = require("obsidian");
 
 // src/skills/git-resolver.ts
-var import_obsidian27 = require("obsidian");
+var import_obsidian28 = require("obsidian");
 
 // src/skills/frontmatter.ts
 function parseSkillContent(rawContent, fallbackId) {
@@ -40600,7 +41114,7 @@ var SkillGitResolver = class {
     let successfulUrl = "";
     for (const candUrl of rawCandidates) {
       try {
-        const res = await (0, import_obsidian27.requestUrl)({ url: candUrl, method: "GET" });
+        const res = await (0, import_obsidian28.requestUrl)({ url: candUrl, method: "GET" });
         if (res.status === 200 && res.text && res.text.trim().length > 0) {
           fetchedContent = res.text;
           successfulUrl = candUrl;
@@ -40967,7 +41481,7 @@ var SkillManager = class {
     this.settings.installedSkills = this.settings.installedSkills.filter((s3) => s3.id !== resolved.id);
     this.settings.installedSkills.push(resolved);
     await this.saveSettingsCallback();
-    new import_obsidian28.Notice(`Skill "${resolved.name}" successfully installed!`);
+    new import_obsidian29.Notice(`Skill "${resolved.name}" successfully installed!`);
     return resolved;
   }
   /**
@@ -40984,7 +41498,7 @@ var SkillManager = class {
       return;
     this.settings.installedSkills = this.settings.installedSkills.filter((s3) => s3.id !== id);
     await this.saveSettingsCallback();
-    new import_obsidian28.Notice(`Skill uninstalled.`);
+    new import_obsidian29.Notice(`Skill uninstalled.`);
   }
   /**
    * Toggles skill enabled status.
@@ -41042,10 +41556,10 @@ ${skill.content}
 };
 
 // src/mcp/mcp-manager.ts
-var import_obsidian31 = require("obsidian");
+var import_obsidian32 = require("obsidian");
 
 // src/mcp/client.ts
-var import_obsidian29 = require("obsidian");
+var import_obsidian30 = require("obsidian");
 function parseJsonSafely(str) {
   try {
     return JSON.parse(str);
@@ -41113,7 +41627,7 @@ var McpClient = class {
       return this.postUrl;
     }
     try {
-      const res = await (0, import_obsidian29.requestUrl)({
+      const res = await (0, import_obsidian30.requestUrl)({
         url: this.url,
         method: "GET",
         headers: { ...this.getHeaders(), "Accept": "text/event-stream, text/plain, */*" },
@@ -41163,7 +41677,7 @@ var McpClient = class {
       body: JSON.stringify(payload),
       throw: false
     };
-    const res = await (0, import_obsidian29.requestUrl)(reqOptions);
+    const res = await (0, import_obsidian30.requestUrl)(reqOptions);
     if (res.status === 401 || res.status === 403) {
       throw new Error(`Authentication error (${res.status}): Please check API Token or OAuth permissions.`);
     }
@@ -41215,7 +41729,7 @@ var McpClient = class {
     });
     try {
       const postEndpoint = await this.discoverEndpoint();
-      await (0, import_obsidian29.requestUrl)({
+      await (0, import_obsidian30.requestUrl)({
         url: postEndpoint,
         method: "POST",
         headers: this.getHeaders(),
@@ -41308,7 +41822,7 @@ var McpClient = class {
 };
 
 // src/mcp/oauth.ts
-var import_obsidian30 = require("obsidian");
+var import_obsidian31 = require("obsidian");
 var McpOAuthHelper = class {
   /**
    * Generates a cryptographically random string for PKCE and state verification.
@@ -41409,7 +41923,7 @@ var McpOAuthHelper = class {
         bodyParams.client_id = pending.clientId;
       }
       const formBody = new URLSearchParams(bodyParams).toString();
-      const response = await (0, import_obsidian30.requestUrl)({
+      const response = await (0, import_obsidian31.requestUrl)({
         url: pending.tokenUrl,
         method: "POST",
         headers: {
@@ -41626,7 +42140,7 @@ var McpManager = class {
     }
     const authUrl = await McpOAuthHelper.startOAuthFlow(server);
     openExternalUrl(authUrl);
-    new import_obsidian31.Notice(`Opening browser for ${server.name} authorization...`);
+    new import_obsidian32.Notice(`Opening browser for ${server.name} authorization...`);
   }
   /**
    * Handles incoming OAuth deep link callback.
@@ -41639,10 +42153,10 @@ var McpManager = class {
         if (server) {
           server.enabled = true;
           await this.testAndSyncServer(result.serverId);
-          new import_obsidian31.Notice(`\u2713 Successfully connected to ${server.name}!`);
+          new import_obsidian32.Notice(`\u2713 Successfully connected to ${server.name}!`);
         }
       } catch (err2) {
-        new import_obsidian31.Notice(`Connected, but tool discovery failed: ${err2.message}`);
+        new import_obsidian32.Notice(`Connected, but tool discovery failed: ${err2.message}`);
       }
     }
     return result;
@@ -41686,7 +42200,7 @@ var McpManager = class {
 };
 
 // src/main.ts
-var HarnessPlugin = class extends import_obsidian32.Plugin {
+var HarnessPlugin = class extends import_obsidian33.Plugin {
   constructor() {
     super(...arguments);
     this.settings = DEFAULT_SETTINGS;

@@ -318,6 +318,13 @@
   white-space: nowrap;
 }
 
+.harness-collapsible-summary-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 .harness-collapsible-badge {
   font-size: 0.75em;
   opacity: 0.7;
