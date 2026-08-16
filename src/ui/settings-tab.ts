@@ -377,10 +377,11 @@ export class HarnessSettingTab extends PluginSettingTab {
       titleWrapper.style.alignItems = 'center';
       titleWrapper.style.gap = '8px';
 
-      const iconSpan = titleWrapper.createEl('span', {
-        text: agent.isDefaultMain ? '🤖' : '👤',
-      });
-      iconSpan.style.fontSize = '1.2em';
+      const iconSpan = titleWrapper.createEl('span', { cls: 'harness-agent-card-icon' });
+      setIcon(iconSpan, agent.isDefaultMain ? 'bot' : 'user');
+      iconSpan.style.display = 'inline-flex';
+      iconSpan.style.alignItems = 'center';
+      iconSpan.style.color = agent.isDefaultMain ? 'var(--interactive-accent)' : 'var(--text-accent)';
 
       const nameEl = titleWrapper.createEl('span', {
         text: agent.name,

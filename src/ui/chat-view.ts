@@ -101,13 +101,13 @@ export class HarnessChatView extends ItemView {
     if (agents.length === 0) {
       this.agentSelectEl.createEl('option', {
         value: 'main',
-        text: '🤖 Main Agent',
+        text: 'Main Agent',
       });
     } else {
       for (const agent of agents) {
         this.agentSelectEl.createEl('option', {
           value: agent.id,
-          text: agent.isDefaultMain || agent.id === 'main' ? `🤖 ${agent.name}` : `👤 ${agent.name}`,
+          text: agent.name,
         });
       }
     }
@@ -152,39 +152,12 @@ export class HarnessChatView extends ItemView {
     // Header
     const headerEl = container.createEl('div', { cls: 'harness-chat-header' });
     const titleEl = headerEl.createEl('div', { cls: 'harness-title-container' });
-
-    // Agent selector dropdown
-    const agentSelectContainer = titleEl.createEl('div', { cls: 'harness-agent-select-container' });
-    this.agentIconEl = agentSelectContainer.createEl('span', { cls: 'harness-agent-icon' });
-    setIcon(this.agentIconEl, 'bot');
-
-    this.agentSelectEl = agentSelectContainer.createEl('select', { cls: 'dropdown harness-agent-select' });
-    this.agentSelectEl.setAttribute('aria-label', 'Select Active Agent');
-
-    this.agentSelectEl.addEventListener('change', async () => {
-      const val = this.agentSelectEl?.value || 'main';
-      const selectedAgent = this.plugin.agentManager ? this.plugin.agentManager.getAgent(val) : undefined;
-      this.currentSession.activeAgentId = selectedAgent ? selectedAgent.id : 'main';
-      this.plugin.settings.activeAgentId = this.currentSession.activeAgentId;
-
-      if (this.agentIconEl) {
-        setIcon(this.agentIconEl, (!selectedAgent || selectedAgent.isDefaultMain || selectedAgent.id === 'main') ? 'bot' : 'user');
-      }
-
-      if (selectedAgent?.model) {
-        this.currentSession.model = selectedAgent.model;
-        this.refreshModelDropdown();
-      }
-
-      this.updateWorkspaceBadge(selectedAgent);
-      await this.saveSessionState();
-    });
-
-    // Workspace Scope Badge
-    this.workspaceBadgeEl = titleEl.createEl('span', { cls: 'harness-workspace-badge' });
-    this.workspaceBadgeEl.style.display = 'none';
-
-    this.refreshAgentDropdown();
+    titleEl.style.display = 'flex';
+    titleEl.style.alignItems = 'center';
+    titleEl.style.gap = '6px';
+    const botIconEl = titleEl.createEl('span');
+    setIcon(botIconEl, 'bot');
+    titleEl.createEl('span', { text: 'Harness Bot', cls: 'harness-title' });
 
     const headerActionsEl = headerEl.createEl('div', { cls: 'harness-chat-header-actions' });
 
@@ -286,9 +259,43 @@ export class HarnessChatView extends ItemView {
     });
 
     const bottomRowEl = this.inputAreaEl.createEl('div', { cls: 'harness-chat-bottom-row' });
+    const bottomControlsLeftEl = bottomRowEl.createEl('div', { cls: 'harness-bottom-controls-left' });
 
-    // Searchable Model Selector on the left of bottom row
-    this.searchableModelSelect = new SearchableModelSelect(bottomRowEl, {
+    // Agent Selector Dropdown
+    const agentSelectContainer = bottomControlsLeftEl.createEl('div', { cls: 'harness-agent-select-container' });
+    this.agentIconEl = agentSelectContainer.createEl('span', { cls: 'harness-agent-icon' });
+    setIcon(this.agentIconEl, 'bot');
+
+    this.agentSelectEl = agentSelectContainer.createEl('select', { cls: 'dropdown harness-agent-select' });
+    this.agentSelectEl.setAttribute('aria-label', 'Select Active Agent');
+
+    this.agentSelectEl.addEventListener('change', async () => {
+      const val = this.agentSelectEl?.value || 'main';
+      const selectedAgent = this.plugin.agentManager ? this.plugin.agentManager.getAgent(val) : undefined;
+      this.currentSession.activeAgentId = selectedAgent ? selectedAgent.id : 'main';
+      this.plugin.settings.activeAgentId = this.currentSession.activeAgentId;
+
+      if (this.agentIconEl) {
+        setIcon(this.agentIconEl, (!selectedAgent || selectedAgent.isDefaultMain || selectedAgent.id === 'main') ? 'bot' : 'user');
+      }
+
+      if (selectedAgent?.model) {
+        this.currentSession.model = selectedAgent.model;
+        this.refreshModelDropdown();
+      }
+
+      this.updateWorkspaceBadge(selectedAgent);
+      await this.saveSessionState();
+    });
+
+    // Workspace Scope Badge
+    this.workspaceBadgeEl = bottomControlsLeftEl.createEl('span', { cls: 'harness-workspace-badge' });
+    this.workspaceBadgeEl.style.display = 'none';
+
+    this.refreshAgentDropdown();
+
+    // Searchable Model Selector
+    this.searchableModelSelect = new SearchableModelSelect(bottomControlsLeftEl, {
       models: [],
       selectedModel: '',
       onChange: async (val: string) => {

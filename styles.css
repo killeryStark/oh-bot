@@ -33,33 +33,56 @@
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.harness-bottom-controls-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
   flex-wrap: wrap;
 }
 
 .harness-agent-select-container {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+  background-color: var(--background-modifier-form-field);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  padding: 0 8px;
+  height: 32px;
+  min-width: 0;
+  max-width: 160px;
+  box-sizing: border-box;
 }
 
 .harness-agent-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-accent);
+  color: var(--text-muted);
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
 }
 
 .harness-agent-select {
-  font-size: 0.85em;
+  font-size: 0.82em;
   font-weight: 500;
-  max-width: 160px;
-  height: 28px;
-  border-radius: 4px;
+  max-width: 120px;
+  height: 100%;
+  border-radius: 0;
   cursor: pointer;
-  background-color: var(--background-secondary);
+  background-color: transparent;
   color: var(--text-normal);
-  border: 1px solid var(--background-modifier-border);
-  padding: 2px 6px;
+  border: none;
+  padding: 0;
+  outline: none;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .harness-workspace-badge {
@@ -71,7 +94,8 @@
   background-color: var(--background-secondary-alt);
   color: var(--text-muted);
   border: 1px solid var(--background-modifier-border);
-  max-width: 140px;
+  max-width: 130px;
+  height: 28px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1638,18 +1662,89 @@
   flex-shrink: 0;
 }
 
+.harness-agent-edit-modal-window {
+  max-width: min(94vw, 680px) !important;
+  width: 100% !important;
+  max-height: 90vh !important;
+  overflow-y: auto !important;
+  box-sizing: border-box !important;
+  border-radius: 12px;
+}
+
 .harness-agent-edit-modal {
-  max-width: 680px;
-  width: 90vw;
+  box-sizing: border-box !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow-x: hidden !important;
+  padding: 4px 0 !important;
 }
 
 .harness-agent-edit-modal .setting-item {
   border-top: 1px solid var(--background-modifier-border);
   padding: 10px 0;
+  box-sizing: border-box;
 }
 
 .harness-agent-edit-modal .setting-item:first-of-type {
   border-top: none;
+}
+
+.harness-setting-stacked {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 6px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.harness-setting-stacked .setting-item-info {
+  width: 100% !important;
+  margin-bottom: 2px !important;
+}
+
+.harness-setting-stacked .setting-item-control {
+  width: 100% !important;
+  justify-content: flex-start !important;
+}
+
+.harness-workspace-input-row {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+.harness-workspace-input-row input {
+  flex: 1 1 200px;
+  min-width: 140px;
+  min-height: 36px;
+  box-sizing: border-box;
+}
+
+.harness-scaffold-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  min-height: 36px;
+  white-space: nowrap;
+}
+
+.harness-modal-buttons-row {
+  border-top: 1px solid var(--background-modifier-border);
+  padding-top: 14px !important;
+  margin-top: 12px !important;
+}
+
+.harness-modal-buttons-row .setting-item-control {
+  width: 100% !important;
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  justify-content: flex-end !important;
 }
 
 .harness-tools-permission-section {
@@ -1658,14 +1753,18 @@
   border-radius: 8px;
   padding: 12px;
   margin: 8px 0 16px 0;
+  box-sizing: border-box;
+  width: 100%;
 }
 
 .harness-tool-category-grid,
 .harness-tool-categories-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
   gap: 8px;
   margin-top: 8px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .harness-tool-category-item {
@@ -1680,6 +1779,8 @@
   transition: background-color 0.15s ease, border-color 0.15s ease;
   user-select: none;
   -webkit-user-select: none;
+  box-sizing: border-box;
+  max-width: 100%;
 }
 
 .harness-tool-category-item:hover {
@@ -1783,21 +1884,43 @@
   .harness-chat-bottom-row {
     flex-wrap: wrap;
     gap: 6px;
+    align-items: center;
+  }
+
+  .harness-bottom-controls-left {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    flex: 1 1 calc(100% - 52px);
+    min-width: 0;
+  }
+
+  .harness-agent-select-container {
+    min-height: 38px;
+    height: 38px;
+    flex: 1 1 auto;
+    max-width: 100%;
+  }
+
+  .harness-agent-select {
+    font-size: 14px;
+    max-width: 100%;
   }
 
   .harness-chat-bottom-row .harness-model-select,
   .harness-chat-bottom-row .harness-model-select-trigger {
-    min-height: 40px;
-    height: 40px;
+    min-height: 38px;
+    height: 38px;
     font-size: 14px;
-    flex: 1 1 calc(100% - 50px);
-    min-width: 0;
+    flex: 1 1 auto;
+    min-width: 110px;
   }
 
   .harness-chat-bottom-row .harness-send-btn {
     min-width: 44px !important;
-    min-height: 40px !important;
-    height: 40px !important;
+    min-height: 38px !important;
+    height: 38px !important;
     flex-shrink: 0;
   }
 
@@ -1888,19 +2011,30 @@
     justify-content: flex-end;
   }
 
-  .harness-agent-edit-modal {
+  .harness-agent-edit-modal-window {
     width: 96vw !important;
-    max-height: 88vh !important;
+    max-width: 96vw !important;
+    max-height: 90vh !important;
     overflow-y: auto !important;
     -webkit-overflow-scrolling: touch !important;
     touch-action: pan-x pan-y;
-    padding: 14px !important;
+    padding: 12px !important;
+    box-sizing: border-box !important;
+  }
+
+  .harness-agent-edit-modal {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    box-sizing: border-box !important;
   }
 
   .harness-agent-edit-modal .setting-item {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 6px;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 6px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
   }
 
   .harness-agent-edit-modal .setting-item-control {

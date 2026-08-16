@@ -22088,12 +22088,13 @@ Analyze objectives carefully, use available tools, and produce clear, concise ou
     return text2.toLowerCase().trim().replace(/[\s\W-]+/g, "-").replace(/^-+|-+$/g, "");
   }
   onOpen() {
-    const { contentEl } = this;
+    const { contentEl, modalEl } = this;
+    modalEl.addClass("harness-agent-edit-modal-window");
     contentEl.empty();
     contentEl.addClass("harness-modal-content");
     contentEl.addClass("harness-agent-edit-modal");
     const titleText = this.agent ? `Edit Agent: ${this.agent.name}` : "Create New Agent";
-    contentEl.createEl("h2", { text: titleText });
+    contentEl.createEl("h2", { text: titleText, cls: "harness-modal-title" });
     let idInputTextComponent = null;
     new import_obsidian10.Setting(contentEl).setName("Agent Name").setDesc("Display name for this agent (e.g. Research Analyst, Code Reviewer)").addText((text2) => {
       text2.setPlaceholder("e.g. Research Analyst").setValue(this.name).onChange((val) => {
@@ -22103,6 +22104,8 @@ Analyze objectives carefully, use available tools, and produce clear, concise ou
           idInputTextComponent.setValue(this.id);
         }
       });
+      text2.inputEl.style.width = "100%";
+      text2.inputEl.style.boxSizing = "border-box";
     });
     const idSetting = new import_obsidian10.Setting(contentEl).setName("Agent ID").setDesc(
       this.agent?.isDefaultMain ? "Default main agent ID cannot be changed" : "Unique slug identifier used in tool calls and subagent delegation"
@@ -22110,6 +22113,7 @@ Analyze objectives carefully, use available tools, and produce clear, concise ou
     idSetting.addText((text2) => {
       idInputTextComponent = text2;
       text2.setPlaceholder("e.g. research-analyst").setValue(this.id);
+      text2.inputEl.style.width = "100%";
       if (this.agent?.isDefaultMain) {
         text2.setDisabled(true);
         text2.inputEl.setAttribute("readonly", "true");
@@ -22120,14 +22124,18 @@ Analyze objectives carefully, use available tools, and produce clear, concise ou
         });
       }
     });
-    new import_obsidian10.Setting(contentEl).setName("Description").setDesc("Role, specialty, and purpose of this agent").addTextArea((text2) => {
+    const descSetting = new import_obsidian10.Setting(contentEl).setName("Description").setDesc("Role, specialty, and purpose of this agent");
+    descSetting.settingEl.addClass("harness-setting-stacked");
+    descSetting.addTextArea((text2) => {
       text2.setPlaceholder("e.g. Gathers notes, synthesizes insights, and produces analytical research summaries").setValue(this.description).onChange((val) => {
         this.description = val;
       });
       text2.inputEl.rows = 2;
       text2.inputEl.style.width = "100%";
+      text2.inputEl.style.boxSizing = "border-box";
     });
     const promptSetting = new import_obsidian10.Setting(contentEl).setName("System Prompt").setDesc("Base instructions, behaviors, constraints, and workflow directives");
+    promptSetting.settingEl.addClass("harness-setting-stacked");
     promptSetting.addTextArea((text2) => {
       text2.setPlaceholder("Enter system instructions...").setValue(this.systemPrompt).onChange((val) => {
         this.systemPrompt = val;
@@ -22135,35 +22143,50 @@ Analyze objectives carefully, use available tools, and produce clear, concise ou
       text2.inputEl.style.fontFamily = "var(--font-monospace)";
       text2.inputEl.style.minHeight = "120px";
       text2.inputEl.style.width = "100%";
+      text2.inputEl.style.boxSizing = "border-box";
     });
     const wsSetting = new import_obsidian10.Setting(contentEl).setName("Workspace Path").setDesc("Folder in vault where this agent operates (e.g. Projects/Research). Leave empty for full vault access.");
-    wsSetting.addText((text2) => {
-      text2.setPlaceholder("Projects/Research").setValue(this.workspacePath).onChange((val) => {
-        this.workspacePath = val.trim();
-      });
+    wsSetting.settingEl.addClass("harness-setting-stacked");
+    const wsRow = wsSetting.controlEl.createEl("div", { cls: "harness-workspace-input-row" });
+    wsRow.style.display = "flex";
+    wsRow.style.gap = "8px";
+    wsRow.style.width = "100%";
+    wsRow.style.flexWrap = "wrap";
+    const wsInput = wsRow.createEl("input", {
+      type: "text",
+      cls: "harness-input-field",
+      placeholder: "Projects/Research",
+      value: this.workspacePath
     });
-    wsSetting.addButton((btn) => {
-      btn.setButtonText("Scaffold Folder & AGENT.md");
-      btn.setTooltip("Create workspace folder and AGENT.md instructions file in vault");
-      (0, import_obsidian10.setIcon)(btn.buttonEl, "folder-plus");
-      btn.onClick(async () => {
-        if (!this.workspacePath.trim()) {
-          new import_obsidian10.Notice("Please enter a workspace path first.");
-          return;
-        }
-        try {
-          const res = await this.plugin.agentManager.scaffoldWorkspace(
-            this.workspacePath,
-            void 0,
-            this.name || void 0
-          );
-          new import_obsidian10.Notice(`Workspace and AGENT.md created! (${res.agentMdPath})`);
-        } catch (err2) {
-          new import_obsidian10.Notice(`Failed to scaffold workspace: ${err2?.message || err2}`);
-        }
-      });
+    wsInput.style.flex = "1 1 200px";
+    wsInput.style.minWidth = "160px";
+    wsInput.addEventListener("input", (e2) => {
+      this.workspacePath = e2.target.value.trim();
     });
-    contentEl.createEl("h3", { text: "LLM Overrides (Optional)" });
+    const scaffoldBtn = wsRow.createEl("button", {
+      cls: "harness-scaffold-btn",
+      text: "Scaffold Folder & AGENT.md"
+    });
+    scaffoldBtn.style.flex = "0 0 auto";
+    (0, import_obsidian10.setIcon)(scaffoldBtn, "folder-plus");
+    scaffoldBtn.addEventListener("click", async (e2) => {
+      e2.preventDefault();
+      if (!this.workspacePath.trim()) {
+        new import_obsidian10.Notice("Please enter a workspace path first.");
+        return;
+      }
+      try {
+        const res = await this.plugin.agentManager.scaffoldWorkspace(
+          this.workspacePath,
+          void 0,
+          this.name || void 0
+        );
+        new import_obsidian10.Notice(`Workspace and AGENT.md created! (${res.agentMdPath})`);
+      } catch (err2) {
+        new import_obsidian10.Notice(`Failed to scaffold workspace: ${err2?.message || err2}`);
+      }
+    });
+    contentEl.createEl("h3", { text: "LLM Overrides (Optional)", cls: "harness-modal-section-title" });
     let modelSelectEl = null;
     const providerSetting = new import_obsidian10.Setting(contentEl).setName("LLM Provider Override").setDesc("Select dedicated provider or inherit from chat session");
     providerSetting.addDropdown((dropdown) => {
@@ -22176,6 +22199,7 @@ Analyze objectives carefully, use available tools, and produce clear, concise ou
         this.providerId = val;
         this.updateModelDropdown(modelSelectEl);
       });
+      dropdown.selectEl.style.maxWidth = "100%";
     });
     const modelSetting = new import_obsidian10.Setting(contentEl).setName("LLM Model Override").setDesc("Select model for chosen provider or inherit default");
     modelSetting.addDropdown((dropdown) => {
@@ -22185,12 +22209,13 @@ Analyze objectives carefully, use available tools, and produce clear, concise ou
       dropdown.onChange((val) => {
         this.model = val;
       });
+      dropdown.selectEl.style.maxWidth = "100%";
     });
-    contentEl.createEl("h3", { text: "Tool Permissions" });
+    contentEl.createEl("h3", { text: "Tool Permissions", cls: "harness-modal-section-title" });
     const toolsContainer = contentEl.createEl("div", { cls: "harness-tools-permission-section" });
-    toolsContainer.style.marginBottom = "16px";
     this.renderToolPermissions(toolsContainer);
     const buttonsSetting = new import_obsidian10.Setting(contentEl);
+    buttonsSetting.settingEl.addClass("harness-modal-buttons-row");
     if (!this.agent?.isDefaultMain && this.agent?.id) {
       buttonsSetting.addButton((btn) => {
         btn.setButtonText("Delete Agent");
@@ -22314,31 +22339,13 @@ Analyze objectives carefully, use available tools, and produce clear, concise ou
         }
       ];
       const categoryGrid = container.createEl("div", { cls: "harness-tool-categories-grid" });
-      categoryGrid.style.display = "grid";
-      categoryGrid.style.gridTemplateColumns = "repeat(auto-fit, minmax(240px, 1fr))";
-      categoryGrid.style.gap = "8px";
-      categoryGrid.style.marginTop = "8px";
       for (const cat of categories) {
         const itemEl = categoryGrid.createEl("label", { cls: "harness-tool-category-item" });
-        itemEl.style.display = "flex";
-        itemEl.style.alignItems = "flex-start";
-        itemEl.style.gap = "8px";
-        itemEl.style.padding = "8px 10px";
-        itemEl.style.borderRadius = "6px";
-        itemEl.style.border = "1px solid var(--background-modifier-border)";
-        itemEl.style.backgroundColor = "var(--background-secondary)";
-        itemEl.style.cursor = "pointer";
         const checkbox = itemEl.createEl("input", { type: "checkbox" });
         checkbox.checked = this.allowedTools.includes(cat.id);
-        checkbox.style.marginTop = "3px";
-        const textWrapper = itemEl.createEl("div");
-        const labelTitle = textWrapper.createEl("div", { text: cat.name });
-        labelTitle.style.fontWeight = "500";
-        labelTitle.style.fontSize = "0.9em";
-        const labelDesc = textWrapper.createEl("div", { text: cat.desc });
-        labelDesc.style.fontSize = "0.78em";
-        labelDesc.style.color = "var(--text-muted)";
-        labelDesc.style.lineHeight = "1.3";
+        const textWrapper = itemEl.createEl("div", { cls: "harness-tool-category-text" });
+        const labelTitle = textWrapper.createEl("div", { text: cat.name, cls: "harness-tool-category-title" });
+        const labelDesc = textWrapper.createEl("div", { text: cat.desc, cls: "harness-tool-category-desc" });
         checkbox.addEventListener("change", () => {
           if (checkbox.checked) {
             if (!this.allowedTools.includes(cat.id)) {
@@ -22677,10 +22684,11 @@ var HarnessSettingTab = class extends import_obsidian11.PluginSettingTab {
       titleWrapper.style.display = "flex";
       titleWrapper.style.alignItems = "center";
       titleWrapper.style.gap = "8px";
-      const iconSpan = titleWrapper.createEl("span", {
-        text: agent.isDefaultMain ? "\u{1F916}" : "\u{1F464}"
-      });
-      iconSpan.style.fontSize = "1.2em";
+      const iconSpan = titleWrapper.createEl("span", { cls: "harness-agent-card-icon" });
+      (0, import_obsidian11.setIcon)(iconSpan, agent.isDefaultMain ? "bot" : "user");
+      iconSpan.style.display = "inline-flex";
+      iconSpan.style.alignItems = "center";
+      iconSpan.style.color = agent.isDefaultMain ? "var(--interactive-accent)" : "var(--text-accent)";
       const nameEl = titleWrapper.createEl("span", {
         text: agent.name
       });
@@ -41783,13 +41791,13 @@ var HarnessChatView = class extends import_obsidian30.ItemView {
     if (agents.length === 0) {
       this.agentSelectEl.createEl("option", {
         value: "main",
-        text: "\u{1F916} Main Agent"
+        text: "Main Agent"
       });
     } else {
       for (const agent of agents) {
         this.agentSelectEl.createEl("option", {
           value: agent.id,
-          text: agent.isDefaultMain || agent.id === "main" ? `\u{1F916} ${agent.name}` : `\u{1F464} ${agent.name}`
+          text: agent.name
         });
       }
     }
@@ -41828,29 +41836,12 @@ var HarnessChatView = class extends import_obsidian30.ItemView {
     container.addClass("harness-chat-container");
     const headerEl = container.createEl("div", { cls: "harness-chat-header" });
     const titleEl = headerEl.createEl("div", { cls: "harness-title-container" });
-    const agentSelectContainer = titleEl.createEl("div", { cls: "harness-agent-select-container" });
-    this.agentIconEl = agentSelectContainer.createEl("span", { cls: "harness-agent-icon" });
-    (0, import_obsidian30.setIcon)(this.agentIconEl, "bot");
-    this.agentSelectEl = agentSelectContainer.createEl("select", { cls: "dropdown harness-agent-select" });
-    this.agentSelectEl.setAttribute("aria-label", "Select Active Agent");
-    this.agentSelectEl.addEventListener("change", async () => {
-      const val = this.agentSelectEl?.value || "main";
-      const selectedAgent = this.plugin.agentManager ? this.plugin.agentManager.getAgent(val) : void 0;
-      this.currentSession.activeAgentId = selectedAgent ? selectedAgent.id : "main";
-      this.plugin.settings.activeAgentId = this.currentSession.activeAgentId;
-      if (this.agentIconEl) {
-        (0, import_obsidian30.setIcon)(this.agentIconEl, !selectedAgent || selectedAgent.isDefaultMain || selectedAgent.id === "main" ? "bot" : "user");
-      }
-      if (selectedAgent?.model) {
-        this.currentSession.model = selectedAgent.model;
-        this.refreshModelDropdown();
-      }
-      this.updateWorkspaceBadge(selectedAgent);
-      await this.saveSessionState();
-    });
-    this.workspaceBadgeEl = titleEl.createEl("span", { cls: "harness-workspace-badge" });
-    this.workspaceBadgeEl.style.display = "none";
-    this.refreshAgentDropdown();
+    titleEl.style.display = "flex";
+    titleEl.style.alignItems = "center";
+    titleEl.style.gap = "6px";
+    const botIconEl = titleEl.createEl("span");
+    (0, import_obsidian30.setIcon)(botIconEl, "bot");
+    titleEl.createEl("span", { text: "Harness Bot", cls: "harness-title" });
     const headerActionsEl = headerEl.createEl("div", { cls: "harness-chat-header-actions" });
     const newSessionBtn = headerActionsEl.createEl("button", { cls: "clickable-icon" });
     newSessionBtn.setAttribute("aria-label", "New Session");
@@ -41927,7 +41918,31 @@ var HarnessChatView = class extends import_obsidian30.ItemView {
       this.toggleInputExpand();
     });
     const bottomRowEl = this.inputAreaEl.createEl("div", { cls: "harness-chat-bottom-row" });
-    this.searchableModelSelect = new SearchableModelSelect(bottomRowEl, {
+    const bottomControlsLeftEl = bottomRowEl.createEl("div", { cls: "harness-bottom-controls-left" });
+    const agentSelectContainer = bottomControlsLeftEl.createEl("div", { cls: "harness-agent-select-container" });
+    this.agentIconEl = agentSelectContainer.createEl("span", { cls: "harness-agent-icon" });
+    (0, import_obsidian30.setIcon)(this.agentIconEl, "bot");
+    this.agentSelectEl = agentSelectContainer.createEl("select", { cls: "dropdown harness-agent-select" });
+    this.agentSelectEl.setAttribute("aria-label", "Select Active Agent");
+    this.agentSelectEl.addEventListener("change", async () => {
+      const val = this.agentSelectEl?.value || "main";
+      const selectedAgent = this.plugin.agentManager ? this.plugin.agentManager.getAgent(val) : void 0;
+      this.currentSession.activeAgentId = selectedAgent ? selectedAgent.id : "main";
+      this.plugin.settings.activeAgentId = this.currentSession.activeAgentId;
+      if (this.agentIconEl) {
+        (0, import_obsidian30.setIcon)(this.agentIconEl, !selectedAgent || selectedAgent.isDefaultMain || selectedAgent.id === "main" ? "bot" : "user");
+      }
+      if (selectedAgent?.model) {
+        this.currentSession.model = selectedAgent.model;
+        this.refreshModelDropdown();
+      }
+      this.updateWorkspaceBadge(selectedAgent);
+      await this.saveSessionState();
+    });
+    this.workspaceBadgeEl = bottomControlsLeftEl.createEl("span", { cls: "harness-workspace-badge" });
+    this.workspaceBadgeEl.style.display = "none";
+    this.refreshAgentDropdown();
+    this.searchableModelSelect = new SearchableModelSelect(bottomControlsLeftEl, {
       models: [],
       selectedModel: "",
       onChange: async (val) => {

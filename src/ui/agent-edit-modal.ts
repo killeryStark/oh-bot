@@ -44,14 +44,15 @@ export class AgentEditModal extends Modal {
   }
 
   onOpen(): void {
-    const { contentEl } = this;
+    const { contentEl, modalEl } = this;
+    modalEl.addClass('harness-agent-edit-modal-window');
     contentEl.empty();
     contentEl.addClass('harness-modal-content');
     contentEl.addClass('harness-agent-edit-modal');
 
     // Title
     const titleText = this.agent ? `Edit Agent: ${this.agent.name}` : 'Create New Agent';
-    contentEl.createEl('h2', { text: titleText });
+    contentEl.createEl('h2', { text: titleText, cls: 'harness-modal-title' });
 
     // Agent Name
     let idInputTextComponent: any = null;
@@ -70,6 +71,8 @@ export class AgentEditModal extends Modal {
               idInputTextComponent.setValue(this.id);
             }
           });
+        text.inputEl.style.width = '100%';
+        text.inputEl.style.boxSizing = 'border-box';
       });
 
     // Agent ID
@@ -84,6 +87,7 @@ export class AgentEditModal extends Modal {
     idSetting.addText((text) => {
       idInputTextComponent = text;
       text.setPlaceholder('e.g. research-analyst').setValue(this.id);
+      text.inputEl.style.width = '100%';
       if (this.agent?.isDefaultMain) {
         text.setDisabled(true);
         text.inputEl.setAttribute('readonly', 'true');
@@ -95,25 +99,29 @@ export class AgentEditModal extends Modal {
       }
     });
 
-    // Description
-    new Setting(contentEl)
+    // Description (Stacked layout for responsiveness)
+    const descSetting = new Setting(contentEl)
       .setName('Description')
-      .setDesc("Role, specialty, and purpose of this agent")
-      .addTextArea((text) => {
-        text
-          .setPlaceholder('e.g. Gathers notes, synthesizes insights, and produces analytical research summaries')
-          .setValue(this.description)
-          .onChange((val) => {
-            this.description = val;
-          });
-        text.inputEl.rows = 2;
-        text.inputEl.style.width = '100%';
-      });
+      .setDesc('Role, specialty, and purpose of this agent');
+    descSetting.settingEl.addClass('harness-setting-stacked');
 
-    // System Prompt
+    descSetting.addTextArea((text) => {
+      text
+        .setPlaceholder('e.g. Gathers notes, synthesizes insights, and produces analytical research summaries')
+        .setValue(this.description)
+        .onChange((val) => {
+          this.description = val;
+        });
+      text.inputEl.rows = 2;
+      text.inputEl.style.width = '100%';
+      text.inputEl.style.boxSizing = 'border-box';
+    });
+
+    // System Prompt (Stacked layout for responsiveness)
     const promptSetting = new Setting(contentEl)
       .setName('System Prompt')
       .setDesc('Base instructions, behaviors, constraints, and workflow directives');
+    promptSetting.settingEl.addClass('harness-setting-stacked');
 
     promptSetting.addTextArea((text) => {
       text
@@ -125,46 +133,59 @@ export class AgentEditModal extends Modal {
       text.inputEl.style.fontFamily = 'var(--font-monospace)';
       text.inputEl.style.minHeight = '120px';
       text.inputEl.style.width = '100%';
+      text.inputEl.style.boxSizing = 'border-box';
     });
 
-    // Workspace Path + Scaffold button
+    // Workspace Path
     const wsSetting = new Setting(contentEl)
       .setName('Workspace Path')
       .setDesc('Folder in vault where this agent operates (e.g. Projects/Research). Leave empty for full vault access.');
+    wsSetting.settingEl.addClass('harness-setting-stacked');
 
-    wsSetting.addText((text) => {
-      text
-        .setPlaceholder('Projects/Research')
-        .setValue(this.workspacePath)
-        .onChange((val) => {
-          this.workspacePath = val.trim();
-        });
+    const wsRow = wsSetting.controlEl.createEl('div', { cls: 'harness-workspace-input-row' });
+    wsRow.style.display = 'flex';
+    wsRow.style.gap = '8px';
+    wsRow.style.width = '100%';
+    wsRow.style.flexWrap = 'wrap';
+
+    const wsInput = wsRow.createEl('input', {
+      type: 'text',
+      cls: 'harness-input-field',
+      placeholder: 'Projects/Research',
+      value: this.workspacePath,
+    });
+    wsInput.style.flex = '1 1 200px';
+    wsInput.style.minWidth = '160px';
+    wsInput.addEventListener('input', (e) => {
+      this.workspacePath = (e.target as HTMLInputElement).value.trim();
     });
 
-    wsSetting.addButton((btn) => {
-      btn.setButtonText('Scaffold Folder & AGENT.md');
-      btn.setTooltip('Create workspace folder and AGENT.md instructions file in vault');
-      setIcon(btn.buttonEl, 'folder-plus');
-      btn.onClick(async () => {
-        if (!this.workspacePath.trim()) {
-          new Notice('Please enter a workspace path first.');
-          return;
-        }
-        try {
-          const res = await this.plugin.agentManager.scaffoldWorkspace(
-            this.workspacePath,
-            undefined,
-            this.name || undefined
-          );
-          new Notice(`Workspace and AGENT.md created! (${res.agentMdPath})`);
-        } catch (err: any) {
-          new Notice(`Failed to scaffold workspace: ${err?.message || err}`);
-        }
-      });
+    const scaffoldBtn = wsRow.createEl('button', {
+      cls: 'harness-scaffold-btn',
+      text: 'Scaffold Folder & AGENT.md',
+    });
+    scaffoldBtn.style.flex = '0 0 auto';
+    setIcon(scaffoldBtn, 'folder-plus');
+    scaffoldBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      if (!this.workspacePath.trim()) {
+        new Notice('Please enter a workspace path first.');
+        return;
+      }
+      try {
+        const res = await this.plugin.agentManager.scaffoldWorkspace(
+          this.workspacePath,
+          undefined,
+          this.name || undefined
+        );
+        new Notice(`Workspace and AGENT.md created! (${res.agentMdPath})`);
+      } catch (err: any) {
+        new Notice(`Failed to scaffold workspace: ${err?.message || err}`);
+      }
     });
 
     // LLM Provider & Model Overrides
-    contentEl.createEl('h3', { text: 'LLM Overrides (Optional)' });
+    contentEl.createEl('h3', { text: 'LLM Overrides (Optional)', cls: 'harness-modal-section-title' });
 
     let modelSelectEl: HTMLSelectElement | null = null;
 
@@ -182,6 +203,7 @@ export class AgentEditModal extends Modal {
         this.providerId = val;
         this.updateModelDropdown(modelSelectEl);
       });
+      dropdown.selectEl.style.maxWidth = '100%';
     });
 
     const modelSetting = new Setting(contentEl)
@@ -195,18 +217,18 @@ export class AgentEditModal extends Modal {
       dropdown.onChange((val) => {
         this.model = val;
       });
+      dropdown.selectEl.style.maxWidth = '100%';
     });
 
     // Allowed Tools
-    contentEl.createEl('h3', { text: 'Tool Permissions' });
+    contentEl.createEl('h3', { text: 'Tool Permissions', cls: 'harness-modal-section-title' });
 
     const toolsContainer = contentEl.createEl('div', { cls: 'harness-tools-permission-section' });
-    toolsContainer.style.marginBottom = '16px';
-
     this.renderToolPermissions(toolsContainer);
 
     // Action Buttons
     const buttonsSetting = new Setting(contentEl);
+    buttonsSetting.settingEl.addClass('harness-modal-buttons-row');
 
     // Delete Button (if not default main)
     if (!this.agent?.isDefaultMain && this.agent?.id) {
@@ -265,7 +287,6 @@ export class AgentEditModal extends Modal {
         models = prov.models;
       }
     } else {
-      // Gather models from active provider or all providers
       const activeProv = this.plugin.settings.providers.find(
         (p) => p.id === this.plugin.settings.activeProviderId
       );
@@ -350,35 +371,16 @@ export class AgentEditModal extends Modal {
       ];
 
       const categoryGrid = container.createEl('div', { cls: 'harness-tool-categories-grid' });
-      categoryGrid.style.display = 'grid';
-      categoryGrid.style.gridTemplateColumns = 'repeat(auto-fit, minmax(240px, 1fr))';
-      categoryGrid.style.gap = '8px';
-      categoryGrid.style.marginTop = '8px';
 
       for (const cat of categories) {
         const itemEl = categoryGrid.createEl('label', { cls: 'harness-tool-category-item' });
-        itemEl.style.display = 'flex';
-        itemEl.style.alignItems = 'flex-start';
-        itemEl.style.gap = '8px';
-        itemEl.style.padding = '8px 10px';
-        itemEl.style.borderRadius = '6px';
-        itemEl.style.border = '1px solid var(--background-modifier-border)';
-        itemEl.style.backgroundColor = 'var(--background-secondary)';
-        itemEl.style.cursor = 'pointer';
 
         const checkbox = itemEl.createEl('input', { type: 'checkbox' });
         checkbox.checked = this.allowedTools.includes(cat.id);
-        checkbox.style.marginTop = '3px';
 
-        const textWrapper = itemEl.createEl('div');
-        const labelTitle = textWrapper.createEl('div', { text: cat.name });
-        labelTitle.style.fontWeight = '500';
-        labelTitle.style.fontSize = '0.9em';
-
-        const labelDesc = textWrapper.createEl('div', { text: cat.desc });
-        labelDesc.style.fontSize = '0.78em';
-        labelDesc.style.color = 'var(--text-muted)';
-        labelDesc.style.lineHeight = '1.3';
+        const textWrapper = itemEl.createEl('div', { cls: 'harness-tool-category-text' });
+        const labelTitle = textWrapper.createEl('div', { text: cat.name, cls: 'harness-tool-category-title' });
+        const labelDesc = textWrapper.createEl('div', { text: cat.desc, cls: 'harness-tool-category-desc' });
 
         checkbox.addEventListener('change', () => {
           if (checkbox.checked) {
