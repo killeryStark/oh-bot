@@ -90,6 +90,28 @@ export const DEFAULT_PROVIDERS: ProviderConfig[] = [
   },
 ];
 
+export interface AgentConfig {
+  id: string;
+  name: string;
+  description: string;
+  systemPrompt: string;
+  workspacePath?: string;
+  agentMdFile?: string;
+  providerId?: string;
+  model?: string;
+  allowedTools?: string[];
+  isDefaultMain?: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface SubagentStepContext {
+  agentId: string;
+  agentName: string;
+  taskId: string;
+  workspacePath?: string;
+}
+
 export interface ChatSession {
   id: string;
   title: string;
@@ -98,12 +120,22 @@ export interface ChatSession {
   messages: LLMMessage[];
   providerId: string;
   model: string;
+  activeAgentId?: string;
 }
 
 export type SearchProviderType = 'duckduckgo' | 'searxng' | 'tavily';
 
 import { SkillMetadata } from './skills/types';
 import { McpServerConfig } from './mcp/types';
+
+export const DEFAULT_MAIN_SYSTEM_PROMPT = `You are an autonomous AI Agent inside Obsidian running on Desktop and Mobile.
+You have access to a rich set of built-in tools to fulfill the user's request step-by-step:
+1. Vault Operations: Read, create, patch, list, and search notes and directories in the vault.
+2. Web Research: Search the web (web_search) and fetch clean web page markdown (fetch_web_page) for up-to-date facts and articles.
+3. PDF Document Generation: Create beautifully styled, publication-ready PDF documents and reports (generate_pdf) directly into the vault with themes ('anthropic-report', 'academic', 'minimal').
+4. Skills & Extensibility: Create and run specialized workflow skills and remote MCP tools.
+
+Always think step-by-step, use tools autonomously to verify or retrieve information, and provide clear, well-structured markdown responses.`;
 
 export interface HarnessSettings {
   providers: ProviderConfig[];
@@ -121,20 +153,15 @@ export interface HarnessSettings {
   searxngUrl?: string;
   tavilyApiKeySecretName?: string;
   defaultPdfFolder?: string;
+  agents: AgentConfig[];
+  activeAgentId?: string;
 }
 
 export const DEFAULT_SETTINGS: HarnessSettings = {
   providers: DEFAULT_PROVIDERS,
   activeProviderId: '',
   activeModel: '',
-  systemPrompt: `You are an autonomous AI Agent inside Obsidian running on Desktop and Mobile.
-You have access to a rich set of built-in tools to fulfill the user's request step-by-step:
-1. Vault Operations: Read, create, patch, list, and search notes and directories in the vault.
-2. Web Research: Search the web (web_search) and fetch clean web page markdown (fetch_web_page) for up-to-date facts and articles.
-3. PDF Document Generation: Create beautifully styled, publication-ready PDF documents and reports (generate_pdf) directly into the vault with themes ('anthropic-report', 'academic', 'minimal').
-4. Skills & Extensibility: Create and run specialized workflow skills and remote MCP tools.
-
-Always think step-by-step, use tools autonomously to verify or retrieve information, and provide clear, well-structured markdown responses.`,
+  systemPrompt: DEFAULT_MAIN_SYSTEM_PROMPT,
   safetyMode: 'strict',
   sessions: [],
   currentSessionId: '',
@@ -146,6 +173,21 @@ Always think step-by-step, use tools autonomously to verify or retrieve informat
   searxngUrl: 'http://localhost:8080',
   tavilyApiKeySecretName: 'oh_bot_secret_tavily',
   defaultPdfFolder: 'Documents/Generated',
+  agents: [
+    {
+      id: 'main',
+      name: 'Main Agent',
+      description: 'Default autonomous agent with full vault access and orchestration capabilities.',
+      systemPrompt: DEFAULT_MAIN_SYSTEM_PROMPT,
+      workspacePath: '',
+      agentMdFile: 'AGENT.md',
+      isDefaultMain: true,
+      allowedTools: ['*'],
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    }
+  ],
+  activeAgentId: 'main',
 };
 
 export interface LLMMessage {
@@ -197,4 +239,5 @@ export interface AgentStepEvent {
   toolCall?: ToolCall;
   toolResult?: { toolCallId: string; result: ToolResult };
   error?: string;
+  subagentContext?: SubagentStepContext;
 }
