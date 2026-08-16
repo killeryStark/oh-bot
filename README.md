@@ -18,6 +18,9 @@ Unlike typical single-turn AI chat interfaces, `obsidian-harness-bot` provides a
 - 🛒 **Skills Marketplace & Smart Git Importer**: Install curated skills in 1 click or import any skill directly from a GitHub repository URL (`https://github.com/owner/repo`, folder `/tree/...`, or raw URL).
 - 📂 **Local Vault Skills Scanner**: Automatically discovers and synchronizes skills from `.agents/skills/`, `.skills/`, `.claude/skills/`, `.gemini/skills/` with symlink protection, deduplication, and SemVer conflict resolution.
 - 🛠️ **Autonomous Agent Tools**:
+  - `web_search`: Zero-config DuckDuckGo web search, SearXNG, or Tavily.
+  - `fetch_web_page`: Extract clean Markdown content from URLs without scripts/ads.
+  - `generate_pdf`: Client-side Anthropic-grade styled PDF document generation into the Vault (Mobile & Desktop).
   - `vault_read_file`: Inspect note contents.
   - `vault_create_file`: Create new Markdown files or documents.
   - `vault_patch_file`: Edit or append text to existing notes.
