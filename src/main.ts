@@ -7,15 +7,23 @@ import { SkillsModal } from './ui/skills-modal';
 import { McpManager } from './mcp/mcp-manager';
 import { McpModal } from './ui/mcp-modal';
 import { ToolRegistry } from './tools/registry';
+import { AgentManager } from './engine/agent-manager';
 
 export default class HarnessPlugin extends Plugin {
   settings: HarnessSettings = DEFAULT_SETTINGS;
   skillManager!: SkillManager;
   mcpManager!: McpManager;
   toolRegistry!: ToolRegistry;
+  agentManager!: AgentManager;
 
   async onload() {
     await this.loadSettings();
+
+    // Initialize Agent Manager
+    this.agentManager = new AgentManager(this.app, this.settings, async () => {
+      await this.saveSettings();
+    });
+    await this.agentManager.init();
 
     // Initialize Skill Manager
     this.skillManager = new SkillManager(this.app, this.settings, async () => {
@@ -110,12 +118,18 @@ export default class HarnessPlugin extends Plugin {
     if (this.settings.systemPrompt === legacyDefaultPrompt) {
       this.settings.systemPrompt = DEFAULT_SETTINGS.systemPrompt;
     }
+    if (this.agentManager) {
+      this.agentManager.setSettings(this.settings);
+    }
   }
 
   async saveSettings() {
     await this.saveData(this.settings);
     if (this.toolRegistry) {
       this.toolRegistry.setSettings(this.settings);
+    }
+    if (this.agentManager) {
+      this.agentManager.setSettings(this.settings);
     }
   }
 }
