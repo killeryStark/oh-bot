@@ -22,6 +22,7 @@ export class AgentHarness {
     this.settings = settings;
     this.secretManager = new SecretManager(app);
     this.toolRegistry = toolRegistry;
+    this.toolRegistry.setSettings(settings);
 
     // Register Base LLM Providers
     this.providers.set('openrouter', new OpenRouterProvider());
@@ -71,6 +72,7 @@ export class AgentHarness {
     extraSystemDirectives?: string
   ): Promise<LLMMessage[]> {
     const { provider, config, apiKey } = this.getActiveProviderConfig(overrideProviderId);
+    this.toolRegistry.setSettings(this.settings);
     const model = overrideModel || this.settings.activeModel || config.models[0] || 'anthropic/claude-3.7-sonnet';
     const messages: LLMMessage[] = [...history];
     const tools = this.toolRegistry.getSchemas();

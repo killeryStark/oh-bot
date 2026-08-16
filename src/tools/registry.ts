@@ -1,5 +1,5 @@
 import { AgentTool } from './base';
-import { ToolResult, ToolSchema } from '../types';
+import { HarnessSettings, ToolResult, ToolSchema } from '../types';
 import { App } from 'obsidian';
 import { sortToolSchemasDeterministically } from '../utils/cache-helpers';
 import { VaultReadFileTool } from './vault/read-file';
@@ -10,6 +10,9 @@ import { VaultSearchNotesTool } from './vault/search-notes';
 import { CreateSkillTool } from './skills/create-skill';
 import { ReadSkillTool } from './skills/read-skill';
 import { ListSkillsTool } from './skills/list-skills';
+import { WebSearchTool } from './web/search-tool';
+import { FetchWebPageTool } from './web/fetch-page-tool';
+import { GeneratePdfTool } from './pdf/generate-pdf-tool';
 import { SkillManager } from '../skills/skill-manager';
 import { McpManager } from '../mcp/mcp-manager';
 import { McpBridgeTool } from './mcp/bridge-tool';
@@ -19,9 +22,12 @@ export class ToolRegistry {
   private createSkillTool = new CreateSkillTool();
   private readSkillTool = new ReadSkillTool();
   private listSkillsTool = new ListSkillsTool();
+  private webSearchTool = new WebSearchTool();
+  private fetchWebPageTool = new FetchWebPageTool();
+  private generatePdfTool = new GeneratePdfTool();
   private mcpManager?: McpManager;
 
-  constructor(skillManager?: SkillManager, mcpManager?: McpManager) {
+  constructor(skillManager?: SkillManager, mcpManager?: McpManager, settings?: HarnessSettings) {
     // Register V1 Vault Tools
     this.registerTool(new VaultReadFileTool());
     this.registerTool(new VaultCreateFileTool());
@@ -34,11 +40,19 @@ export class ToolRegistry {
     this.registerTool(this.readSkillTool);
     this.registerTool(this.listSkillsTool);
 
+    // Register Web & PDF Tools
+    this.registerTool(this.webSearchTool);
+    this.registerTool(this.fetchWebPageTool);
+    this.registerTool(this.generatePdfTool);
+
     if (skillManager) {
       this.setSkillManager(skillManager);
     }
     if (mcpManager) {
       this.setMcpManager(mcpManager);
+    }
+    if (settings) {
+      this.setSettings(settings);
     }
   }
 
@@ -50,6 +64,10 @@ export class ToolRegistry {
 
   setMcpManager(mcpManager: McpManager): void {
     this.mcpManager = mcpManager;
+  }
+
+  setSettings(settings: HarnessSettings): void {
+    this.webSearchTool.setSettings(settings);
   }
 
   registerTool(tool: AgentTool): void {
